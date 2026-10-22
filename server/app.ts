@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
-import express from "express";
+import express, { type RequestHandler, type Router } from "express";
 import helmet from "helmet";
 import { config } from "./config.ts";
 import { pool } from "./db.ts";
@@ -12,11 +12,49 @@ import { adminExportRouter, adminRecordingsRouter } from "./routes/adminRecordin
 import { workerRecordingsRouter } from "./routes/recordings.ts";
 import { authRouter } from "./routes/auth.ts";
 
-export function createApp() {
+/** Every router and where it is mounted. The app is built from this table, and tests check against it. */
+const MOUNTS: { prefix: string; guards: RequestHandler[]; routers: Router[] }[] = [
+  { prefix: "/api/auth", guards: [], routers: [authRouter] },
+  { prefix: "/api/admin/users", guards: [requireAuth, requireRole("admin")], routers: [adminUsersRouter] },
+  { prefix: "/api/admin/assignments", guards: [requireAuth, requireRole("admin")], routers: [adminExportRouter, adminAssignmentsRouter] },
+  { prefix: "/api/admin/recordings", guards: [requireAuth, requireRole("admin")], routers: [adminRecordingsRouter] },
+  { prefix: "/api/admin", guards: [requireAuth, requireRole("admin")], routers: [adminRoutesRouter] },
+  { prefix: "/api/me/assignments", guards: [requireAuth, requireRole("worker")], routers: [workerAssignmentsRouter] },
+  { prefix: "/api/me/recordings", guards: [requireAuth, requireRole("worker")], routers: [workerRecordingsRouter] },
+];
+
+/** "METHOD /full/path" for every endpoint the app serves (API and health check). */
+export function listEndpoints(): string[] {
+  const out = ["GET /healthz"];
+  for (const m of MOUNTS) {
+    for (const r of m.routers) {
+      for (const layer of (r as any).stack as any[]) {
+        if (!layer.route) continue;
+        for (const method of Object.keys(layer.route.methods)) out.push(`${method.toUpperCase()} ${m.prefix}${layer.route.path}`);
+      }
+    }
+  }
+  return out.sort();
+}
+
+export function createApp(opts: { onHit?: (endpoint: string, status: number) => void } = {}) {
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", config.trustProxy); // without this, Secure cookies and client IPs break behind the proxy
-
+  // tests record which route served each request. Express forgets the matched route (and the mount
+  // path) once an error handler runs, so remember both at the moment the route is matched.
+  if (opts.onHit) {
+    app.use((req, res, next) => {
+      let current: any;
+      let seen: { path: string; base: string } | null = null;
+      Object.defineProperty(req, "route", {
+        configurable: true,
+        get: () => current,
+        set: (v) => { current = v; if (v) seen = { path: v.path, base: req.baseUrl }; },
+      });
+      res.on("finish", () => { if (seen) opts.onHit!(`${req.method} ${seen.base}${seen.path}`, res.statusCode); });
+      next();
+    });
+  }
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -51,13 +89,7 @@ export function createApp() {
   });
   app.use("/api", csrfGuard, attachUser);
 
-  app.use("/api/auth", authRouter);
-  app.use("/api/admin/users", requireAuth, requireRole("admin"), adminUsersRouter);
-  app.use("/api/admin/assignments", requireAuth, requireRole("admin"), adminExportRouter, adminAssignmentsRouter);
-  app.use("/api/admin/recordings", requireAuth, requireRole("admin"), adminRecordingsRouter);
-  app.use("/api/admin", requireAuth, requireRole("admin"), adminRoutesRouter);
-  app.use("/api/me/assignments", requireAuth, requireRole("worker"), workerAssignmentsRouter);
-  app.use("/api/me/recordings", requireAuth, requireRole("worker"), workerRecordingsRouter);
+  for (const m of MOUNTS) app.use(m.prefix, ...m.guards, ...m.routers);
   app.use("/api", (_req, _res, next) => next(new HttpError(404, "not_found", "no such endpoint")));
 
   // built web app (dev: ../dist/web next to server/, container: ./web next to dist/server.js)

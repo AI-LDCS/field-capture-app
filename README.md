@@ -59,6 +59,19 @@ Pick points on the map or type them. Everything is editable until a version is p
 - Split a segment at a point (scissors), join with the next, reverse direction, per-segment required/optional, name and minimum coverage.
 - Undo / redo (Ctrl or Cmd + Z, add Shift to redo). Unsaved edits warn before you leave. Pure edit logic is unit-tested in `test/editor.test.ts`.
 
+## Tests
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs   # tests use the real Postgres and RustFS
+npm test               # everything, then the endpoint check
+npm run test:unit      # pure logic only, no database or storage needed
+npm run test:coverage  # same tests with a line/branch coverage table (server, shared, editor logic)
+```
+
+- **Every endpoint has a test, enforced.** The app records which route answered each test request. After the tests, `test/check-endpoints.ts` compares that with the full route table (`listEndpoints()` in `server/app.ts`) and fails the run if any endpoint never answered with a 2xx. Adding a route without a test makes `npm test` fail. It also lists routes never tested with a refusal.
+- API tests run against a throw-away database and bucket. Unit tests cover the curve, the editor model, the geometry and coverage maths, the GPS check and the quality flags.
+- Not covered by tests yet: the phone code (`web/src/worker/*`: recorder, uploader, local database), the React screens, and `server/index.ts` start-up. Those were checked by hand in a browser.
+
 ## What is enforced where
 
 | Rule | Where |

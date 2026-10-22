@@ -1,6 +1,8 @@
 import { CONFIG } from "./config.ts";
 import { haversineM } from "./geo.ts";
 
+export type PreflightConfig = { windowMs: number; minSamples: number; targetAccuracyM: number; maxSpreadM: number };
+
 export type PreflightSample = { t: number; lat: number; lng: number; acc: number };
 
 export type PreflightEval = {
@@ -20,7 +22,7 @@ export type PreflightEval = {
 export function evaluatePreflight(
   samples: PreflightSample[],
   now: number,
-  cfg = CONFIG.preflight,
+  cfg: PreflightConfig = CONFIG.preflight,
 ): PreflightEval {
   const recent = samples.filter((s) => now - s.t <= cfg.windowMs);
   const distinct = [...new Map(recent.map((s) => [s.t, s])).values()].sort((a, b) => a.t - b.t);

@@ -8,3 +8,4 @@ certs/
 *.crt
 *.pem
 .DS_Store
+.test-hits/

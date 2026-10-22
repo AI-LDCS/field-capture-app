@@ -10,9 +10,11 @@
     "dev": "concurrently -k -n web,api \"vite build --watch\" \"npm:dev:server\"",
     "build": "vite build && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.js",
     "start": "node dist/server.js",
-    "test": "tsx --env-file=.env --test --test-concurrency=1 test/*.test.ts",
+    "test": "rm -rf .test-hits && tsx --env-file=.env --test --test-concurrency=1 test/*.test.ts && tsx test/check-endpoints.ts",
     "typecheck": "tsc --noEmit",
-    "dev:server": "COOKIE_SECURE=false PUBLIC_ORIGINS=http://localhost:3100 tsx watch --env-file=.env server/index.ts"
+    "dev:server": "COOKIE_SECURE=false PUBLIC_ORIGINS=http://localhost:3100 tsx watch --env-file=.env server/index.ts",
+    "test:unit": "tsx --test test/curve.test.ts test/editor.test.ts test/geo.test.ts test/preflight.test.ts",
+    "test:coverage": "rm -rf .test-hits && tsx --env-file=.env --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=\"server/**\" --test-coverage-include=\"shared/**\" --test-coverage-include=\"web/src/editor/**\" --test-reporter=spec test/*.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1155.0",

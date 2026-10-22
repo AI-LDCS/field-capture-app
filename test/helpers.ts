@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { AddressInfo } from "node:net";
 import pg from "pg";
+
+export const HITS_DIR = path.resolve(import.meta.dirname, "../.test-hits");
 
 /** Fresh database per test file, on the compose Postgres (127.0.0.1:5433). */
 export async function startTestServer() {
@@ -34,7 +38,9 @@ export async function startTestServer() {
   await migrate();
   await storage.ensureBucket();
   await bootstrapAdmin();
-  const server = createApp().listen(0, "127.0.0.1");
+  fs.mkdirSync(HITS_DIR, { recursive: true });
+  const hitsFile = path.join(HITS_DIR, `${process.pid}.log`);
+  const server = createApp({ onHit: (endpoint, status) => fs.appendFileSync(hitsFile, `${endpoint} ${status}\n`) }).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
@@ -93,3 +99,36 @@ export const line = (lng0: number, lat: number, meters = 300): [number, number][
 };
 
 export const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+
+// ---- shared setup for the endpoint tests ----
+export const ADMIN_LOGIN = { username: "testadmin", password: "initial-admin-password-1" };
+export const WORKER_PW = "worker-password-1";
+
+export async function adminLogin(base: string) {
+  const c = new Client(base);
+  const r = await c.post("/api/auth/login", ADMIN_LOGIN);
+  if (r.status !== 200) throw new Error("admin login failed " + JSON.stringify(r.body));
+  return c;
+}
+export async function createWorker(base: string, admin: Client, username: string) {
+  const r = await admin.post("/api/admin/users", { username, displayName: username, password: WORKER_PW });
+  if (r.status !== 201) throw new Error("create worker failed " + JSON.stringify(r.body));
+  const client = new Client(base);
+  await client.post("/api/auth/login", { username, password: WORKER_PW });
+  return { client, id: r.body.user.id as string };
+}
+export async function publishRoute(admin: Client, name: string) {
+  const r = await admin.post("/api/admin/routes", { name, segments: [
+    { required: true, smooth: true, coords: [[100.5, 13.75], [100.5012, 13.7515], [100.5024, 13.75]] },
+    { required: false, coords: [[100.503, 13.75], [100.5045, 13.75]] },
+  ] });
+  const p = await admin.post(`/api/admin/route-versions/${r.body.id}/publish`);
+  if (p.status !== 200) throw new Error("publish failed " + JSON.stringify(p.body));
+  return p.body as { id: string; routeId: string };
+}
+export async function assignTo(admin: Client, versionId: string, userId: string) {
+  const r = await admin.post("/api/admin/assignments", { routeVersionId: versionId, userId });
+  if (r.status !== 201) throw new Error("assign failed " + JSON.stringify(r.body));
+  return r.body as { id: string; segments: { id: string; coords: number[][] }[] };
+}
+export const NIL = "00000000-0000-4000-8000-000000000000";
