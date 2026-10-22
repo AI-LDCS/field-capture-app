@@ -38,11 +38,13 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string) => post("/api/auth/change-password", { currentPassword, newPassword }),
 
   workers: () => get<WorkerRow[]>("/api/admin/users"),
+  /** generatedPassword is present only when the admin left the password empty */
   createWorker: (username: string, displayName: string, password?: string) =>
-    post<{ user: WorkerRow; temporaryPassword: string }>("/api/admin/users", { username, displayName, ...(password ? { password } : {}) }),
+    post<{ user: WorkerRow; generatedPassword?: string }>("/api/admin/users", { username, displayName, ...(password ? { password } : {}) }),
   renameWorker: (id: string, displayName: string) => patch<WorkerRow>(`/api/admin/users/${id}`, { displayName }),
   setWorkerActive: (id: string, active: boolean) => post<WorkerRow>(`/api/admin/users/${id}/${active ? "activate" : "deactivate"}`),
-  resetPassword: (id: string) => post<{ temporaryPassword: string }>(`/api/admin/users/${id}/reset-password`),
+  setWorkerPassword: (id: string, password?: string) =>
+    post<{ generatedPassword?: string; ok?: boolean }>(`/api/admin/users/${id}/password`, password ? { password } : {}),
 
   routes: () => get<RouteSummary[]>("/api/admin/routes"),
   version: (vid: string) => get<RouteVersion>(`/api/admin/route-versions/${vid}`),
@@ -58,8 +60,8 @@ export const api = {
     return get<AssignmentSummary[]>(`/api/admin/assignments${p ? `?${p}` : ""}`);
   },
   assignment: (id: string) => get<AssignmentDetail>(`/api/admin/assignments/${id}`),
-  createAssignment: (routeVersionId: string, userId: string, note: string) =>
-    post<AssignmentDetail>("/api/admin/assignments", { routeVersionId, userId, note }),
+  createAssignment: (routeVersionId: string, userId: string) =>
+    post<AssignmentDetail>("/api/admin/assignments", { routeVersionId, userId }),
   withdrawAssignment: (id: string) => del(`/api/admin/assignments/${id}`),
 
   myAssignments: () => get<AssignmentSummary[]>("/api/me/assignments"),

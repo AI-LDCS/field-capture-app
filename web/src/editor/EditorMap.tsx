@@ -3,7 +3,7 @@ import { Fragment, useMemo, useRef, useState } from "react";
 import { CircleMarker, MapContainer, Marker, Polyline, useMapEvents } from "react-leaflet";
 import type { LngLat } from "@shared/types.ts";
 import { FitTo, Tiles, ll } from "../ui.tsx";
-import { midpoint, pointAtFraction, seqColor, type Seg } from "./model.ts";
+import { curveOf, midAfter, pointAtFraction, seqColor, type Seg } from "./model.ts";
 
 const icons = new Map<string, L.DivIcon>();
 function icon(html: string, size: number, cls = ""): L.DivIcon {
@@ -60,19 +60,21 @@ export default function EditorMap(props: Props) {
         {shown.map((s, i) => {
           const color = seqColor(i, n);
           const on = s.key === sel;
-          const pos = s.coords.map(ll);
+          const line = curveOf(s).line;
+          const pos = line.map(ll);
           const dash = s.required ? undefined : "9 9";
           return (
             <Fragment key={s.key}>
-              {on && pos.length > 1 && <Polyline positions={pos} pathOptions={{ color: "#fff", weight: 13, opacity: 0.9 }} interactive={false} />}
+              {/* always created first so it stays under the line; only visible while selected */}
+              {pos.length > 1 && <Polyline positions={pos} pathOptions={{ color: "#fff", weight: 13, opacity: on ? 0.9 : 0 }} interactive={false} />}
               <Polyline positions={pos} pathOptions={{ color, weight: on ? 8 : 6, opacity: on ? 1 : 0.8, dashArray: dash }}
                 eventHandlers={{ click: (e) => { if (!draw) { L.DomEvent.stopPropagation(e); onSelect(s.key); onSelectPt(null); } } }} />
-              {s.coords.length > 0 && (
-                <Marker position={ll(s.coords[0])} interactive={false} zIndexOffset={400}
+              {line.length > 0 && (
+                <Marker position={ll(line[0])} interactive={false} zIndexOffset={400}
                   icon={icon(`<span style="background:${color}">${i + 1}</span>`, 26, "seg-badge")} />
               )}
               {(() => {
-                const m = pointAtFraction(s.coords, 0.5);
+                const m = pointAtFraction(line, 0.5);
                 return m && (
                   <Marker position={ll(m.point)} interactive={false} zIndexOffset={300}
                     icon={icon(`<span style="color:${color};transform:rotate(${Math.round(m.bearing)}deg)">▲</span>`, 22, "seg-arrow")} />
@@ -84,8 +86,8 @@ export default function EditorMap(props: Props) {
 
         {!readOnly && sel && shown.filter((s) => s.key === sel).map((s) => (
           <Fragment key={`edit-${s.key}`}>
-            {!draw && s.coords.slice(0, -1).map((c, i) => {
-              const m = midpoint(c, s.coords[i + 1]);
+            {!draw && s.coords.slice(0, -1).map((_, i) => {
+              const m = midAfter(s, i);
               return (
                 <Marker key={`mid-${i}`} position={ll(m)} zIndexOffset={500} icon={icon("+", 18, "vtx-mid")} title="Add a point here"
                   eventHandlers={{ click: () => onInsertMid(s.key, i + 1, m) }} />

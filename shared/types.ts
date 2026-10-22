@@ -7,17 +7,18 @@ export type RouteVersionStatus = "draft" | "published" | "archived";
 export type SegmentStatus = "pending" | "in_progress" | "completed" | "skipped";
 export type AssignmentStatus = "assigned" | "in_progress" | "pending_sync" | "completed" | "needs_review";
 
-export type User = { id: string; username: string; displayName: string; role: Role; mustChangePassword: boolean };
+export type User = { id: string; username: string; displayName: string; role: Role };
 
-export type WorkerRow = {
-  id: string; username: string; displayName: string; active: boolean; mustChangePassword: boolean;
-  createdAt: string; lastActiveAt: string | null;
-};
+export type WorkerRow = { id: string; username: string; displayName: string; active: boolean; createdAt: string };
 
+/**
+ * coords = the points an admin edits: the control points of a curve when `smooth`, else the line itself.
+ * lengthM is always the length of the stored (smoothed) line.
+ */
 export type SegmentDef = {
-  id: string; order: number; name: string; required: boolean; coords: LngLat[]; minCoverageRatio: number; lengthM: number;
+  id: string; order: number; name: string; required: boolean; smooth: boolean; coords: LngLat[]; minCoverageRatio: number; lengthM: number;
 };
-export type SegmentInput = { name?: string; required: boolean; coords: LngLat[]; minCoverageRatio?: number };
+export type SegmentInput = { name?: string; required: boolean; smooth?: boolean; coords: LngLat[]; minCoverageRatio?: number };
 
 export type RouteVersion = {
   id: string; routeId: string; routeName: string; version: number; status: RouteVersionStatus;
@@ -32,7 +33,7 @@ export type RouteSummary = {
 };
 
 export type AssignmentSummary = {
-  id: string; status: AssignmentStatus; note: string; createdAt: string; updatedAt: string;
+  id: string; status: AssignmentStatus; createdAt: string; updatedAt: string;
   worker: { id: string; username: string; displayName: string };
   route: { id: string; name: string; versionId: string; version: number };
   progress: { segmentsDone: number; segmentsTotal: number; requiredDone: number; requiredTotal: number };

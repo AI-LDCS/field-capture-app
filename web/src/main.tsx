@@ -42,7 +42,6 @@ function Shell() {
 
   if (loading) return <main><p>Loading…</p></main>;
   if (!user) return <main><Login /></main>;
-  if (user.mustChangePassword) return <main><ChangePassword forced /></main>;
 
   const admin = user.role === "admin";
   const link = (h: string, label: string, match: string[]) => (
@@ -63,7 +62,6 @@ function Shell() {
   } else {
     body =
       page === "assignment" && a ? <AssignmentView key={a} id={a} />
-      : page === "password" ? <ChangePassword />
       : <MyAssignments />;
   }
 
@@ -81,7 +79,9 @@ function Shell() {
           ) : link("#/", "My assignments", ["", "assignment"])}
         </nav>
         <span className="grow" />
-        <a href="#/password" className="small muted">{user.username}</a>
+        {admin
+          ? <a href="#/password" className="small muted" title="Change my password">{user.username}</a>
+          : <span className="small muted">{user.displayName || user.username}</span>}
         <button className="ghost small" onClick={() => void logout()}>Sign out</button>
       </header>
       <main>{body}</main>

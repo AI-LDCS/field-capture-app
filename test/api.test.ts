@@ -15,13 +15,12 @@ async function adminClient() {
   assert.equal(r.status, 200, JSON.stringify(r.body));
   return c;
 }
-/** creates a worker, logs in with the temp password, sets a real password, returns a logged-in client */
+/** the admin types a password; the worker logs in with it, nothing else to do */
 async function makeWorker(admin: Client, username: string, password = "worker-password-1") {
-  const created = await admin.post("/api/admin/users", { username, displayName: username.toUpperCase() });
+  const created = await admin.post("/api/admin/users", { username, displayName: username.toUpperCase(), password });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const w = new Client(t.base);
-  assert.equal((await w.post("/api/auth/login", { username, password: created.body.temporaryPassword })).status, 200);
-  assert.equal((await w.post("/api/auth/change-password", { currentPassword: created.body.temporaryPassword, newPassword: password })).status, 200);
+  assert.equal((await w.post("/api/auth/login", { username, password })).status, 200);
   return { client: w, id: created.body.user.id as string, username, password };
 }
 async function publishedRoute(admin: Client, name = "Route", segments?: any[]) {
@@ -113,32 +112,62 @@ describe("account lifecycle", () => {
     assert.equal((await new Client(t.base).post("/api/auth/login", { username: "leaver", password: w.password })).status, 200);
   });
 
-  it("a password reset kills old sessions, forces a change, and the old password stops working", async () => {
+  it("setting a worker's password kills old sessions; the new password works at once, with no forced change", async () => {
     const admin = await adminClient();
     const w = await makeWorker(admin, "resetme");
-    const reset = await admin.post(`/api/admin/users/${w.id}/reset-password`);
-    assert.equal(reset.status, 200);
+    const set = await admin.post(`/api/admin/users/${w.id}/password`, { password: "typed-by-admin-1" });
+    assert.equal(set.status, 200);
+    assert.equal(set.body.generatedPassword, undefined, "a typed password is never echoed back");
     assert.equal((await w.client.get("/api/me/assignments")).status, 401);
     assert.equal((await new Client(t.base).post("/api/auth/login", { username: "resetme", password: w.password })).status, 401);
 
     const again = new Client(t.base);
-    assert.equal((await again.post("/api/auth/login", { username: "resetme", password: reset.body.temporaryPassword })).status, 200);
-    const blocked = await again.get("/api/me/assignments");
-    assert.equal(blocked.status, 403);
-    assert.equal(blocked.body.error, "password_change_required");
-    assert.equal((await again.get("/api/auth/me")).status, 200);
-    assert.equal((await again.post("/api/auth/change-password", { currentPassword: reset.body.temporaryPassword, newPassword: "brand-new-password-9" })).status, 200);
-    assert.equal((await again.get("/api/me/assignments")).status, 200);
+    assert.equal((await again.post("/api/auth/login", { username: "resetme", password: "typed-by-admin-1" })).status, 200);
+    assert.equal((await again.get("/api/me/assignments")).status, 200); // straight in, nothing to change
   });
 
-  it("changing your password signs out your other devices but keeps this one", async () => {
+  it("a generated password is returned once, only when the admin did not type one", async () => {
     const admin = await adminClient();
-    const w = await makeWorker(admin, "twodevices");
-    const other = new Client(t.base);
-    assert.equal((await other.post("/api/auth/login", { username: "twodevices", password: w.password })).status, 200);
-    assert.equal((await w.client.post("/api/auth/change-password", { currentPassword: w.password, newPassword: "yet-another-pass-3" })).status, 200);
-    assert.equal((await w.client.get("/api/auth/me")).status, 200);
+    const created = await admin.post("/api/admin/users", { username: "gen-pw", displayName: "G" });
+    assert.equal(created.status, 201);
+    const pw = created.body.generatedPassword;
+    assert.ok(typeof pw === "string" && pw.length >= 12);
+    assert.equal((await new Client(t.base).post("/api/auth/login", { username: "gen-pw", password: pw })).status, 200);
+    const again = await admin.post(`/api/admin/users/${created.body.user.id}/password`);
+    assert.ok(again.body.generatedPassword && again.body.generatedPassword !== pw);
+    assert.equal((await new Client(t.base).post("/api/auth/login", { username: "gen-pw", password: pw })).status, 401);
+  });
+
+  it("a worker cannot change their own password; only admins set it", async () => {
+    const admin = await adminClient();
+    const w = await makeWorker(admin, "fixedpw");
+    const r = await w.client.post("/api/auth/change-password", { currentPassword: w.password, newPassword: "i-want-another-one-1" });
+    assert.equal(r.status, 403);
+    assert.equal((await new Client(t.base).post("/api/auth/login", { username: "fixedpw", password: w.password })).status, 200);
+    assert.equal((await new Client(t.base).post("/api/auth/login", { username: "fixedpw", password: "i-want-another-one-1" })).status, 401);
+  });
+
+  it("weak worker passwords are rejected, and a worker is only username, display name and active", async () => {
+    const admin = await adminClient();
+    assert.equal((await admin.post("/api/admin/users", { username: "weakling", password: "short" })).status, 400);
+    const made = await admin.post("/api/admin/users", { username: "plainguy", displayName: "Plain Guy", password: "long-enough-1" });
+    assert.deepEqual(Object.keys(made.body.user).sort(), ["active", "createdAt", "displayName", "id", "username"]);
+    const cols = (await t.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'")).rows.map((r) => r.column_name);
+    assert.ok(!cols.includes("must_change_password"));
+  });
+
+  it("the admin changing their own password signs out their other devices but keeps this one", async () => {
+    const original = ADMIN.password;
+    const next = "a-new-admin-password-42";
+    const here = await adminClient();
+    const other = await adminClient();
+    assert.equal((await here.post("/api/auth/change-password", { currentPassword: original, newPassword: "short" })).status, 400);
+    assert.equal((await here.post("/api/auth/change-password", { currentPassword: "wrong-current-pw-1", newPassword: next })).status, 400);
+    assert.equal((await here.post("/api/auth/change-password", { currentPassword: original, newPassword: next })).status, 200);
+    assert.equal((await here.get("/api/auth/me")).status, 200);
     assert.equal((await other.get("/api/auth/me")).status, 401);
+    // put it back so the other tests can log in
+    assert.equal((await here.post("/api/auth/change-password", { currentPassword: next, newPassword: original })).status, 200);
   });
 
   it("admins manage workers only", async () => {
@@ -147,7 +176,7 @@ describe("account lifecycle", () => {
     const list = await admin.get("/api/admin/users");
     assert.ok(list.body.every((u: any) => u.id !== me.body.user.id));
     assert.equal((await admin.post(`/api/admin/users/${me.body.user.id}/deactivate`)).status, 404);
-    assert.equal((await admin.post(`/api/admin/users/${me.body.user.id}/reset-password`)).status, 404);
+    assert.equal((await admin.post(`/api/admin/users/${me.body.user.id}/password`)).status, 404);
   });
 
   it("bootstrap run again does not change or recreate the admin", async () => {
@@ -167,7 +196,7 @@ describe("authorization", () => {
     ["GET", "/api/admin/users"], ["POST", "/api/admin/users"],
     ["PATCH", "/api/admin/users/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/deactivate"],
-    ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/reset-password"],
+    ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/password"],
     ["GET", "/api/admin/routes"], ["POST", "/api/admin/routes"],
     ["GET", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
     ["PUT", "/api/admin/route-versions/00000000-0000-4000-8000-000000000000"],
@@ -363,10 +392,52 @@ describe("routes and versions", () => {
     assert.equal((await admin.del(`/api/admin/assignments/${b.body.id}`)).status, 200);
   });
 
+  it("a curved segment is stored as the smooth line, and its control points come back for editing", async () => {
+    const admin = await adminClient();
+    const ctrl = [[100.5, 13.75], [100.5006, 13.7506], [100.5012, 13.7504], [100.5018, 13.751]];
+    const made = await admin.post("/api/admin/routes", { name: "Curvy", segments: [
+      { required: true, smooth: true, coords: ctrl },
+      { required: false, coords: ctrl.map(([x, y]) => [x + 0.01, y]) },
+    ] });
+    assert.equal(made.status, 201, JSON.stringify(made.body));
+    const [curved, straight] = made.body.segments;
+    assert.equal(curved.smooth, true);
+    assert.deepEqual(curved.coords, ctrl, "the editor gets the control points back");
+    assert.equal(straight.smooth, false);
+    assert.equal(straight.coords.length, 4, "a straight segment is stored as given");
+
+    // the database holds the dense curve, through every control point
+    const { rows } = await t.pool.query(
+      "SELECT ST_NPoints(geom) AS n, control, ST_AsGeoJSON(geom)::json AS g FROM route_segments WHERE route_version_id = $1 ORDER BY ord", [made.body.id]);
+    assert.ok(rows[0].n > 40, `curve has ${rows[0].n} points`);
+    assert.equal(rows[1].n, 4);
+    assert.equal(rows[1].control, null);
+    for (const c of ctrl) assert.ok(rows[0].g.coordinates.some((p: number[]) => p[0] === c[0] && p[1] === c[1]), "control point on the curve");
+
+    // new version keeps both the curve and its control points; publish, then a worker sees the curve
+    const p = await admin.post(`/api/admin/route-versions/${made.body.id}/publish`);
+    const nv = await admin.post(`/api/admin/routes/${p.body.routeId}/new-version`);
+    assert.equal(nv.body.segments[0].smooth, true);
+    assert.deepEqual(nv.body.segments[0].coords, ctrl);
+    const w = await makeWorker(admin, "curvewalker");
+    const a = await admin.post("/api/admin/assignments", { routeVersionId: p.body.id, userId: w.id });
+    const seen = await w.client.get(`/api/me/assignments/${a.body.id}`);
+    assert.ok(seen.body.segments[0].coords.length > 40, "the worker walks the curve, not the corners");
+  });
+
+  it("a curved segment can still be edited as a draft, but not once published", async () => {
+    const admin = await adminClient();
+    const v = await admin.post("/api/admin/routes", { name: "Edit curve", segments: [{ required: true, smooth: true, coords: [[100.5, 13.75], [100.5006, 13.7506], [100.5012, 13.7504]] }] });
+    const moved = await admin.put(`/api/admin/route-versions/${v.body.id}`, { segments: [{ required: true, smooth: false, coords: [[100.5, 13.75], [100.502, 13.752]] }] });
+    assert.equal(moved.status, 200);
+    assert.equal(moved.body.segments[0].smooth, false);
+    assert.equal((await t.pool.query("SELECT control FROM route_segments WHERE route_version_id = $1", [v.body.id])).rows[0].control, null);
+  });
+
   it("writes an audit trail for sensitive actions", async () => {
     const { rows } = await t.pool.query("SELECT DISTINCT action FROM audit_log");
     const actions = rows.map((r) => r.action);
-    for (const a of ["admin_bootstrapped", "login", "login_failed", "user_created", "user_deactivated", "password_reset", "password_changed", "route_published", "assignment_created"]) {
+    for (const a of ["admin_bootstrapped", "login", "login_failed", "user_created", "user_deactivated", "password_set", "password_changed", "route_published", "assignment_created"]) {
       assert.ok(actions.includes(a), `missing audit action ${a}`);
     }
   });

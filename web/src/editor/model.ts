@@ -1,17 +1,19 @@
+import { smoothLine } from "@shared/curve.ts";
 import { bearingDeg, haversineM, lineLengthM } from "@shared/geo.ts";
 import type { LngLat, SegmentInput } from "@shared/types.ts";
 
 /** Editing model. Every function is pure: it returns a new list and never mutates its input. */
-export type Seg = { key: string; name: string; required: boolean; minCoverage: number; coords: LngLat[] };
+/** `coords` are what the admin edits: control points when `smooth` (the line is the curve through them), else the line itself. */
+export type Seg = { key: string; name: string; required: boolean; minCoverage: number; smooth: boolean; coords: LngLat[] };
 
 let counter = 0;
 export const newKey = () => `s${Date.now().toString(36)}${(counter++).toString(36)}`;
 export const makeSeg = (coords: LngLat[] = [], over: Partial<Seg> = {}): Seg => ({
-  key: newKey(), name: "", required: true, minCoverage: 0.9, coords, ...over,
+  key: newKey(), name: "", required: true, minCoverage: 0.9, smooth: false, coords, ...over,
 });
 
 export const toInput = (segs: Seg[]): SegmentInput[] =>
-  segs.map((s) => ({ name: s.name, required: s.required, coords: s.coords, minCoverageRatio: s.minCoverage }));
+  segs.map((s) => ({ name: s.name, required: s.required, smooth: s.smooth, coords: s.coords, minCoverageRatio: s.minCoverage }));
 
 const mapSeg = (segs: Seg[], key: string, f: (s: Seg) => Seg) => segs.map((s) => (s.key === key ? f(s) : s));
 
@@ -66,7 +68,23 @@ export function joinWithNext(segs: Seg[], key: string): Seg[] {
 
 export const reverseSeg = (segs: Seg[], key: string) => mapSeg(segs, key, (s) => ({ ...s, coords: [...s.coords].reverse() }));
 
-export const segLength = (s: Seg) => lineLengthM(s.coords);
+// the same function the server uses, so what you see is what gets stored
+const curves = new WeakMap<LngLat[], { line: LngLat[]; at: number[] }>();
+export function curveOf(s: Pick<Seg, "smooth" | "coords">): { line: LngLat[]; at: number[] } {
+  if (!s.smooth) return { line: s.coords, at: s.coords.map((_, i) => i) };
+  let c = curves.get(s.coords);
+  if (!c) curves.set(s.coords, (c = smoothLine(s.coords)));
+  return c;
+}
+
+/** Where a new point goes between control point i and i+1: on the drawn line, so a curve is not disturbed. */
+export function midAfter(s: Seg, i: number): LngLat {
+  const { line, at } = curveOf(s);
+  if (s.smooth && at.length === s.coords.length) return line[Math.round((at[i] + at[i + 1]) / 2)];
+  return midpoint(s.coords[i], s.coords[i + 1]);
+}
+
+export const segLength = (s: Seg) => lineLengthM(curveOf(s).line);
 export const totalLength = (segs: Seg[]) => segs.reduce((a, s) => a + segLength(s), 0);
 
 /** A segment is usable once it has two points. Returns the 1-based numbers of the ones that are not. */

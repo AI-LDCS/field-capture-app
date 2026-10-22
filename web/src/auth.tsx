@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type FormEvent, type Re
 import type { User } from "@shared/types.ts";
 import { api, setUnauthenticatedHandler } from "./api.ts";
 
-type Auth = { user: User | null; loading: boolean; refresh: () => Promise<void>; logout: () => Promise<void>; setUser: (u: User | null) => void };
+type Auth = { user: User | null; loading: boolean; logout: () => Promise<void>; setUser: (u: User | null) => void };
 const Ctx = createContext<Auth>(null as unknown as Auth);
 export const useAuth = () => useContext(Ctx);
 
@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     location.hash = "#/";
   };
-  return <Ctx.Provider value={{ user, loading, refresh, logout, setUser }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, logout, setUser }}>{children}</Ctx.Provider>;
 }
 
 export function Login() {
@@ -50,8 +50,8 @@ export function Login() {
   );
 }
 
-export function ChangePassword({ forced = false }: { forced?: boolean }) {
-  const { refresh, logout } = useAuth();
+/** Only the admin account has this. Workers' passwords are set by an admin. */
+export function ChangePassword() {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
@@ -61,27 +61,23 @@ export function ChangePassword({ forced = false }: { forced?: boolean }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setErr("");
+    setDone(false);
     if (next !== again) return setErr("The new passwords do not match");
     try {
       await api.changePassword(cur, next);
       setDone(true);
       setCur(""); setNext(""); setAgain("");
-      await refresh();
     } catch (x: any) { setErr(x.message); }
   };
   return (
     <form className="card narrow" onSubmit={submit}>
-      <h2>{forced ? "Choose a new password" : "Change password"}</h2>
-      {forced && <p className="muted">You are using a temporary password. Pick your own to continue.</p>}
+      <h2>Change my password</h2>
       <label>Current password<input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" /></label>
-      <label>New password (10+ characters)<input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" /></label>
+      <label>New password (12+ characters)<input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" /></label>
       <label>New password again<input type="password" value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" /></label>
       {err && <p className="err">{err}</p>}
-      {done && !forced && <p className="ok">Password changed. Your other devices were signed out.</p>}
-      <div className="row">
-        <button disabled={!cur || !next || !again}>Change password</button>
-        {forced && <button type="button" className="ghost" onClick={() => void logout()}>Sign out</button>}
-      </div>
+      {done && <p className="ok">Password changed. Your other devices were signed out.</p>}
+      <button disabled={!cur || !next || !again}>Change password</button>
     </form>
   );
 }

@@ -34,6 +34,7 @@ Pick points on the map or type them. Everything is editable until a version is p
 - Drag a vertex on the map, or edit its latitude / longitude in the table. Click a `+` on the line to add a point; select a point and press Delete.
 - **New segment** + **Draw**: click the map to add points to the selected segment. Esc stops drawing. Or type `lat, lng` and press Add. Or paste many points.
 - The list order is the walking order. Drag the grip to reorder (arrows work too). Numbers, colours and direction arrows on the map follow the order.
+- **Curved segments** (the default for hand-drawn ones): place points along the sidewalk and the line bends smoothly through every one (centripetal Catmull-Rom, `shared/curve.ts`). The server draws the curve itself and stores both the smooth line (used for coverage and what the worker walks) and your points (so you can keep editing). It does not know where sidewalks are: it only smooths what you place.
 - Split a segment at a point (scissors), join with the next, reverse direction, per-segment required/optional, name and minimum coverage.
 - Undo / redo (Ctrl or Cmd + Z, add Shift to redo). Unsaved edits warn before you leave. Pure edit logic is unit-tested in `test/editor.test.ts`.
 
@@ -44,6 +45,7 @@ Pick points on the map or type them. Everything is editable until a version is p
 | Argon2id passwords | `server/auth/password.ts` |
 | Server-side sessions, `__Host-sid` cookie: HttpOnly, Secure, SameSite=Lax; only a SHA-256 of the token is stored | `server/auth/sessions.ts` |
 | New token on every login; deactivate / reset-password / change-password delete sessions | `server/routes/*` |
+| Only admins set worker passwords; a worker cannot change their own | `routes/adminUsers.ts`, `routes/auth.ts` |
 | Admin vs worker, worker sees only own assignments (404 for others) | `server/app.ts`, `routes/assignments.ts` |
 | CSRF: Origin allow-list + JSON-only + SameSite | `server/http.ts` |
 | Login lockout: 5 failures per username, 20 per IP, per 15 min | `routes/auth.ts` |
@@ -57,7 +59,8 @@ Pick points on the map or type them. Everything is editable until a version is p
 
 - Plain SQL migrations + `pg`, no ORM (PostGIS geometry columns).
 - Admins manage workers only. There is no admin-creates-admin.
-- Admin-set and reset passwords are temporary: the worker must change them at first login.
+- A worker is a username, a display name and a password. Only an admin sets the password (typed, or generated and shown once), from the Workers page. It never expires and the worker cannot change it. Setting a new one signs the worker out everywhere. Worker passwords: 8+ characters. Only the admin account can change its own password (12+).
+- Assignments have no notes or schedule: an admin gives a route version to a worker, that is all.
 - Publishing a new version archives the previous published one. Archived versions cannot be newly assigned; existing assignments keep working.
 - A route needs at least one required segment and every segment at least 5 m to be published.
 - Session: 14 days absolute, 24 h idle (env-tunable).

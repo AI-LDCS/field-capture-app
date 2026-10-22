@@ -3,20 +3,42 @@ import { api } from "./api.ts";
 import { Badge, Card, SecretBox, km, useLoad, when } from "./ui.tsx";
 
 // ---------- workers ----------
+/** Password field with a Generate option. Empty means: the server generates one. */
+function PasswordRow({ id, onDone }: { id: string; onDone: (generated?: string) => void }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const save = async () => {
+    setErr("");
+    try { onDone((await api.setWorkerPassword(id, pw || undefined)).generatedPassword); setPw(""); } catch (x: any) { setErr(x.message); }
+  };
+  return (
+    <div className="pwrow">
+      <div className="row">
+        <input value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password (8+), or leave empty to generate" autoComplete="off" />
+        <button onClick={() => void save()}>{pw ? "Set password" : "Generate & set"}</button>
+      </div>
+      <p className="muted small">The worker is signed out everywhere and uses the new password. Workers cannot change it themselves.</p>
+      {err && <p className="err small">{err}</p>}
+    </div>
+  );
+}
+
 export function Workers() {
   const { data, err, reload } = useLoad(() => api.workers());
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
   const [secret, setSecret] = useState<{ label: string; value: string } | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
     setMsg("");
     try {
-      const r = await api.createWorker(username, displayName);
-      setSecret({ label: `Temporary password for ${r.user.username}`, value: r.temporaryPassword });
-      setUsername(""); setDisplayName("");
+      const r = await api.createWorker(username, displayName, password || undefined);
+      setSecret(r.generatedPassword ? { label: `Password for ${r.user.username}`, value: r.generatedPassword } : null);
+      setUsername(""); setDisplayName(""); setPassword("");
       reload();
     } catch (x: any) { setMsg(x.message); }
   };
@@ -29,11 +51,12 @@ export function Workers() {
     <>
       <Card title="Add a field worker">
         <form onSubmit={create} className="grid2">
-          <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. somchai" autoCapitalize="none" /></label>
-          <label>Name (optional)<input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></label>
+          <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. somchai" autoCapitalize="none" autoComplete="off" /></label>
+          <label>Display name<input value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="off" /></label>
+          <label>Password<input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8+ characters, or leave empty to generate" autoComplete="off" /></label>
           <div className="row"><button disabled={!username}>Create worker</button></div>
         </form>
-        <p className="muted small">A temporary password is generated and shown once.</p>
+        <p className="muted small">The password never expires and the worker cannot change it. Only you can set a new one, from this page. It is stored hashed, so it can be shown only when you set it.</p>
         {msg && <p className="err">{msg}</p>}
         {secret && <SecretBox {...secret} onClose={() => setSecret(null)} />}
       </Card>
@@ -45,24 +68,27 @@ export function Workers() {
           <div key={w.id} className="item">
             <div className="row between">
               <div>
-                <strong>{w.username}</strong> {w.displayName && <span className="muted">· {w.displayName}</span>}{" "}
-                {!w.active && <Badge s="deactivated" />} {w.mustChangePassword && <Badge s="temp password" />}
-                <div className="small muted">last active {when(w.lastActiveAt)}</div>
+                <strong>{w.username}</strong> {w.displayName && <span className="muted">· {w.displayName}</span>} {!w.active && <Badge s="deactivated" />}
               </div>
               <div className="row wrap">
                 <button className="ghost" onClick={() => {
                   const n = prompt("Display name", w.displayName);
                   if (n !== null) void act(() => api.renameWorker(w.id, n));
                 }}>Rename</button>
-                <button className="ghost" onClick={() => confirm(`Reset the password of ${w.username}? They will be signed out everywhere.`) &&
-                  void act(async () => { const r = await api.resetPassword(w.id); setSecret({ label: `New temporary password for ${w.username}`, value: r.temporaryPassword }); })}>
-                  Reset password
-                </button>
+                <button className="ghost" onClick={() => setEditing(editing === w.id ? null : w.id)}>Set password</button>
                 {w.active
                   ? <button className="ghost danger-text" onClick={() => confirm(`Deactivate ${w.username}? They are signed out immediately.`) && void act(() => api.setWorkerActive(w.id, false))}>Deactivate</button>
                   : <button className="ghost" onClick={() => void act(() => api.setWorkerActive(w.id, true))}>Reactivate</button>}
               </div>
             </div>
+            {editing === w.id && (
+              <PasswordRow id={w.id} onDone={(generated) => {
+                setEditing(null);
+                setSecret(generated ? { label: `New password for ${w.username}`, value: generated } : null);
+                setMsg(generated ? "" : `Password set for ${w.username}.`);
+                reload();
+              }} />
+            )}
           </div>
         ))}
       </Card>
@@ -137,7 +163,6 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
 
   const [versionId, setVersionId] = useState(presetVersionId ?? "");
   const [userId, setUserId] = useState("");
-  const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
 
   const published = (routes.data ?? []).flatMap((r) => r.versions.filter((v) => v.status === "published").map((v) => ({ id: v.id, label: `${r.name} · v${v.version}` })));
@@ -147,8 +172,7 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
     e.preventDefault();
     setMsg("");
     try {
-      await api.createAssignment(versionId, userId, note);
-      setNote("");
+      await api.createAssignment(versionId, userId);
       list.reload();
     } catch (x: any) { setMsg(x.message); }
   };
@@ -169,7 +193,6 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
               {active.map((w) => <option key={w.id} value={w.id}>{w.username}{w.displayName ? ` (${w.displayName})` : ""}</option>)}
             </select>
           </label>
-          <label>Note (optional)<input value={note} onChange={(e) => setNote(e.target.value)} /></label>
           <div className="row"><button disabled={!versionId || !userId}>Assign</button></div>
         </form>
         {msg && <p className="err">{msg}</p>}
@@ -198,7 +221,7 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
             <div>
               <strong>{a.route.name}</strong> <span className="muted">v{a.route.version}</span> <Badge s={a.status} />
               <div className="small muted">
-                {a.worker.username} · required {a.progress.requiredDone}/{a.progress.requiredTotal} · {when(a.createdAt)}{a.note && <> · “{a.note}”</>}
+                {a.worker.username} · required {a.progress.requiredDone}/{a.progress.requiredTotal} · {when(a.createdAt)}
               </div>
             </div>
             <div className="row">

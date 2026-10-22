@@ -72,6 +72,11 @@ export default function SegmentList({ segs, sel, readOnly, onSelect, onMove, onC
                       <button type="button" className={s.required ? "on" : ""} onClick={() => onChange(s.key, { required: true })}>Required</button>
                       <button type="button" className={!s.required ? "on" : ""} onClick={() => onChange(s.key, { required: false })}>Optional</button>
                     </div>
+                    <div className="seg-toggle" role="group" aria-label="Shape">
+                      <button type="button" className={s.smooth ? "on" : ""} onClick={() => onChange(s.key, { smooth: true })} title="Smooth line through your points">⌇ Curved</button>
+                      <button type="button" className={!s.smooth ? "on" : ""} onClick={() => onChange(s.key, { smooth: false })} title="Straight lines between points">⟋ Straight</button>
+                    </div>
+                    <p className="muted small">{s.smooth ? "Curved: place points along the sidewalk; the line bends smoothly through them. Add a point wherever it bends." : "Straight: the line is drawn point to point."}</p>
                     <div className="row wrap">
                       <button className="ghost small" disabled={i === 0} onClick={() => onMove(i, i - 1)}>↑ Earlier</button>
                       <button className="ghost small" disabled={i === segs.length - 1} onClick={() => onMove(i, i + 1)}>↓ Later</button>
@@ -81,7 +86,7 @@ export default function SegmentList({ segs, sel, readOnly, onSelect, onMove, onC
                     </div>
                   </>
                 ) : (
-                  <p className="muted small">{s.coords.length} points · must cover {Math.round(s.minCoverage * 100)}%</p>
+                  <p className="muted small">{s.smooth ? "Curved" : "Straight"} · {s.coords.length} points · must cover {Math.round(s.minCoverage * 100)}%</p>
                 )}
               </div>
             )}

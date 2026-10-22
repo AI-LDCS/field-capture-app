@@ -35,13 +35,8 @@ export const attachUser: RequestHandler = async (req, _res, next) => {
   }
 };
 
-const PASSWORD_ROUTES = new Set(["/api/auth/me", "/api/auth/logout", "/api/auth/change-password"]);
-
 export const requireAuth: RequestHandler = (req, _res, next) => {
   if (!req.user) return next(new HttpError(401, "unauthenticated", "login required"));
-  if (req.user.mustChangePassword && !PASSWORD_ROUTES.has(req.originalUrl.split("?")[0])) {
-    return next(new HttpError(403, "password_change_required", "change your password first"));
-  }
   next();
 };
 

@@ -57,7 +57,7 @@ export const Card = ({ title, children, right }: { title?: string; children: Rea
   </section>
 );
 
-/** Shows a one-time secret such as a temporary password. It is never shown again. */
+/** Shows a generated password once. It is stored hashed and cannot be shown again. */
 export function SecretBox({ label, value, onClose }: { label: string; value: string; onClose: () => void }) {
   return (
     <div className="secret">
@@ -67,7 +67,7 @@ export function SecretBox({ label, value, onClose }: { label: string; value: str
         <button className="ghost" onClick={() => void navigator.clipboard?.writeText(value)}>Copy</button>
         <button className="ghost" onClick={onClose}>I saved it, hide</button>
       </div>
-      <div className="small muted">Shown once. The worker must change it at first login.</div>
+      <div className="small muted">Shown once. Give it to the worker; they cannot change it. You can set a new one any time.</div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  curveOf, midAfter, segLength,
   commit, hist, incompleteSegments, insertPoint, joinWithNext, makeSeg, midpoint, moveSeg, parseLatLng, parsePoints,
   pointAtFraction, redo, removePoint, reverseSeg, setPoint, splitAt, toInput, undo,
 } from "../web/src/editor/model.ts";
@@ -71,7 +72,7 @@ describe("editor model", () => {
 
   it("maps to the API input", () => {
     const a = makeSeg(P([0, 0], [1, 0]), { name: "N", required: false, minCoverage: 0.8 });
-    assert.deepEqual(toInput([a]), [{ name: "N", required: false, coords: [[0, 0], [1, 0]], minCoverageRatio: 0.8 }]);
+    assert.deepEqual(toInput([a]), [{ name: "N", required: false, smooth: false, coords: [[0, 0], [1, 0]], minCoverageRatio: 0.8 }]);
   });
 
   it("finds the middle of a line and its heading", () => {
@@ -79,6 +80,32 @@ describe("editor model", () => {
     assert.ok(Math.abs(r.point[0] - 100.001) < 1e-6);
     assert.ok(Math.abs(r.bearing - 90) < 0.5); // due east
     assert.equal(pointAtFraction(P([1, 1]), 0.5), null);
+  });
+});
+
+describe("curved segments in the editor", () => {
+  const ctrl = P([100.5, 13.75], [100.5006, 13.7506], [100.5012, 13.7504], [100.5018, 13.751]);
+  it("a curved segment draws a denser line than its control points; a straight one draws its points", () => {
+    const curved = makeSeg(ctrl, { smooth: true });
+    const straight = makeSeg(ctrl, { smooth: false });
+    assert.ok(curveOf(curved).line.length > ctrl.length * 10);
+    assert.equal(curveOf(straight).line, straight.coords);
+    assert.ok(segLength(curved) > 0);
+    assert.equal(curveOf(curved), curveOf(curved), "cached per control list, so dragging stays fast");
+  });
+  it("a new point goes on the drawn curve, so adding it does not change the shape", () => {
+    const curved = makeSeg(ctrl, { smooth: true });
+    const m = midAfter(curved, 1);
+    assert.ok(curveOf(curved).line.some((p) => p[0] === m[0] && p[1] === m[1]), "the handle sits on the line");
+    const with1 = insertPoint([curved], curved.key, 2, m)[0];
+    const before = segLength(curved), after = segLength(with1);
+    assert.ok(Math.abs(after - before) / before < 0.03, `${before} -> ${after}`);
+  });
+  it("split and join keep the curved setting", () => {
+    const s = makeSeg(ctrl, { smooth: true });
+    const parts = splitAt([s], s.key, 2).segs;
+    assert.ok(parts.every((x) => x.smooth));
+    assert.ok(joinWithNext(parts, parts[0].key)[0].smooth);
   });
 });
 

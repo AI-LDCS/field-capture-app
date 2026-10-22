@@ -8,7 +8,6 @@ export type SessionUser = {
   username: string;
   displayName: string;
   role: "admin" | "worker";
-  mustChangePassword: boolean;
   sessionId: string;
 };
 
@@ -51,7 +50,7 @@ export async function loadSession(req: Request): Promise<SessionUser | null> {
   if (!token) return null;
   const id = sha(token);
   const row = await q1(
-    `SELECT s.id AS session_id, s.last_seen_at, u.id, u.username, u.display_name, u.role, u.must_change_password
+    `SELECT s.id AS session_id, s.last_seen_at, u.id, u.username, u.display_name, u.role
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.id = $1 AND s.expires_at > now()
         AND s.last_seen_at > now() - ($2 || ' hours')::interval
@@ -63,8 +62,7 @@ export async function loadSession(req: Request): Promise<SessionUser | null> {
     await q("UPDATE sessions SET last_seen_at = now() WHERE id = $1", [id]);
   }
   return {
-    id: row.id, username: row.username, displayName: row.display_name, role: row.role,
-    mustChangePassword: row.must_change_password, sessionId: id,
+    id: row.id, username: row.username, displayName: row.display_name, role: row.role, sessionId: id,
   };
 }
 

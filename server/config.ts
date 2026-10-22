@@ -22,7 +22,7 @@ export const config = {
     maxFailuresPerUser: 5,
     maxFailuresPerIp: 20,
   },
-  password: { minLength: 10, adminMinLength: 12, maxLength: 128 },
+  password: { workerMinLength: 8, adminMinLength: 12, maxLength: 128 },
 };
 
 export function requireConfig() {

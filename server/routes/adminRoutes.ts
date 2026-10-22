@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { PoolClient } from "pg";
+import { smoothLine } from "../../shared/curve.ts";
 import { audit } from "../audit.ts";
 import { pool, q, q1, tx, type Db } from "../db.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
@@ -9,10 +10,12 @@ export const adminRoutesRouter = Router();
 
 // ---------- input ----------
 const Coord = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
+const MAX_POINTS = 5000;
 const SegmentIn = z.object({
   name: z.string().trim().max(80).default(""),
   required: z.boolean(),
-  coords: z.array(Coord).min(2).max(5000),
+  smooth: z.boolean().default(false), // true: coords are control points and the stored line is the curve through them
+  coords: z.array(Coord).min(2).max(MAX_POINTS),
   minCoverageRatio: z.number().min(0.5).max(1).default(0.9),
 });
 const DraftIn = z.object({
@@ -21,7 +24,7 @@ const DraftIn = z.object({
 });
 
 // ---------- output ----------
-const SEG_SQL = `SELECT id, ord, name, required, ST_AsGeoJSON(geom)::json AS g, min_coverage_ratio, ST_Length(geom::geography) AS length_m
+const SEG_SQL = `SELECT id, ord, name, required, control, ST_AsGeoJSON(geom)::json AS g, min_coverage_ratio, ST_Length(geom::geography) AS length_m
                    FROM route_segments WHERE route_version_id = $1 ORDER BY ord`;
 
 export async function loadVersion(db: Db, versionId: string) {
@@ -35,7 +38,7 @@ export async function loadVersion(db: Db, versionId: string) {
     id: v.id, routeId: v.route_id, routeName: v.route_name, version: v.version, status: v.status,
     createdAt: v.created_at, publishedAt: v.published_at,
     segments: segs.map((s) => ({
-      id: s.id, order: s.ord, name: s.name, required: s.required, coords: s.g.coordinates,
+      id: s.id, order: s.ord, name: s.name, required: s.required, smooth: s.control != null, coords: s.control ?? s.g.coordinates,
       minCoverageRatio: s.min_coverage_ratio, lengthM: Math.round(s.length_m * 10) / 10,
     })),
   };
@@ -45,10 +48,13 @@ async function writeSegments(c: PoolClient, versionId: string, segs: z.infer<typ
   await q("DELETE FROM route_segments WHERE route_version_id = $1", [versionId], c);
   for (let i = 0; i < segs.length; i++) {
     const s = segs[i];
+    // the server draws the curve, so the stored line never depends on what a client claims
+    const line = s.smooth ? smoothLine(s.coords).line : s.coords;
+    if (line.length < 2 || line.length > MAX_POINTS) throw new HttpError(400, "bad_segment", `segment ${i + 1} has too many points once smoothed`);
     await q(
-      `INSERT INTO route_segments (route_version_id, ord, name, required, geom, min_coverage_ratio)
-       VALUES ($1,$2,$3,$4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6)`,
-      [versionId, i, s.name, s.required, JSON.stringify({ type: "LineString", coordinates: s.coords }), s.minCoverageRatio], c,
+      `INSERT INTO route_segments (route_version_id, ord, name, required, geom, control, min_coverage_ratio)
+       VALUES ($1,$2,$3,$4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6, $7)`,
+      [versionId, i, s.name, s.required, JSON.stringify({ type: "LineString", coordinates: line }), s.smooth ? JSON.stringify(s.coords) : null, s.minCoverageRatio], c,
     );
   }
 }
@@ -146,8 +152,8 @@ adminRoutesRouter.post("/routes/:id/new-version", async (req, res) => {
       [id, src.version + 1, src.name, req.user!.id], c,
     );
     await q(
-      `INSERT INTO route_segments (route_version_id, ord, name, required, geom, min_coverage_ratio)
-       SELECT $1, ord, name, required, geom, min_coverage_ratio FROM route_segments WHERE route_version_id = $2`,
+      `INSERT INTO route_segments (route_version_id, ord, name, required, geom, control, min_coverage_ratio)
+       SELECT $1, ord, name, required, geom, control, min_coverage_ratio FROM route_segments WHERE route_version_id = $2`,
       [v.id, src.id], c,
     );
     await audit(req.user!.id, "route_version_created", { type: "route_version", id: v.id }, { from: src.version }, req.ip, c);

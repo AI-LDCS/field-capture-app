@@ -14,7 +14,7 @@ export function MyAssignments() {
           <div>
             <strong>{a.route.name}</strong> <Badge s={a.status} />
             <div className="small muted">
-              required {a.progress.requiredDone}/{a.progress.requiredTotal} · assigned {when(a.createdAt)}{a.note && <> · “{a.note}”</>}
+              required {a.progress.requiredDone}/{a.progress.requiredTotal} · assigned {when(a.createdAt)}
             </div>
           </div>
           <span className="muted">›</span>
@@ -42,7 +42,6 @@ export function AssignmentView({ id, admin }: { id: string; admin?: boolean }) {
           Version {data.route.version} · {data.segments.length} segments · {km(total)}
           {admin && <> · worker <strong>{data.worker.username}</strong></>}
         </p>
-        {data.note && <p>“{data.note}”</p>}
       </Card>
 
       <div className="map">

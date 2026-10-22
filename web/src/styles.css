@@ -116,3 +116,4 @@ main:has(.editor) { max-width: 1320px; }
 .vtx.first { border-color: #16a34a; } .vtx.last { border-color: #dc2626; }
 .vtx-mid { width: 18px; height: 18px; line-height: 14px; text-align: center; background: var(--card, #fff); color: #111; font: 700 14px system-ui; border: 2px solid #111827; border-radius: 50%; opacity: .75; cursor: copy; box-sizing: border-box; }
 .vtx-mid:hover { opacity: 1; background: #fde047; }
+.pwrow { margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; }

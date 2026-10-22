@@ -11,10 +11,11 @@ import { HttpError, requireAuth } from "../http.ts";
 export const authRouter = Router();
 
 const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(config.password.maxLength) });
-export const newPassword = z.string().min(config.password.minLength, `at least ${config.password.minLength} characters`).max(config.password.maxLength);
+export const workerPassword = z.string().min(config.password.workerMinLength, `at least ${config.password.workerMinLength} characters`).max(config.password.maxLength);
+const adminPassword = z.string().min(config.password.adminMinLength, `at least ${config.password.adminMinLength} characters`).max(config.password.maxLength);
 
-const publicUser = (u: { id: string; username: string; displayName: string; role: string; mustChangePassword: boolean }) => ({
-  id: u.id, username: u.username, displayName: u.displayName, role: u.role, mustChangePassword: u.mustChangePassword,
+const publicUser = (u: { id: string; username: string; displayName: string; role: string }) => ({
+  id: u.id, username: u.username, displayName: u.displayName, role: u.role,
 });
 
 authRouter.post("/login", async (req, res) => {
@@ -51,9 +52,7 @@ authRouter.post("/login", async (req, res) => {
   await q("DELETE FROM login_attempts WHERE username = $1", [uname]);
   await createSession(user.id, req, res);
   await audit(user.id, "login", { type: "user", id: user.id }, undefined, ip);
-  res.json({
-    user: publicUser({ id: user.id, username: user.username, displayName: user.display_name, role: user.role, mustChangePassword: user.must_change_password }),
-  });
+  res.json({ user: publicUser({ id: user.id, username: user.username, displayName: user.display_name, role: user.role }) });
 });
 
 authRouter.post("/logout", async (req, res) => {
@@ -69,11 +68,13 @@ authRouter.get("/me", requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user!) });
 });
 
-const changeSchema = z.object({ currentPassword: z.string().min(1).max(config.password.maxLength), newPassword });
+const changeSchema = z.object({ currentPassword: z.string().min(1).max(config.password.maxLength), newPassword: adminPassword });
 
+/** Only the admin account changes its own password. A worker's password is set by an admin and is fixed. */
 authRouter.post("/change-password", requireAuth, async (req, res) => {
-  const { currentPassword, newPassword: np } = changeSchema.parse(req.body);
   const me = req.user!;
+  if (me.role !== "admin") throw new HttpError(403, "forbidden", "ask an administrator to change your password");
+  const { currentPassword, newPassword: np } = changeSchema.parse(req.body);
   const row = await q1("SELECT password_hash FROM users WHERE id = $1", [me.id]);
   if (!row || !(await verifyPassword(row.password_hash, currentPassword))) {
     throw new HttpError(400, "wrong_password", "current password is wrong");
@@ -81,7 +82,7 @@ authRouter.post("/change-password", requireAuth, async (req, res) => {
   if (np === currentPassword) throw new HttpError(400, "same_password", "choose a different password");
   const hash = await hashPassword(np);
   await tx(async (c) => {
-    await q("UPDATE users SET password_hash=$1, must_change_password=false, password_changed_at=now(), updated_at=now() WHERE id=$2", [hash, me.id], c);
+    await q("UPDATE users SET password_hash=$1, password_changed_at=now(), updated_at=now() WHERE id=$2", [hash, me.id], c);
     await deleteUserSessions(me.id, me.sessionId, c); // every other device is signed out
     await audit(me.id, "password_changed", { type: "user", id: me.id }, undefined, req.ip, c);
   });

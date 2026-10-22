@@ -6,7 +6,7 @@ import { HttpError, notFound, uuidParam } from "../http.ts";
 
 // ---------- shared shape ----------
 const SUMMARY = `
-  SELECT a.id, a.status, a.note, a.created_at, a.updated_at,
+  SELECT a.id, a.status, a.created_at, a.updated_at,
          a.user_id, u.username, u.display_name,
          v.id AS route_version_id, v.version, r.id AS route_id, v.name AS route_name,
          (SELECT count(*)::int FROM assignment_segments s WHERE s.assignment_id = a.id) AS segment_total,
@@ -19,7 +19,7 @@ const SUMMARY = `
     JOIN routes r ON r.id = v.route_id`;
 
 const summary = (a: any) => ({
-  id: a.id, status: a.status, note: a.note, createdAt: a.created_at, updatedAt: a.updated_at,
+  id: a.id, status: a.status, createdAt: a.created_at, updatedAt: a.updated_at,
   worker: { id: a.user_id, username: a.username, displayName: a.display_name },
   route: { id: a.route_id, name: a.route_name, versionId: a.route_version_id, version: a.version },
   progress: { segmentsDone: a.segment_done, segmentsTotal: a.segment_total, requiredDone: a.required_done, requiredTotal: a.required_total },
@@ -63,7 +63,7 @@ adminAssignmentsRouter.get("/:id", async (req, res) => {
   res.json(d);
 });
 
-const createSchema = z.object({ routeVersionId: z.uuid(), userId: z.uuid(), note: z.string().trim().max(500).default("") });
+const createSchema = z.object({ routeVersionId: z.uuid(), userId: z.uuid() });
 
 adminAssignmentsRouter.post("/", async (req, res) => {
   const body = createSchema.parse(req.body);
@@ -76,8 +76,8 @@ adminAssignmentsRouter.post("/", async (req, res) => {
     if (!u.active) throw new HttpError(409, "worker_inactive", "this worker is deactivated");
 
     const [a] = await q(
-      "INSERT INTO assignments (route_version_id, user_id, assigned_by, note) VALUES ($1,$2,$3,$4) RETURNING id",
-      [body.routeVersionId, body.userId, req.user!.id, body.note], c,
+      "INSERT INTO assignments (route_version_id, user_id, assigned_by) VALUES ($1,$2,$3) RETURNING id",
+      [body.routeVersionId, body.userId, req.user!.id], c,
     );
     // snapshot of the segment list and the required flag at assignment time
     await q(

@@ -3,7 +3,7 @@ import type { LngLat, RouteVersion } from "@shared/types.ts";
 import { api } from "./api.ts";
 import EditorMap from "./editor/EditorMap.tsx";
 import {
-  commit, hist, incompleteSegments, insertPoint, joinWithNext, makeSeg, midpoint, moveSeg, parsePoints, redo, removePoint,
+  commit, hist, incompleteSegments, insertPoint, joinWithNext, makeSeg, midAfter, moveSeg, parsePoints, redo, removePoint,
   removeSeg, reverseSeg, setPoint, splitAt, toInput, totalLength, undo, updateSeg, type History, type Seg,
 } from "./editor/model.ts";
 import PointsTable from "./editor/PointsTable.tsx";
@@ -21,7 +21,7 @@ export function EditVersion({ versionId }: { versionId: string }) {
 }
 
 const fromVersion = (v?: RouteVersion): Seg[] =>
-  (v?.segments ?? []).map((s) => makeSeg(s.coords, { name: s.name, required: s.required, minCoverage: s.minCoverageRatio }));
+  (v?.segments ?? []).map((s) => makeSeg(s.coords, { name: s.name, required: s.required, smooth: s.smooth, minCoverage: s.minCoverageRatio }));
 
 function Editor({ version }: { version?: RouteVersion }) {
   const readOnly = !!version && version.status !== "draft";
@@ -81,7 +81,7 @@ function Editor({ version }: { version?: RouteVersion }) {
   const pick = (key: string | null) => { setSel(key); setSelPt(null); if (!key) setDraw(false); };
 
   const newSegment = () => {
-    const s = makeSeg([]);
+    const s = makeSeg([], { smooth: true }); // sidewalks bend: curved is the default for hand-drawn segments
     edit([...segs, s]);
     setSel(s.key); setSelPt(null); setDraw(true);
   };
@@ -108,7 +108,7 @@ function Editor({ version }: { version?: RouteVersion }) {
   const sample = () => {
     const dLng = 300 / (111_320 * Math.cos((center[1] * Math.PI) / 180));
     const mk = (i: number): LngLat[] => [[center[0] + dLng * i, center[1]], [center[0] + dLng * (i + 0.5), center[1] + 0.0008], [center[0] + dLng * (i + 1), center[1]]];
-    const next = [makeSeg(mk(0)), makeSeg(mk(1), { required: false }), makeSeg(mk(2))];
+    const next = [makeSeg(mk(0), { smooth: true }), makeSeg(mk(1), { required: false, smooth: true }), makeSeg(mk(2), { smooth: true })];
     edit(next);
     setFit(next.flatMap((s) => s.coords));
     if (!name) setName("Sample route");
@@ -190,10 +190,10 @@ function Editor({ version }: { version?: RouteVersion }) {
 
         {!readOnly && selSeg && (
           <Card title={`Points of segment ${segs.indexOf(selSeg) + 1} (${selSeg.coords.length})`}>
-            <p className="muted small">Edit the numbers, or drag the dots on the map. Click a + on the line to add a point. Select a point and press Delete to remove it.</p>
+            <p className="muted small">{selSeg.smooth ? "These points are on the sidewalk; the curve passes through each one. " : ""}Edit the numbers, or drag the dots on the map. Click a + on the line to add a point. Select a point and press Delete to remove it.</p>
             <PointsTable seg={selSeg} selPt={selPt} onSelectPt={setSelPt}
               onSetPoint={(i, p) => edit(setPoint(segs, selSeg.key, i, p))}
-              onInsertAfter={(i) => { edit(insertPoint(segs, selSeg.key, i + 1, midpoint(selSeg.coords[i], selSeg.coords[i + 1]))); setSelPt(i + 1); }}
+              onInsertAfter={(i) => { edit(insertPoint(segs, selSeg.key, i + 1, midAfter(selSeg, i))); setSelPt(i + 1); }}
               onRemovePoint={(i) => { edit(removePoint(segs, selSeg.key, i)); setSelPt(null); }}
               onAddPoint={addPoint} onSplit={split} />
           </Card>
