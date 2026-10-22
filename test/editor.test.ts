@@ -1,0 +1,125 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  commit, hist, incompleteSegments, insertPoint, joinWithNext, makeSeg, midpoint, moveSeg, parseLatLng, parsePoints,
+  pointAtFraction, redo, removePoint, reverseSeg, setPoint, splitAt, toInput, undo,
+} from "../web/src/editor/model.ts";
+import type { LngLat } from "../shared/types.ts";
+
+const P = (...xs: number[][]) => xs as LngLat[];
+const seg = (name: string, coords: LngLat[], required = true) => makeSeg(coords, { name, required });
+const names = (s: { name: string }[]) => s.map((x) => x.name).join(",");
+
+describe("editor model", () => {
+  it("drag-reorder moves a segment and keeps the rest in order", () => {
+    const s = [seg("A", P([0, 0], [1, 0])), seg("B", P([1, 0], [2, 0])), seg("C", P([2, 0], [3, 0])), seg("D", P([3, 0], [4, 0]))];
+    assert.equal(names(moveSeg(s, 0, 2)), "B,C,A,D");
+    assert.equal(names(moveSeg(s, 3, 0)), "D,A,B,C");
+    assert.equal(names(moveSeg(s, 1, 1)), "A,B,C,D");
+    assert.equal(moveSeg(s, 1, 9), s); // out of range: untouched
+    assert.equal(names(s), "A,B,C,D"); // input never mutated
+  });
+
+  it("edits one point without touching other segments", () => {
+    const a = seg("A", P([0, 0], [1, 0], [2, 0])), b = seg("B", P([5, 5], [6, 6]));
+    const next = setPoint([a, b], a.key, 1, [1, 0.5]);
+    assert.deepEqual(next[0].coords[1], [1, 0.5]);
+    assert.equal(next[1], b);
+    assert.deepEqual(a.coords[1], [1, 0]);
+    assert.equal(setPoint([a], a.key, 9, [1, 1])[0], a); // bad index ignored
+  });
+
+  it("inserts and removes points", () => {
+    const a = seg("A", P([0, 0], [2, 0]));
+    const ins = insertPoint([a], a.key, 1, midpoint([0, 0], [2, 0]));
+    assert.deepEqual(ins[0].coords, [[0, 0], [1, 0], [2, 0]]);
+    assert.deepEqual(insertPoint([a], a.key, 99, [3, 0])[0].coords.at(-1), [3, 0]);
+    assert.deepEqual(removePoint(ins, a.key, 1)[0].coords, [[0, 0], [2, 0]]);
+  });
+
+  it("splits at an inner vertex into two usable segments, and refuses at the ends", () => {
+    const a = seg("A", P([0, 0], [1, 0], [2, 0], [3, 0]), false);
+    const r = splitAt([a], a.key, 2);
+    assert.equal(r.segs.length, 2);
+    assert.deepEqual(r.segs[0].coords, [[0, 0], [1, 0], [2, 0]]);
+    assert.deepEqual(r.segs[1].coords, [[2, 0], [3, 0]]);
+    assert.equal(r.segs[1].required, false);
+    assert.notEqual(r.segs[0].key, r.segs[1].key);
+    assert.equal(splitAt([a], a.key, 0).segs.length, 1);
+    assert.equal(splitAt([a], a.key, 3).segs.length, 1);
+    assert.equal(splitAt([a], a.key, 1).segs.length, 2); // pieces of 2 and 3 points are both fine
+  });
+
+  it("join is the inverse of split (no duplicated shared point)", () => {
+    const a = seg("A", P([0, 0], [1, 0], [2, 0], [3, 0]));
+    const split = splitAt([a], a.key, 2).segs;
+    const joined = joinWithNext(split, split[0].key);
+    assert.equal(joined.length, 1);
+    assert.deepEqual(joined[0].coords, a.coords);
+    const far = joinWithNext([seg("X", P([0, 0], [1, 0])), seg("Y", P([5, 5], [6, 6]))], "x");
+    assert.equal(far.length, 2); // unknown key: nothing happens
+  });
+
+  it("reverses direction", () => {
+    const a = seg("A", P([0, 0], [1, 1], [2, 0]));
+    assert.deepEqual(reverseSeg([a], a.key)[0].coords, [[2, 0], [1, 1], [0, 0]]);
+  });
+
+  it("flags segments with fewer than 2 points", () => {
+    assert.deepEqual(incompleteSegments([seg("A", P([0, 0], [1, 0])), seg("B", P([0, 0])), seg("C", [])]), [2, 3]);
+  });
+
+  it("maps to the API input", () => {
+    const a = makeSeg(P([0, 0], [1, 0]), { name: "N", required: false, minCoverage: 0.8 });
+    assert.deepEqual(toInput([a]), [{ name: "N", required: false, coords: [[0, 0], [1, 0]], minCoverageRatio: 0.8 }]);
+  });
+
+  it("finds the middle of a line and its heading", () => {
+    const r = pointAtFraction(P([100, 13], [100.002, 13]), 0.5)!;
+    assert.ok(Math.abs(r.point[0] - 100.001) < 1e-6);
+    assert.ok(Math.abs(r.bearing - 90) < 0.5); // due east
+    assert.equal(pointAtFraction(P([1, 1]), 0.5), null);
+  });
+});
+
+describe("typing coordinates", () => {
+  it("accepts lat first, any separator", () => {
+    assert.deepEqual(parseLatLng("13.7563, 100.5018"), { p: [100.5018, 13.7563] });
+    assert.deepEqual(parseLatLng("13.7563 100.5018"), { p: [100.5018, 13.7563] });
+    assert.deepEqual(parseLatLng("13.7563;100.5018"), { p: [100.5018, 13.7563] });
+  });
+  it("rejects swapped, out of range and junk with a reason", () => {
+    assert.match((parseLatLng("100.5018, 13.7563") as any).error, /latitude/);
+    assert.match((parseLatLng("13, 200") as any).error, /longitude/);
+    assert.match((parseLatLng("hello") as any).error, /lat, lng/);
+    assert.match((parseLatLng("1, 2, 3") as any).error, /lat, lng/);
+  });
+  it("bulk text makes segments; blank line splits; optional marks the next", () => {
+    const r = parsePoints("13.1, 100.1\n13.2, 100.2\n\noptional\n13.3, 100.3\n13.4, 100.4\n13.5, 100.5");
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.segs.length, 2);
+    assert.equal(r.segs[0].required, true);
+    assert.equal(r.segs[1].required, false);
+    assert.equal(r.segs[1].coords.length, 3);
+  });
+  it("bulk text reports bad lines and one-point segments", () => {
+    const r = parsePoints("100.5, 13.7\nbad\n\n13.1, 100.1");
+    assert.equal(r.segs.length, 0);
+    assert.ok(r.errors.length >= 3);
+  });
+});
+
+describe("undo / redo", () => {
+  it("steps back and forward, and a new edit clears redo", () => {
+    let h = hist(1);
+    h = commit(h, 2); h = commit(h, 3);
+    assert.equal(undo(h).present, 2);
+    assert.equal(redo(undo(undo(h))).present, 2);
+    const back = undo(h);
+    const edited = commit(back, 9);
+    assert.equal(edited.present, 9);
+    assert.equal(edited.future.length, 0);
+    assert.equal(undo(hist(1)).present, 1); // nothing to undo
+    assert.equal(commit(h, h.present), h); // no-op change adds no step
+  });
+});

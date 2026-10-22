@@ -1,6 +1,6 @@
 import "leaflet/dist/leaflet.css";
 import "./styles.css";
-import { StrictMode, useEffect, useState } from "react";
+import { Component, StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Assignments, RoutesPage, Workers } from "./admin.tsx";
 import { AuthProvider, ChangePassword, Login, useAuth } from "./auth.tsx";
@@ -16,6 +16,24 @@ const useHash = () => {
   }, []);
   return h;
 };
+
+/** One broken screen must not blank the whole app. */
+class Boundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(e: unknown) { return { error: e instanceof Error ? e.message : String(e) }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <main>
+        <div className="card narrow">
+          <h2>Something went wrong</h2>
+          <p className="err small">{this.state.error}</p>
+          <button onClick={() => { location.hash = "#/"; location.reload(); }}>Reload</button>
+        </div>
+      </main>
+    );
+  }
+}
 
 function Shell() {
   const { user, loading, logout } = useAuth();
@@ -72,5 +90,5 @@ function Shell() {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode><AuthProvider><Shell /></AuthProvider></StrictMode>,
+  <StrictMode><Boundary><AuthProvider><Shell /></AuthProvider></Boundary></StrictMode>,
 );

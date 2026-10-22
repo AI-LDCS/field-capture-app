@@ -29,6 +29,8 @@ export function createApp() {
           upgradeInsecureRequests: config.cookieSecure ? [] : null,
         },
       },
+      // OSM and other tile servers reject requests with no Referer. Send only our origin, and only cross-origin.
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
       // plain-http local development must not be forced to https
       strictTransportSecurity: config.cookieSecure,
       crossOriginEmbedderPolicy: false,

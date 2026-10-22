@@ -24,8 +24,18 @@ The first admin is created from `ADMIN_USERNAME` / `ADMIN_PASSWORD` **only if no
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs   # published on 127.0.0.1 only
 npm run dev            # http://localhost:3100  (plain http, COOKIE_SECURE=false)
-npm test               # 25 API tests against a throw-away database on that Postgres
+npm test               # API tests (throw-away database on that Postgres) + editor unit tests
 ```
+
+## Route editor
+
+Pick points on the map or type them. Everything is editable until a version is published.
+
+- Drag a vertex on the map, or edit its latitude / longitude in the table. Click a `+` on the line to add a point; select a point and press Delete.
+- **New segment** + **Draw**: click the map to add points to the selected segment. Esc stops drawing. Or type `lat, lng` and press Add. Or paste many points.
+- The list order is the walking order. Drag the grip to reorder (arrows work too). Numbers, colours and direction arrows on the map follow the order.
+- Split a segment at a point (scissors), join with the next, reverse direction, per-segment required/optional, name and minimum coverage.
+- Undo / redo (Ctrl or Cmd + Z, add Shift to redo). Unsaved edits warn before you leave. Pure edit logic is unit-tested in `test/editor.test.ts`.
 
 ## What is enforced where
 
@@ -52,6 +62,10 @@ npm test               # 25 API tests against a throw-away database on that Post
 - A route needs at least one required segment and every segment at least 5 m to be published.
 - Session: 14 days absolute, 24 h idle (env-tunable).
 - Hash routing in the web app (no server-side route fallback needed).
+
+## Map tiles
+
+The street map uses the public OpenStreetMap tile server and the terrain layer uses OpenTopoMap. Both are free community servers with usage policies (they block apps with no `Referer`, and heavy or commercial use). Fine for development and small teams. For a real deployment use a tile provider you have an account with (MapTiler, Stadia, Thunderforest) or self-host tiles, and change the URLs in `web/src/ui.tsx` and the `img-src` list in `server/app.ts`.
 
 ## VPS notes
 

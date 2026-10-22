@@ -65,3 +65,54 @@ header a, header button { white-space: nowrap; }
   header nav { gap: 8px; }
   header .brand { display: none; }
 }
+
+/* ---------- route editor ---------- */
+main:has(.editor) { max-width: 1320px; }
+.editor { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 12px; }
+.ed-map { position: relative; height: 420px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; z-index: 0; }
+.ed-side .card:first-child { margin-top: 0; }
+@media (min-width: 980px) {
+  .editor { grid-template-columns: minmax(0, 1.35fr) minmax(380px, 1fr); align-items: start; }
+  .ed-map { position: sticky; top: 64px; height: calc(100vh - 84px); }
+}
+.ed-tools { position: absolute; left: 10px; bottom: 10px; z-index: 1000; display: flex; gap: 6px; flex-wrap: wrap; }
+.ed-tools button { padding: 6px 12px; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.ed-tools button.ghost { background: var(--card); }
+.ed-tools button.on { background: #c026d3; border-color: #c026d3; color: #fff; }
+.ed-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: #c026d3; color: #fff; padding: 5px 12px; border-radius: 999px; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.35); white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+.drawing .leaflet-container { cursor: crosshair; }
+.dirty { font-size: 12px; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 999px; }
+.row.nogap { gap: 6px; margin-top: 0; }
+
+.seglist { list-style: none; margin: 8px 0; padding: 0; }
+.segitem { border: 1px solid var(--line); border-left: 6px solid var(--accent); border-radius: 8px; padding: 8px 10px; margin: 6px 0; background: var(--bg); cursor: pointer; }
+.segitem.on { outline: 2px solid var(--fg); outline-offset: -1px; }
+.segitem.dragging { opacity: .45; }
+.segitem.drop-before { box-shadow: 0 -3px 0 0 #c026d3; }
+.segitem.drop-after { box-shadow: 0 3px 0 0 #c026d3; }
+.grip { cursor: grab; color: var(--muted); font-size: 16px; padding: 0 4px; user-select: none; letter-spacing: -2px; }
+.seqnum { color: #fff; font-weight: 700; font-size: 12px; min-width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; }
+.segname { font-weight: 600; }
+.segdetail { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); cursor: default; }
+.seg-toggle { display: flex; margin: 8px 0; }
+.seg-toggle button { flex: 1; background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 0; }
+.seg-toggle button:first-child { border-radius: 8px 0 0 8px; } .seg-toggle button:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
+.seg-toggle button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.ptable { max-height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
+.phead, .prow { display: grid; grid-template-columns: 28px 1fr 1fr 98px; gap: 6px; align-items: center; padding: 4px 8px; }
+.phead { position: sticky; top: 0; background: var(--card); font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); z-index: 1; }
+.prow { border-bottom: 1px solid var(--line); cursor: pointer; }
+.prow.on { background: rgba(220, 38, 38, .12); }
+.prow input { margin: 0; padding: 4px 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.prow input.bad { border-color: var(--danger); background: rgba(185, 28, 28, .12); }
+.pidx { font-size: 12px; color: var(--muted); text-align: center; }
+.pact { display: flex; gap: 2px; justify-content: flex-end; } .pact button { padding: 2px 7px; }
+
+/* map markers */
+.seg-badge span { display: block; width: 26px; height: 26px; line-height: 26px; text-align: center; color: #fff; font: 700 13px system-ui; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,.5); margin-left: -13px; margin-top: -13px; }
+.seg-arrow span { display: block; font-size: 15px; line-height: 22px; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.vtx { width: 16px; height: 16px; background: #fff; border: 3px solid #111827; border-radius: 50%; box-sizing: border-box; cursor: grab; }
+.vtx.first { border-color: #16a34a; } .vtx.last { border-color: #dc2626; }
+.vtx-mid { width: 18px; height: 18px; line-height: 14px; text-align: center; background: var(--card, #fff); color: #111; font: 700 14px system-ui; border: 2px solid #111827; border-radius: 50%; opacity: .75; cursor: copy; box-sizing: border-box; }
+.vtx-mid:hover { opacity: 1; background: #fde047; }

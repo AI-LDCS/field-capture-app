@@ -229,6 +229,10 @@ describe("request safety", () => {
     assert.ok(img.includes("https://tile.opentopomap.org"), csp);
     assert.ok(!img.some((x) => x === "*" || x === "https:" || x === "http:"), csp);
   });
+  it("sends our origin as Referer to tile servers (OSM blocks requests without one)", async () => {
+    const r = await fetch(t.base + "/healthz");
+    assert.equal(r.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+  });
   it("rejects a form-style content type", async () => {
     const c = new Client(t.base);
     const r = await c.req("POST", "/api/auth/login", "username=testadmin&password=x", { "content-type": "application/x-www-form-urlencoded" });

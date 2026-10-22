@@ -1,64 +1,14 @@
-import { useEffect, useState } from "react";
-import { CircleMarker, MapContainer, Polyline, useMap, useMapEvents } from "react-leaflet";
-import { lineLengthM } from "@shared/geo.ts";
-import type { LngLat, RouteVersion, SegmentInput } from "@shared/types.ts";
+import { useEffect, useMemo, useState } from "react";
+import type { LngLat, RouteVersion } from "@shared/types.ts";
 import { api } from "./api.ts";
-import { Badge, Card, FitTo, Tiles, km, ll, useLoad } from "./ui.tsx";
-
-type Seg = { name: string; required: boolean; coords: LngLat[] };
-
-/**
- * One point per line as "lat, lng" (comma, space, tab or semicolon). A blank line starts the
- * next segment. A line "optional" (or "required") before a segment sets its type.
- */
-export function parsePoints(text: string): { segs: Seg[]; errors: string[] } {
-  const segs: Seg[] = [];
-  const errors: string[] = [];
-  let cur: LngLat[] = [];
-  let required = true;
-  const flush = (line: number) => {
-    if (cur.length === 1) errors.push(`segment ending near line ${line}: needs at least 2 points`);
-    else if (cur.length > 1) segs.push({ name: "", required, coords: cur });
-    cur = [];
-    required = true;
-  };
-  const lines = text.split(/\r?\n/);
-  lines.forEach((raw, i) => {
-    const line = raw.trim();
-    if (!line) return flush(i);
-    if (/^#?\s*(optional|required)\s*$/i.test(line)) {
-      if (cur.length) flush(i);
-      required = /required/i.test(line);
-      return;
-    }
-    const nums = line.split(/[\s,;]+/).filter(Boolean).map(Number);
-    if (nums.length !== 2 || nums.some((n) => !Number.isFinite(n))) return void errors.push(`line ${i + 1}: expected "lat, lng"`);
-    const [lat, lng] = nums;
-    if (Math.abs(lat) > 90) return void errors.push(`line ${i + 1}: latitude ${lat} out of range (lat first, then lng)`);
-    if (Math.abs(lng) > 180) return void errors.push(`line ${i + 1}: longitude ${lng} out of range`);
-    cur.push([lng, lat]);
-  });
-  flush(lines.length);
-  return { segs, errors };
-}
-
-function Clicks({ onAdd }: { onAdd: (p: LngLat) => void }) {
-  useMapEvents({ click: (e) => onAdd([e.latlng.lng, e.latlng.lat]) });
-  return null;
-}
-function Locate() {
-  const map = useMap();
-  useEffect(() => {
-    navigator.geolocation?.getCurrentPosition((p) => map.setView([p.coords.latitude, p.coords.longitude], 17), () => {}, { timeout: 5000 });
-  }, [map]);
-  return null;
-}
-function CenterWatch({ onCenter }: { onCenter: (c: LngLat) => void }) {
-  const map = useMap();
-  useEffect(() => { onCenter([map.getCenter().lng, map.getCenter().lat]); }, [map]);
-  useMapEvents({ moveend: () => onCenter([map.getCenter().lng, map.getCenter().lat]) });
-  return null;
-}
+import EditorMap from "./editor/EditorMap.tsx";
+import {
+  commit, hist, incompleteSegments, insertPoint, joinWithNext, makeSeg, midpoint, moveSeg, parsePoints, redo, removePoint,
+  removeSeg, reverseSeg, setPoint, splitAt, toInput, totalLength, undo, updateSeg, type History, type Seg,
+} from "./editor/model.ts";
+import PointsTable from "./editor/PointsTable.tsx";
+import SegmentList from "./editor/SegmentList.tsx";
+import { Badge, Card, km, useLoad } from "./ui.tsx";
 
 export function NewRoute() {
   return <Editor />;
@@ -70,148 +20,194 @@ export function EditVersion({ versionId }: { versionId: string }) {
   return <Editor version={data} />;
 }
 
+const fromVersion = (v?: RouteVersion): Seg[] =>
+  (v?.segments ?? []).map((s) => makeSeg(s.coords, { name: s.name, required: s.required, minCoverage: s.minCoverageRatio }));
+
 function Editor({ version }: { version?: RouteVersion }) {
   const readOnly = !!version && version.status !== "draft";
   const [name, setName] = useState(version?.routeName ?? "");
-  const [segs, setSegs] = useState<Seg[]>(version?.segments.map((s) => ({ name: s.name, required: s.required, coords: s.coords })) ?? []);
-  const [draft, setDraft] = useState<LngLat[]>([]);
-  const [draftRequired, setDraftRequired] = useState(true);
-  const [center, setCenter] = useState<LngLat>([100.5018, 13.7563]);
-  const [paste, setPaste] = useState("");
-  const [pasteErrors, setPasteErrors] = useState<string[]>([]);
+  const [h, setH] = useState<History<Seg[]>>(() => hist(fromVersion(version)));
+  const segs = h.present;
+  const [sel, setSel] = useState<string | null>(null);
+  const [selPt, setSelPt] = useState<number | null>(null);
+  const [draw, setDraw] = useState(false);
   const [fit, setFit] = useState<LngLat[] | null>(version ? version.segments.flatMap((s) => s.coords) : null);
-  const [msg, setMsg] = useState("");
+  const [center, setCenter] = useState<LngLat>([100.5018, 13.7563]);
+  const [bulk, setBulk] = useState("");
+  const [bulkErrors, setBulkErrors] = useState<string[]>([]);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [vid, setVid] = useState(version?.id);
+  const snapshot = (n: string, s: Seg[]) => JSON.stringify([n.trim(), toInput(s)]);
+  const [saved, setSaved] = useState(() => snapshot(version?.routeName ?? "", fromVersion(version)));
+  const dirty = !readOnly && snapshot(name, segs) !== saved;
 
-  const toInput = (list: Seg[]): SegmentInput[] => list.map((s) => ({ name: s.name, required: s.required, coords: s.coords }));
-  const withDraft = () => (draft.length >= 2 ? [...segs, { name: "", required: draftRequired, coords: draft }] : segs);
+  const edit = (next: Seg[]) => setH((x) => commit(x, next));
+  const selSeg = segs.find((s) => s.key === sel) ?? null;
 
-  const commitDraft = () => {
-    if (draft.length < 2) return;
-    setSegs([...segs, { name: "", required: draftRequired, coords: draft }]);
-    setDraft([]);
-    setDraftRequired(true);
+  // start near the admin on a brand-new route
+  useEffect(() => {
+    if (version) return;
+    navigator.geolocation?.getCurrentPosition((p) => { const c: LngLat = [p.coords.longitude, p.coords.latitude]; setCenter(c); setFit([c, c]); }, () => {}, { timeout: 4000 });
+  }, []);
+
+  // leaving with unsaved edits asks first
+  useEffect(() => {
+    if (!dirty) return;
+    const f = (e: BeforeUnloadEvent) => e.preventDefault();
+    addEventListener("beforeunload", f);
+    return () => removeEventListener("beforeunload", f);
+  }, [dirty]);
+
+  // keyboard: Esc stops drawing, Delete removes the picked point, Ctrl/Cmd+Z / Shift+Z undo / redo
+  useEffect(() => {
+    if (readOnly) return;
+    const f = (e: KeyboardEvent) => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement)?.tagName ?? "");
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "z" && !typing) { e.preventDefault(); setH((x) => (e.shiftKey ? redo(x) : undo(x))); }
+      else if (mod && e.key.toLowerCase() === "y" && !typing) { e.preventDefault(); setH(redo); }
+      else if (e.key === "Escape") setDraw(false);
+      else if ((e.key === "Delete" || e.key === "Backspace") && !typing && sel && selPt !== null) {
+        e.preventDefault();
+        edit(removePoint(segs, sel, selPt));
+        setSelPt(null);
+      }
+    };
+    addEventListener("keydown", f);
+    return () => removeEventListener("keydown", f);
+  });
+
+  const pick = (key: string | null) => { setSel(key); setSelPt(null); if (!key) setDraw(false); };
+
+  const newSegment = () => {
+    const s = makeSeg([]);
+    edit([...segs, s]);
+    setSel(s.key); setSelPt(null); setDraw(true);
   };
-  const importPoints = () => {
-    const { segs: added, errors } = parsePoints(paste);
-    setPasteErrors(errors.length || added.length ? errors : ["no points found"]);
+  const addPoint = (p: LngLat) => {
+    if (!sel) return;
+    const at = segs.find((s) => s.key === sel)?.coords.length ?? 0;
+    edit(insertPoint(segs, sel, at, p));
+    setSelPt(at);
+  };
+  const split = (i: number) => {
+    if (!sel) return;
+    const r = splitAt(segs, sel, i);
+    if (r.newKey) { edit(r.segs); setSelPt(null); }
+  };
+  const importBulk = () => {
+    const { segs: added, errors } = parsePoints(bulk);
+    setBulkErrors(errors.length || added.length ? errors : ["no points found"]);
     if (errors.length || !added.length) return;
-    setSegs([...segs, ...added]);
+    edit([...segs, ...added]);
     setFit(added.flatMap((x) => x.coords));
-    setPaste("");
-  };
-  const move = (i: number, d: -1 | 1) => {
-    const j = i + d;
-    if (j < 0 || j >= segs.length) return;
-    const next = [...segs];
-    [next[i], next[j]] = [next[j], next[i]];
-    setSegs(next);
+    setSel(added[0].key);
+    setBulk("");
   };
   const sample = () => {
     const dLng = 300 / (111_320 * Math.cos((center[1] * Math.PI) / 180));
     const mk = (i: number): LngLat[] => [[center[0] + dLng * i, center[1]], [center[0] + dLng * (i + 0.5), center[1] + 0.0008], [center[0] + dLng * (i + 1), center[1]]];
-    setSegs([{ name: "", required: true, coords: mk(0) }, { name: "", required: false, coords: mk(1) }, { name: "", required: true, coords: mk(2) }]);
-    setName(name || "Sample route");
+    const next = [makeSeg(mk(0)), makeSeg(mk(1), { required: false }), makeSeg(mk(2))];
+    edit(next);
+    setFit(next.flatMap((s) => s.coords));
+    if (!name) setName("Sample route");
   };
 
   const save = async (): Promise<string | null> => {
-    if (!name.trim()) { setMsg("Give the route a name"); return null; }
-    const all = withDraft();
+    setMsg(null);
+    if (!name.trim()) { setMsg({ ok: false, text: "Give the route a name" }); return null; }
+    const bad = incompleteSegments(segs);
+    if (bad.length) { setMsg({ ok: false, text: `Segment ${bad.join(", ")} needs at least 2 points (or delete it)` }); setSel(segs[bad[0] - 1].key); return null; }
     setBusy(true);
-    setMsg("");
     try {
       let id = vid;
-      if (!id) {
-        const v = await api.createRoute(name, toInput(all));
-        id = v.id;
-        setVid(id);
-      } else {
-        await api.saveDraft(id, name, toInput(all));
-      }
-      setSegs(all);
-      setDraft([]);
+      if (!id) { id = (await api.createRoute(name, toInput(segs))).id; setVid(id); }
+      else await api.saveDraft(id, name, toInput(segs));
+      setSaved(snapshot(name, segs));
       return id;
-    } catch (x: any) { setMsg(x.message); return null; } finally { setBusy(false); }
+    } catch (x: any) { setMsg({ ok: false, text: x.message }); return null; } finally { setBusy(false); }
   };
-  const saveAndStay = async () => { if (await save()) setMsg("Draft saved"); };
-  const saveAndPublish = async () => {
+  const saveDraft = async () => { if (await save()) setMsg({ ok: true, text: "Draft saved" }); };
+  const savePublish = async () => {
     const id = await save();
     if (!id) return;
-    try { await api.publish(id); location.hash = "#/routes"; } catch (x: any) { setMsg(x.message); }
+    try { await api.publish(id); location.hash = "#/routes"; } catch (x: any) { setMsg({ ok: false, text: x.message }); }
   };
 
-  const total = segs.reduce((a, s) => a + lineLengthM(s.coords), 0);
+  const revert = () => {
+    if (!confirm("Discard all unsaved changes?")) return;
+    setH(hist(fromVersion(version)));
+    setName(version?.routeName ?? "");
+    setSel(null); setSelPt(null); setDraw(false);
+  };
+
+  const total = useMemo(() => totalLength(segs), [segs]);
 
   return (
-    <>
-      <Card title={readOnly ? `${version!.routeName} · v${version!.version}` : version ? `Edit draft · v${version.version}` : "New route"}
-        right={version && <Badge s={version.status} />}>
-        {readOnly
-          ? <p className="muted small">This version is {version!.status} and cannot be changed. Make a new version from the Routes page to edit.</p>
-          : <p className="muted small">Tap the map to add points. Finish each segment, then draw the next. Segments are walked in the order listed.</p>}
-        {!readOnly && <label>Route name<input value={name} onChange={(e) => setName(e.target.value)} /></label>}
-      </Card>
-
-      <div className="map">
-        <MapContainer center={[center[1], center[0]]} zoom={16} style={{ height: "100%" }}>
-          <Tiles />
-          {!version && <Locate />}
-          <FitTo pts={fit} />
-          <CenterWatch onCenter={setCenter} />
-          {!readOnly && <Clicks onAdd={(p) => setDraft((d) => [...d, p])} />}
-          {segs.map((s, i) => (
-            <Polyline key={i} positions={s.coords.map(ll)} pathOptions={{ color: s.required ? "#1d4ed8" : "#ea580c", weight: 5, dashArray: s.required ? undefined : "8 8" }} />
-          ))}
-          {draft.length > 0 && <Polyline positions={draft.map(ll)} pathOptions={{ color: "#c026d3", weight: 5 }} />}
-          {draft.map((p, i) => <CircleMarker key={i} center={ll(p)} radius={4} pathOptions={{ color: "#c026d3" }} />)}
-        </MapContainer>
+    <div className="editor">
+      <div className="ed-map">
+        <EditorMap segs={segs} sel={sel} selPt={selPt} draw={draw} readOnly={readOnly} fit={fit} center={center}
+          onSelect={pick} onSelectPt={setSelPt} onAddPoint={addPoint}
+          onMovePoint={(k, i, p) => { edit(setPoint(segs, k, i, p)); setSelPt(i); }}
+          onInsertMid={(k, at, p) => { edit(insertPoint(segs, k, at, p)); setSelPt(at); }} />
+        {!readOnly && (
+          <div className="ed-tools">
+            <button onClick={newSegment}>＋ New segment</button>
+            <button className={draw ? "on" : "ghost"} disabled={!selSeg} onClick={() => setDraw(!draw)} title="Click the map to add points to the selected segment">✎ Draw</button>
+            <button className="ghost" disabled={!h.past.length} onClick={() => setH(undo)} title="Undo (Ctrl/Cmd+Z)">↶</button>
+            <button className="ghost" disabled={!h.future.length} onClick={() => setH(redo)} title="Redo (Ctrl/Cmd+Shift+Z)">↷</button>
+          </div>
+        )}
+        {draw && selSeg && <div className="ed-hint">Drawing segment {segs.indexOf(selSeg) + 1}: click the map to add points · Esc to stop</div>}
       </div>
 
-      {!readOnly && (
-        <>
-          <Card title={`Current segment (${draft.length} points${draft.length > 1 ? `, ${Math.round(lineLengthM(draft))} m` : ""})`}>
-            <label className="check"><input type="checkbox" checked={draftRequired} onChange={(e) => setDraftRequired(e.target.checked)} /> Required</label>
-            <div className="row wrap">
-              <button onClick={commitDraft} disabled={draft.length < 2}>Finish segment</button>
-              <button className="ghost" onClick={() => setDraft(draft.slice(0, -1))} disabled={!draft.length}>Undo point</button>
-              {!version && <button className="ghost" onClick={sample}>Insert sample</button>}
-            </div>
-          </Card>
-
-          <Card title="Insert from lat/long points">
-            <p className="muted small">One point per line as <code>lat, lng</code> in route order. A blank line starts a new segment. Put <code>optional</code> on its own line before a segment to mark it optional.</p>
-            <textarea rows={5} placeholder={"13.7563, 100.5018\n13.7571, 100.5030\n\noptional\n13.7580, 100.5045\n13.7590, 100.5060"} value={paste} onChange={(e) => setPaste(e.target.value)} />
-            {pasteErrors.length > 0 && <ul className="err small">{pasteErrors.slice(0, 6).map((e) => <li key={e}>{e}</li>)}</ul>}
-            <div className="row"><button onClick={importPoints} disabled={!paste.trim()}>Add as segments</button></div>
-          </Card>
-        </>
-      )}
-
-      <Card title={`Segments · ${segs.length} · ${km(total)}`}>
-        {segs.length === 0 && <p className="muted">None yet.</p>}
-        {segs.map((s, i) => (
-          <div key={i} className="item row between">
-            <div>
-              #{i + 1} <Badge s={s.required ? "required" : "optional"} /> <span className="muted small">{Math.round(lineLengthM(s.coords))} m · {s.coords.length} points</span>
-            </div>
-            {!readOnly && (
-              <div className="row wrap">
-                <label className="check"><input type="checkbox" checked={s.required} onChange={(e) => setSegs(segs.map((x, j) => (j === i ? { ...x, required: e.target.checked } : x)))} /> required</label>
-                <button className="ghost" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
-                <button className="ghost" onClick={() => move(i, 1)} disabled={i === segs.length - 1}>↓</button>
-                <button className="ghost danger-text" onClick={() => setSegs(segs.filter((_, j) => j !== i))}>✕</button>
-              </div>
-            )}
+      <div className="ed-side">
+        <Card title={readOnly ? `${version!.routeName} · v${version!.version}` : version ? `Edit draft · v${version.version}` : "New route"}
+          right={<>{dirty && <span className="dirty">unsaved</span>} {version && <Badge s={version.status} />}</>}>
+          {readOnly
+            ? <p className="muted small">This version is {version!.status} and cannot be changed. Make a new version from the Routes page to edit.</p>
+            : <label>Route name<input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} /></label>}
+          <div className="row wrap">
+            {!readOnly && <button onClick={() => void saveDraft()} disabled={busy || !dirty && !!vid}>Save draft</button>}
+            {!readOnly && <button className="ghost" onClick={() => void savePublish()} disabled={busy}>Save &amp; publish</button>}
+            {!readOnly && dirty && <button className="ghost" onClick={revert}>Revert</button>}
+            <a className="btn ghost" href="#/routes">{readOnly ? "Back" : "Close"}</a>
           </div>
-        ))}
-        {msg && <p className={msg === "Draft saved" ? "ok" : "err"}>{msg}</p>}
-        <div className="row wrap">
-          {!readOnly && <button onClick={() => void saveAndStay()} disabled={busy}>Save draft</button>}
-          {!readOnly && <button className="ghost" onClick={() => void saveAndPublish()} disabled={busy}>Save &amp; publish</button>}
-          <a className="btn ghost" href="#/routes">{readOnly ? "Back" : "Close"}</a>
-        </div>
-      </Card>
-    </>
+          {msg && <p className={msg.ok ? "ok" : "err"}>{msg.text}</p>}
+        </Card>
+
+        <Card title={`Segments · ${segs.length} · ${km(total)}`} right={!readOnly && !version && segs.length === 0 && <button className="ghost small" onClick={sample}>Insert sample</button>}>
+          {!readOnly && <p className="muted small">The list order is the walking order. Drag the ⋮⋮ grip to reorder; colours and numbers on the map follow.</p>}
+          <SegmentList segs={segs} sel={sel} readOnly={readOnly} onSelect={pick}
+            onMove={(from, to) => edit(moveSeg(segs, from, to))}
+            onChange={(k, patch) => edit(updateSeg(segs, k, patch))}
+            onRemove={(k) => { edit(removeSeg(segs, k)); pick(null); }}
+            onReverse={(k) => edit(reverseSeg(segs, k))}
+            onJoin={(k) => edit(joinWithNext(segs, k))} />
+          {!readOnly && <div className="row"><button onClick={newSegment}>＋ New segment</button></div>}
+        </Card>
+
+        {!readOnly && selSeg && (
+          <Card title={`Points of segment ${segs.indexOf(selSeg) + 1} (${selSeg.coords.length})`}>
+            <p className="muted small">Edit the numbers, or drag the dots on the map. Click a + on the line to add a point. Select a point and press Delete to remove it.</p>
+            <PointsTable seg={selSeg} selPt={selPt} onSelectPt={setSelPt}
+              onSetPoint={(i, p) => edit(setPoint(segs, selSeg.key, i, p))}
+              onInsertAfter={(i) => { edit(insertPoint(segs, selSeg.key, i + 1, midpoint(selSeg.coords[i], selSeg.coords[i + 1]))); setSelPt(i + 1); }}
+              onRemovePoint={(i) => { edit(removePoint(segs, selSeg.key, i)); setSelPt(null); }}
+              onAddPoint={addPoint} onSplit={split} />
+          </Card>
+        )}
+
+        {!readOnly && (
+          <Card title="Paste many points">
+            <p className="muted small">One point per line as <code>lat, lng</code>. A blank line starts a new segment. Put <code>optional</code> on its own line before a segment to mark it optional.</p>
+            <textarea rows={5} placeholder={"13.7563, 100.5018\n13.7571, 100.5030\n\noptional\n13.7580, 100.5045\n13.7590, 100.5060"} value={bulk} onChange={(e) => setBulk(e.target.value)} />
+            {bulkErrors.length > 0 && <ul className="err small">{bulkErrors.slice(0, 6).map((e) => <li key={e}>{e}</li>)}</ul>}
+            <div className="row"><button onClick={importBulk} disabled={!bulk.trim()}>Add as segments</button></div>
+          </Card>
+        )}
+      </div>
+    </div>
   );
 }
