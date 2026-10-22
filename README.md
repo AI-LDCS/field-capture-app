@@ -1,6 +1,6 @@
-# Field Capture (real build, milestone 1)
+# Field Capture (real build, milestone 2)
 
-Login, admin, versioned routes, assignments. Recording and upload come in milestone 2.
+Login, admin, versioned routes, assignments, and now the field flow: GPS check, recording with crash recovery, resumable upload through the app into RustFS, server-side verification, the backend deciding completion, and admin review (video, map, downloads).
 
 Stack: Node 22 + Express 5 + TypeScript, React + Vite + Leaflet, PostgreSQL + PostGIS, RustFS (S3-compatible, not used yet), Caddy at the edge, Docker Compose.
 
@@ -26,6 +26,27 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs  
 npm run dev            # http://localhost:3100  (plain http, COOKIE_SECURE=false)
 npm test               # API tests (throw-away database on that Postgres) + editor unit tests
 ```
+
+## Field flow (worker)
+
+1. **GPS check** (stable accuracy, 90 s timeout and skip, outcome logged) and **camera + storage check**.
+2. **Record**: MediaRecorder in 2 s chunks, each saved to IndexedDB with its SHA-256 before it counts. GPS is saved alongside. Wake lock on; recording stops if the page is hidden. The screen becomes a map (with "go here next") over the live camera, with a draggable divider.
+3. **Recovery**: a recording cut off by a refresh, crash or closed tab is marked interrupted on the next start. The worker finalizes it, and it uploads; a new recording is blocked until then.
+4. **Upload** (continuous, resumable): the phone asks the server what it already has, sends only the rest, checks every chunk's hash, and deletes its local copy only after the server verifies the manifest. If the session ends mid-recording, recording continues and uploads wait for a new sign-in.
+5. **Server decides**: coverage is recomputed from the GPS the server holds, on the stored (smoothed) line. A missing GPS check, poor accuracy, gaps, or simulated data sends it to review.
+
+Local data is kept in one IndexedDB per user, so another worker on the same phone can never see or upload it.
+
+## Storage and video
+
+- Chunks go to RustFS as `rec/<id>/c/<seq>-<sha256>` (the hash is in the key, so racing uploads cannot overwrite each other). The app checks the hash before writing.
+- Finalize only checks the manifest, so it is fast. A background job then builds the playable file (8 MiB multipart parts, hash re-checked), remuxes it with ffmpeg so it has a real duration and can be seeked, and only then deletes the chunk objects. It survives a restart.
+- Videos leave the system only through `/api/admin/...` (range requests, downloads, zip), and every view or download is audited. No worker route returns video.
+- Recordings are kept until an admin deletes them (no automatic deletion).
+
+## Dev tools
+
+`ENABLE_DEV_TOOLS=true` (set only in `docker-compose.dev.yml`) shows fake GPS and a canvas camera on the worker page, so the flow can be tested on a laptop. Recordings made that way are flagged `simulated`, always go to review, and are labelled in review. Never set it on the VPS.
 
 ## Route editor
 
@@ -76,6 +97,9 @@ The street map uses the public OpenStreetMap tile server and the terrain layer u
 - Set `PUBLIC_ORIGINS=https://your.domain`, `COOKIE_SECURE=true`, `TRUST_PROXY=1`.
 - Back up the `pgdata` and `rustfs-data` volumes.
 
-## Not done yet (milestone 2+)
+## Not done yet
 
-Recording, IndexedDB recovery, resumable upload to RustFS, server verification, completion rules, audit screens, service worker.
+- Not yet tried on a real phone (iPhone Safari, Android Chrome): camera, GPS, screen lock, and whether Safari's mp4 chunks play back joined. This is the first thing to check.
+- Skipping an optional segment needs a connection (recording and upload do not).
+- No admin delete for recordings, no automatic retention, no service worker (the app needs a connection to load).
+- Orphan chunk objects from two racing uploads of the same chunk are not cleaned up.
