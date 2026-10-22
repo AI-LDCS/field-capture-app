@@ -115,6 +115,7 @@ Do not edit rows of published versions or verified recordings by hand: database 
 | `docker compose up` fails with "port is already allocated" | Another process uses the port (8444 for the tailnet profile, 80/443 for public). Stop it or change `TAILNET_HTTPS_PORT`. |
 | App exits at start with a missing `S3_*` or `DATABASE_URL` error | The variable is not in `.env`. Both S3 keys and the database URL are required. |
 | Tailnet HTTPS stops working after ~3 months | The Tailscale certificate expired. Renew it ([deployment](deployment.md#first-start-tailnet)). |
+| `npm run dev` on a fresh clone: the page is 404 but `/healthz` works | The server started before the first web build finished (it looks for `dist/web` once, at start). Wait for `vite build` to print "built", then restart the server (save any server file, or stop and rerun `npm run dev`). Not seen in a clean-clone check, but possible on a slow machine. |
 | Browser on a worker's phone keeps old behaviour after an update | Reload the page; the app has no service worker caching it. |
 
 ## Recovering the admin account
