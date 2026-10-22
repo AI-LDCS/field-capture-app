@@ -8,6 +8,8 @@ import { attachUser, csrfGuard, errorHandler, HttpError, requireAuth, requireRol
 import { adminAssignmentsRouter, workerAssignmentsRouter } from "./routes/assignments.ts";
 import { adminRoutesRouter } from "./routes/adminRoutes.ts";
 import { adminUsersRouter } from "./routes/adminUsers.ts";
+import { adminExportRouter, adminRecordingsRouter } from "./routes/adminRecordings.ts";
+import { workerRecordingsRouter } from "./routes/recordings.ts";
 import { authRouter } from "./routes/auth.ts";
 
 export function createApp() {
@@ -51,9 +53,11 @@ export function createApp() {
 
   app.use("/api/auth", authRouter);
   app.use("/api/admin/users", requireAuth, requireRole("admin"), adminUsersRouter);
-  app.use("/api/admin/assignments", requireAuth, requireRole("admin"), adminAssignmentsRouter);
+  app.use("/api/admin/assignments", requireAuth, requireRole("admin"), adminExportRouter, adminAssignmentsRouter);
+  app.use("/api/admin/recordings", requireAuth, requireRole("admin"), adminRecordingsRouter);
   app.use("/api/admin", requireAuth, requireRole("admin"), adminRoutesRouter);
   app.use("/api/me/assignments", requireAuth, requireRole("worker"), workerAssignmentsRouter);
+  app.use("/api/me/recordings", requireAuth, requireRole("worker"), workerRecordingsRouter);
   app.use("/api", (_req, _res, next) => next(new HttpError(404, "not_found", "no such endpoint")));
 
   // built web app (dev: ../dist/web next to server/, container: ./web next to dist/server.js)

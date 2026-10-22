@@ -61,7 +61,11 @@ export const csrfGuard: RequestHandler = (req, _res, next) => {
     return next(new HttpError(403, "bad_origin", "origin required"));
   }
   const hasBody = Number(req.headers["content-length"] ?? 0) > 0 || req.headers["transfer-encoding"];
-  if (hasBody && !req.is("application/json")) return next(new HttpError(415, "json_required", "send application/json"));
+  // the one route that takes raw bytes; a cross-site form cannot send this content type
+  const isChunk = req.method === "PUT" && /^\/api\/me\/recordings\/[0-9a-f-]{36}\/chunks\/\d+$/i.test(req.originalUrl.split("?")[0]);
+  if (hasBody && !req.is("application/json") && !(isChunk && req.is("application/octet-stream"))) {
+    return next(new HttpError(415, "json_required", "send application/json"));
+  }
   next();
 };
 

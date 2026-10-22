@@ -7,3 +7,5 @@ services:
     ports: ["127.0.0.1:9000:9000"]
   app:
     ports: ["127.0.0.1:3100:3100"]
+    environment:
+      ENABLE_DEV_TOOLS: "true"   # fake GPS + canvas camera for testing. Never set this on the VPS.

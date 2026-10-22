@@ -38,8 +38,35 @@ export type AssignmentSummary = {
   route: { id: string; name: string; versionId: string; version: number };
   progress: { segmentsDone: number; segmentsTotal: number; requiredDone: number; requiredTotal: number };
 };
+export type GpsQuality = { total: number; poorAccuracy: number; gaps: number; jumps: number; offRoute: number };
+export type PreflightOutcome = { result: "passed" | "skipped"; durationMs: number; samples: number; bestAccuracyM: number | null; note?: string };
+
+export type RecordingSummary = {
+  id: string;
+  status: "uploading" | "server_verified"; // what the server knows; the phone has finer states
+  startedAtMs: number;
+  endedAtMs: number | null;
+  chunkCount: number;
+  bytes: number;
+  gpsCount: number;
+  simulated: boolean;
+  stopReason: string | null;
+  assembly: "none" | "pending" | "running" | "done" | "failed";
+  fileBytes: number | null;
+};
+
+export type SegmentEvidence = { recordingId: string; coverage: number; firstTMs: number | null; lastTMs: number | null };
+
 export type AssignmentSegment = {
   id: string; routeSegmentId: string; order: number; name: string; required: boolean; status: SegmentStatus;
   skipReason: string | null; completedAt: string | null; coords: LngLat[]; minCoverageRatio: number; lengthM: number;
+  coverage: number; evidence: SegmentEvidence[];
 };
-export type AssignmentDetail = AssignmentSummary & { segments: AssignmentSegment[] };
+export type AssignmentDetail = AssignmentSummary & {
+  segments: AssignmentSegment[];
+  reasons: string[];
+  preflight: PreflightOutcome | null;
+  quality: GpsQuality | null;
+  completedAt: string | null;
+  recordings: RecordingSummary[];
+};

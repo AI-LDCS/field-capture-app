@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { audit } from "../audit.ts";
 import { q, q1, tx } from "../db.ts";
+import type { AssignmentDetail, RecordingSummary } from "../../shared/types.ts";
+import { finishAssignment, refreshSegments } from "../evaluate.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
 
 // ---------- shared shape ----------
@@ -25,21 +27,48 @@ const summary = (a: any) => ({
   progress: { segmentsDone: a.segment_done, segmentsTotal: a.segment_total, requiredDone: a.required_done, requiredTotal: a.required_total },
 });
 
-async function detail(id: string, userId?: string) {
+export async function recordingSummaries(assignmentId: string, userId?: string): Promise<RecordingSummary[]> {
+  const rows = await q(
+    `SELECT r.*, (SELECT count(*)::int FROM recording_chunks c WHERE c.recording_id = r.id) AS chunks_now,
+            (SELECT COALESCE(sum(size),0) FROM recording_chunks c WHERE c.recording_id = r.id) AS bytes_now,
+            (SELECT count(*)::int FROM gps_points g WHERE g.recording_id = r.id) AS gps_now
+       FROM recordings r WHERE r.assignment_id = $1 AND ($2::uuid IS NULL OR r.user_id = $2) ORDER BY r.started_at_ms`,
+    [assignmentId, userId ?? null],
+  );
+  return rows.map((r) => ({
+    id: r.id, status: r.status === "server_verified" ? "server_verified" : "uploading", startedAtMs: Number(r.started_at_ms),
+    endedAtMs: r.ended_at_ms === null ? null : Number(r.ended_at_ms), chunkCount: r.chunk_count ?? r.chunks_now,
+    bytes: Number(r.file_bytes ?? r.bytes_now), gpsCount: r.gps_count ?? r.gps_now, simulated: r.simulated, stopReason: r.stop_reason,
+    assembly: r.assembly_state, fileBytes: r.file_bytes === null ? null : Number(r.file_bytes),
+  }));
+}
+
+export async function detail(id: string, userId?: string): Promise<AssignmentDetail | undefined> {
   const a = await q1(`${SUMMARY} WHERE a.id = $1 AND ($2::uuid IS NULL OR a.user_id = $2)`, [id, userId ?? null]);
   if (!a) return undefined;
+  const extra = await q1("SELECT preflight, quality, review_reasons, completed_at FROM assignments WHERE id = $1", [id]);
   const segs = await q(
-    `SELECT s.id, s.ord, s.required, s.status, s.skip_reason, s.completed_at, s.route_segment_id,
+    `SELECT s.id, s.ord, s.required, s.status, s.skip_reason, s.completed_at, s.coverage, s.route_segment_id,
             rs.name, rs.min_coverage_ratio, ST_AsGeoJSON(rs.geom)::json AS g, ST_Length(rs.geom::geography) AS length_m
        FROM assignment_segments s JOIN route_segments rs ON rs.id = s.route_segment_id
       WHERE s.assignment_id = $1 ORDER BY s.ord`, [id],
   );
+  const ev = await q(
+    `SELECT e.assignment_segment_id, e.recording_id, e.coverage, e.first_t_ms, e.last_t_ms
+       FROM segment_evidence e JOIN assignment_segments s ON s.id = e.assignment_segment_id
+      WHERE s.assignment_id = $1 ORDER BY e.first_t_ms`, [id],
+  );
   return {
     ...summary(a),
+    reasons: extra.review_reasons ?? [], preflight: extra.preflight ?? null, quality: extra.quality ?? null, completedAt: extra.completed_at,
+    recordings: await recordingSummaries(id, userId),
     segments: segs.map((s) => ({
       id: s.id, routeSegmentId: s.route_segment_id, order: s.ord, name: s.name, required: s.required, status: s.status,
-      skipReason: s.skip_reason, completedAt: s.completed_at, coords: s.g.coordinates,
+      skipReason: s.skip_reason, completedAt: s.completed_at, coords: s.g.coordinates, coverage: s.coverage,
       minCoverageRatio: s.min_coverage_ratio, lengthM: Math.round(s.length_m * 10) / 10,
+      evidence: ev.filter((e) => e.assignment_segment_id === s.id).map((e) => ({
+        recordingId: e.recording_id, coverage: e.coverage, firstTMs: e.first_t_ms === null ? null : Number(e.first_t_ms), lastTMs: e.last_t_ms === null ? null : Number(e.last_t_ms),
+      })),
     })),
   };
 }
@@ -91,6 +120,28 @@ adminAssignmentsRouter.post("/", async (req, res) => {
   res.status(201).json(await detail(id));
 });
 
+/** Admin decision on an assignment that needs review. */
+adminAssignmentsRouter.post("/:id/review", async (req, res) => {
+  const id = uuidParam(req, "id");
+  const { decision } = z.object({ decision: z.enum(["approve", "reject"]) }).parse(req.body);
+  await tx(async (c) => {
+    const a = await q1("SELECT status FROM assignments WHERE id = $1 FOR UPDATE", [id], c);
+    if (!a) throw notFound("assignment not found");
+    if (a.status !== "needs_review") throw new HttpError(409, "not_in_review", "this assignment is not waiting for review");
+    await q("UPDATE assignments SET status = $1, completed_at = CASE WHEN $1 = 'completed' THEN now() ELSE NULL END, updated_at = now() WHERE id = $2",
+      [decision === "approve" ? "completed" : "in_progress", id], c);
+    await audit(req.user!.id, "assignment_reviewed", { type: "assignment", id }, { decision }, req.ip, c);
+  });
+  res.json(await detail(id));
+});
+
+adminAssignmentsRouter.post("/:id/re-evaluate", async (req, res) => {
+  const id = uuidParam(req, "id");
+  if (!(await q1("SELECT 1 FROM assignments WHERE id = $1", [id]))) throw notFound("assignment not found");
+  await finishAssignment(id, req.user!.id, req.ip);
+  res.json(await detail(id));
+});
+
 /** Only an assignment nobody has started can be withdrawn. */
 adminAssignmentsRouter.delete("/:id", async (req, res) => {
   const id = uuidParam(req, "id");
@@ -116,4 +167,57 @@ workerAssignmentsRouter.get("/:id", async (req, res) => {
   const d = await detail(uuidParam(req, "id"), req.user!.id);
   if (!d) throw notFound("assignment not found");
   res.json(d);
+});
+
+async function ownedOpen(req: import("express").Request) {
+  const id = uuidParam(req, "id");
+  const a = await q1("SELECT id, status FROM assignments WHERE id = $1 AND user_id = $2", [id, req.user!.id]);
+  if (!a) throw notFound("assignment not found");
+  if (a.status === "completed") throw new HttpError(409, "completed", "this assignment is already completed");
+  return a;
+}
+
+const preflightSchema = z.object({
+  result: z.enum(["passed", "skipped"]),
+  durationMs: z.number().int().min(0).max(3_600_000),
+  samples: z.number().int().min(0).max(100_000),
+  bestAccuracyM: z.number().min(0).max(100_000).nullable(),
+  note: z.string().max(200).optional(),
+});
+
+workerAssignmentsRouter.post("/:id/preflight", async (req, res) => {
+  const a = await ownedOpen(req);
+  const body = preflightSchema.parse(req.body);
+  await q("UPDATE assignments SET preflight = $1, updated_at = now() WHERE id = $2", [JSON.stringify(body), a.id]);
+  await audit(req.user!.id, "preflight", { type: "assignment", id: a.id }, body, req.ip);
+  res.json({ ok: true });
+});
+
+/** Optional segments only. The database also refuses it for a required one. */
+workerAssignmentsRouter.post("/:id/segments/:segId/skip", async (req, res) => {
+  const a = await ownedOpen(req);
+  const segId = uuidParam(req, "segId");
+  const { reason } = z.object({ reason: z.string().trim().max(200).default("") }).parse(req.body ?? {});
+  const seg = await q1("SELECT required FROM assignment_segments WHERE id = $1 AND assignment_id = $2", [segId, a.id]);
+  if (!seg) throw notFound("segment not found");
+  if (seg.required) throw new HttpError(400, "required_segment", "a required segment cannot be skipped");
+  await q("UPDATE assignment_segments SET status = 'skipped', skip_reason = $1 WHERE id = $2", [reason || "skipped by worker", segId]);
+  await audit(req.user!.id, "segment_skipped", { type: "assignment_segment", id: segId }, { reason }, req.ip);
+  res.json(await detail(a.id, req.user!.id));
+});
+
+workerAssignmentsRouter.post("/:id/segments/:segId/unskip", async (req, res) => {
+  const a = await ownedOpen(req);
+  const segId = uuidParam(req, "segId");
+  await q("UPDATE assignment_segments SET status = 'pending', skip_reason = NULL WHERE id = $1 AND assignment_id = $2 AND status = 'skipped'", [segId, a.id]);
+  await refreshSegments(a.id);
+  await audit(req.user!.id, "segment_unskipped", { type: "assignment_segment", id: segId }, undefined, req.ip);
+  res.json(await detail(a.id, req.user!.id));
+});
+
+/** "I am done": the server checks uploads, GPS evidence and coverage, then decides. */
+workerAssignmentsRouter.post("/:id/finish", async (req, res) => {
+  const a = await ownedOpen(req);
+  await finishAssignment(a.id, req.user!.id, req.ip);
+  res.json(await detail(a.id, req.user!.id));
 });

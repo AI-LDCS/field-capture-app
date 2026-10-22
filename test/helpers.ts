@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import pg from "pg";
 
@@ -16,6 +17,11 @@ export async function startTestServer() {
   process.env.PUBLIC_ORIGINS = "http://localhost:3100";
   process.env.ADMIN_USERNAME = "testadmin";
   process.env.ADMIN_PASSWORD = "initial-admin-password-1";
+  // object storage: RustFS on 127.0.0.1:9000, with a bucket of its own for this run
+  process.env.S3_ENDPOINT = "http://127.0.0.1:9000";
+  process.env.S3_BUCKET = `test-${process.pid}-${Date.now()}`;
+  process.env.ENABLE_DEV_TOOLS = "false";
+  process.env.REMUX = "false";
 
   // import only now, after the environment is set (config is read at import)
   const { createApp } = await import("../server/app.ts");
@@ -23,16 +29,20 @@ export async function startTestServer() {
   const { bootstrapAdmin } = await import("../server/bootstrap.ts");
   const { pool } = await import("../server/db.ts");
   const { config } = await import("../server/config.ts");
+  const storage = await import("../server/storage.ts");
+  const { kickAssembler } = await import("../server/assemble.ts");
   await migrate();
+  await storage.ensureBucket();
   await bootstrapAdmin();
   const server = createApp().listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   return {
-    base, pool, config, bootstrapAdmin,
+    base, pool, config, bootstrapAdmin, storage, kickAssembler,
     async stop() {
       server.close();
+      await storage.dropBucket().catch(() => {});
       await pool.end();
       await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
       await admin.end();
@@ -40,7 +50,7 @@ export async function startTestServer() {
   };
 }
 
-export type Res = { status: number; body: any; headers: Headers };
+export type Res = { status: number; body: any; headers: Headers; bytes: Buffer };
 
 /** A tiny browser: keeps cookies, sends a trusted Origin and JSON. */
 export class Client {
@@ -50,10 +60,11 @@ export class Client {
   async req(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<Res> {
     const h: Record<string, string> = { origin: this.origin, ...headers };
     if (body !== undefined && !h["content-type"]) h["content-type"] = "application/json";
+    const raw = Buffer.isBuffer(body);
     if (this.cookie) h.cookie = this.cookie;
     const r = await fetch(this.base + path, {
       method, headers: h, redirect: "manual",
-      body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? new Uint8Array(body as Buffer) : typeof body === "string" ? body : JSON.stringify(body),
     });
     const set = r.headers.getSetCookie?.() ?? [];
     for (const c of set) {
@@ -62,12 +73,14 @@ export class Client {
       if (/Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c)) this.cookie = "";
       else this.cookie = `${k}=${v}`;
     }
-    const text = await r.text();
+    const buf = Buffer.from(await r.arrayBuffer());
+    const text = buf.toString("utf8");
     let json: any = undefined;
     try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
-    return { status: r.status, body: json, headers: r.headers };
+    return { status: r.status, body: json, headers: r.headers, bytes: buf };
   }
-  get = (p: string) => this.req("GET", p);
+  get = (p: string, headers?: Record<string, string>) => this.req("GET", p, undefined, headers);
+  putRaw = (p: string, data: Buffer, headers: Record<string, string>) => this.req("PUT", p, data, { "content-type": "application/octet-stream", ...headers });
   post = (p: string, b?: unknown) => this.req("POST", p, b ?? {});
   put = (p: string, b?: unknown) => this.req("PUT", p, b ?? {});
   patch = (p: string, b?: unknown) => this.req("PATCH", p, b ?? {});
@@ -78,3 +91,5 @@ export const line = (lng0: number, lat: number, meters = 300): [number, number][
   const d = meters / (111_320 * Math.cos((lat * Math.PI) / 180));
   return [[lng0, lat], [lng0 + d / 2, lat + 0.0004], [lng0 + d, lat]];
 };
+
+export const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");

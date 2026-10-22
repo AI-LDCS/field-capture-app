@@ -65,7 +65,7 @@ authRouter.post("/logout", async (req, res) => {
 });
 
 authRouter.get("/me", requireAuth, (req, res) => {
-  res.json({ user: publicUser(req.user!) });
+  res.json({ user: publicUser(req.user!), devTools: config.devTools });
 });
 
 const changeSchema = z.object({ currentPassword: z.string().min(1).max(config.password.maxLength), newPassword: adminPassword });

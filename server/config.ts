@@ -11,6 +11,16 @@ export const config = {
   publicOrigins: (env.PUBLIC_ORIGINS ?? "").split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean),
   cookieSecure: bool(env.COOKIE_SECURE, true),
   trustProxy: int(env.TRUST_PROXY, 1),
+  s3: {
+    endpoint: env.S3_ENDPOINT ?? "http://127.0.0.1:9000",
+    region: env.S3_REGION ?? "us-east-1",
+    accessKey: env.S3_ACCESS_KEY ?? "",
+    secretKey: env.S3_SECRET_KEY ?? "",
+    bucket: env.S3_BUCKET ?? "recordings",
+  },
+  /** Fake GPS and a fake camera for testing without walking. Off unless this is set. */
+  devTools: bool(env.ENABLE_DEV_TOOLS, false),
+  assembly: { partBytes: 8 * 1024 * 1024, pollMs: 5000, remux: bool(env.REMUX, true) },
   adminUsername: env.ADMIN_USERNAME ?? "",
   adminPassword: env.ADMIN_PASSWORD ?? "",
   session: {
@@ -27,6 +37,7 @@ export const config = {
 
 export function requireConfig() {
   if (!config.databaseUrl) throw new Error("DATABASE_URL is required");
+  if (!config.s3.accessKey || !config.s3.secretKey) throw new Error("S3_ACCESS_KEY and S3_SECRET_KEY are required");
   if (config.cookieSecure && config.publicOrigins.some((o) => o.startsWith("http://") && !/localhost|127\.0\.0\.1/.test(o))) {
     console.warn("COOKIE_SECURE=true but a non-localhost http:// origin is configured; login will not work there");
   }
