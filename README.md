@@ -1,118 +1,190 @@
-# Field Capture (real build, milestone 2)
+# Field Capture
 
-Login, admin, versioned routes, assignments, and now the field flow: GPS check, recording with crash recovery, resumable upload through the app into RustFS, server-side verification, the backend deciding completion, and admin review (video, map, downloads).
+A web app for collecting **video and GPS data along walking routes**. Administrators draw routes, hand them to field workers, and review what comes back. Workers follow the route on their phone, record video and GPS, and the app uploads it, even over a poor connection. The server, not the phone, decides whether the route was really completed.
 
-Stack: Node 22 + Express 5 + TypeScript, React + Vite + Leaflet, PostgreSQL + PostGIS, RustFS (S3-compatible, not used yet), Caddy at the edge, Docker Compose.
+It is built to be careful with the data: a recording survives a refresh or crash, uploads resume where they stopped, every chunk is checksummed, and a phone deletes its copy only after the server has verified it.
 
-## Run it
+> **Status:** working end to end and covered by automated tests on the server side. Behaviour on real iPhone and Android browsers still has to be checked on devices. See [Status and limits](#status-and-limits).
+
+## What it does
+
+**Administrators**
+- Create and deactivate field workers; set their passwords (workers cannot change them).
+- Draw routes on a map: required and optional segments, curved or straight, points edited on the map or typed as latitude and longitude, segment order changed by drag and drop, undo and redo.
+- Publish routes as immutable **versions**; assign a version to a worker. Changing a route later makes a new version and never changes work already handed out.
+- Review each assignment: the server's verdict and reasons, the recorded track on a map, the video playing with a marker that follows it, jump to any segment, approve or send back.
+- Download videos, GPS data (with video-relative times) and a full export. Every view and download is audited.
+
+**Field workers**
+- Sign in, see their assignments on a map.
+- A GPS check (accuracy and stability, with a recorded skip after 90 seconds), a camera and storage check.
+- Record: a map with "go here next" over the live camera, in a resizable split. Skip optional segments.
+- Recording is saved on the phone as it happens and uploads in the background. After a crash or reload it is recovered and finished.
+
+**The platform**
+- Server-side sessions, Argon2id passwords, role and ownership checks on every endpoint, CSRF protection, a login lockout, an audit log.
+- Route versions and verified recordings are frozen by database rules, not only by the API.
+- Video goes through the app into S3-compatible storage (RustFS) and is assembled into one seekable file in the background. Workers can never download it.
+
+## How it works
+
+```mermaid
+flowchart LR
+  P["Phone<br/>React app + IndexedDB"] -- HTTPS --> C[Caddy]
+  A["Admin browser"] -- HTTPS --> C
+  C --> S["Node app<br/>API + web + video job"]
+  S --> D[("PostgreSQL<br/>+ PostGIS")]
+  S --> R[("RustFS<br/>S3 storage")]
+```
+
+1. The worker's phone records 2-second video chunks and GPS points into IndexedDB (each chunk hashed).
+2. It uploads them through the app while online, asks the server what it already has, and resends only the rest.
+3. When the recording ends, a **manifest** (every chunk's hash, the GPS count) is checked by the server. Only then does the phone delete its copy.
+4. The server recomputes coverage from the GPS it holds and decides: `completed`, `needs_review`, `in_progress`, or `pending_sync`.
+5. A background job builds one playable, seekable video from the chunks.
+
+Read more: [Architecture](docs/architecture.md) and [Field flow](docs/field-flow.md).
+
+## Quick start
+
+You need **Docker** (with Compose v2) and, for development on your machine, **Node.js 22**.
+
+### Develop on your laptop
 
 ```bash
-cp .env.example .env        # then fill in real secrets (random, long)
-# certs for the tailnet profile: tailscale cert <host>.<tailnet>.ts.net, put the .crt/.key in ./certs
+cp .env.example .env
+```
 
-# tailnet (HTTPS on :8444, reachable on your tailnet)
+Edit `.env`: set long random values for `POSTGRES_PASSWORD`, `ADMIN_PASSWORD`, `S3_ACCESS_KEY` and `S3_SECRET_KEY`, and put the same database password inside `DATABASE_URL`. (Set `POSTGRES_PASSWORD` **before** the first start: changing it later does not change the password inside an existing database volume.)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs   # database and storage, on 127.0.0.1 only
+npm install
+npm run dev                                                                      # http://localhost:3100
+```
+
+Sign in as `ADMIN_USERNAME` with `ADMIN_PASSWORD`. Dev mode turns on **dev tools**: on a worker's assignment page you can switch on fake GPS and a canvas camera and run the whole flow without walking. Recordings made that way are marked *simulated* and always go to review.
+
+### Run the whole stack in Docker, for a phone, over Tailscale
+
+A phone only allows the camera and GPS on HTTPS.
+
+```bash
+# TAILNET_HOST and PUBLIC_ORIGINS in .env first, then a certificate named after the host:
+mkdir -p certs
+tailscale cert --cert-file certs/<TAILNET_HOST>.crt --key-file certs/<TAILNET_HOST>.key <TAILNET_HOST>
+
 docker compose --profile tailnet up -d --build
+```
 
-# public VPS (Caddy gets a Let's Encrypt cert for $DOMAIN, ports 80/443)
+Open `https://<TAILNET_HOST>:8444` on a device that is on your tailnet. Full steps, including certificate renewal: [Deployment](docs/deployment.md).
+
+### Run on a public server
+
+Point a domain at the server, set `DOMAIN` and `PUBLIC_ORIGINS=https://<domain>` in `.env`, then:
+
+```bash
 docker compose --profile public up -d --build
 ```
 
-The first admin is created from `ADMIN_USERNAME` / `ADMIN_PASSWORD` **only if no admin exists**. It is never overwritten or reset on restart. Change the password in the app after first login.
+Caddy gets a certificate automatically. Read the [security checklist](docs/security.md#before-going-public-checklist) first, and never use the dev override on a server.
 
-### Development on the host
+## First steps
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs   # published on 127.0.0.1 only
-npm run dev            # http://localhost:3100  (plain http, COOKIE_SECURE=false)
-npm test               # API tests (throw-away database on that Postgres) + editor unit tests
+1. Sign in as the admin and **change the password** (click your username).
+2. **Workers**: add a worker (type a password or let the app generate one).
+3. **Routes → New route**: draw a route, **Save & publish**.
+4. **Assignments**: assign the published route to the worker.
+5. The worker signs in on a phone, opens the assignment, passes the GPS and camera checks, and records.
+6. After **Finish**, open the assignment as admin to review.
+
+Guides: [Admin guide](docs/admin-guide.md), [Worker guide](docs/worker-guide.md).
+
+## Repository layout
+
+```
+server/        Express API, completion logic, video assembler, storage, auth
+  routes/        one file per area of the API
+  auth/          password hashing, sessions
+shared/        code used by both server and browser: types, thresholds, geometry,
+               coverage, curve smoothing, GPS-check logic
+web/src/       React app
+  editor/        the route editor (map, segment list, points table, edit model)
+  worker/        phone-side recording, upload, local database, recording screen
+db/            migrations (plain SQL) and the Postgres + PostGIS image
+deploy/        Caddy configuration for the two edge profiles
+test/          API, unit and docs tests, plus the endpoint-coverage check
+docs/          the documentation
+docker-compose.yml          db, rustfs, app, and the edge proxy profiles
+docker-compose.dev.yml      laptop override: private ports on 127.0.0.1, dev tools on
 ```
 
-## Field flow (worker)
+## Commands
 
-1. **GPS check** (stable accuracy, 90 s timeout and skip, outcome logged) and **camera + storage check**.
-2. **Record**: MediaRecorder in 2 s chunks, each saved to IndexedDB with its SHA-256 before it counts. GPS is saved alongside. Wake lock on; recording stops if the page is hidden. The screen becomes a map (with "go here next") over the live camera, with a draggable divider.
-3. **Recovery**: a recording cut off by a refresh, crash or closed tab is marked interrupted on the next start. The worker finalizes it, and it uploads; a new recording is blocked until then.
-4. **Upload** (continuous, resumable): the phone asks the server what it already has, sends only the rest, checks every chunk's hash, and deletes its local copy only after the server verifies the manifest. If the session ends mid-recording, recording continues and uploads wait for a new sign-in.
-5. **Server decides**: coverage is recomputed from the GPS the server holds, on the stored (smoothed) line. A missing GPS check, poor accuracy, gaps, or simulated data sends it to review.
-
-Local data is kept in one IndexedDB per user, so another worker on the same phone can never see or upload it.
-
-## Storage and video
-
-- Chunks go to RustFS as `rec/<id>/c/<seq>-<sha256>` (the hash is in the key, so racing uploads cannot overwrite each other). The app checks the hash before writing.
-- Finalize only checks the manifest, so it is fast. A background job then builds the playable file (8 MiB multipart parts, hash re-checked), remuxes it with ffmpeg so it has a real duration and can be seeked, and only then deletes the chunk objects. It survives a restart.
-- Videos leave the system only through `/api/admin/...` (range requests, downloads, zip), and every view or download is audited. No worker route returns video.
-- Recordings are kept until an admin deletes them (no automatic deletion).
-
-## Dev tools
-
-`ENABLE_DEV_TOOLS=true` (set only in `docker-compose.dev.yml`) shows fake GPS and a canvas camera on the worker page, so the flow can be tested on a laptop. Recordings made that way are flagged `simulated`, always go to review, and are labelled in review. Never set it on the VPS.
-
-## Route editor
-
-Pick points on the map or type them. Everything is editable until a version is published.
-
-- Drag a vertex on the map, or edit its latitude / longitude in the table. Click a `+` on the line to add a point; select a point and press Delete.
-- **New segment** + **Draw**: click the map to add points to the selected segment. Esc stops drawing. Or type `lat, lng` and press Add. Or paste many points.
-- The list order is the walking order. Drag the grip to reorder (arrows work too). Numbers, colours and direction arrows on the map follow the order.
-- **Curved segments** (the default for hand-drawn ones): place points along the sidewalk and the line bends smoothly through every one (centripetal Catmull-Rom, `shared/curve.ts`). The server draws the curve itself and stores both the smooth line (used for coverage and what the worker walks) and your points (so you can keep editing). It does not know where sidewalks are: it only smooths what you place.
-- Split a segment at a point (scissors), join with the next, reverse direction, per-segment required/optional, name and minimum coverage.
-- Undo / redo (Ctrl or Cmd + Z, add Shift to redo). Unsaved edits warn before you leave. Pure edit logic is unit-tested in `test/editor.test.ts`.
-
-## Tests
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs   # tests use the real Postgres and RustFS
-npm test               # everything, then the endpoint check
-npm run test:unit      # pure logic only, no database or storage needed
-npm run test:coverage  # same tests with a line/branch coverage table (server, shared, editor logic)
-```
-
-- **Every endpoint has a test, enforced.** The app records which route answered each test request. After the tests, `test/check-endpoints.ts` compares that with the full route table (`listEndpoints()` in `server/app.ts`) and fails the run if any endpoint never answered with a 2xx. Adding a route without a test makes `npm test` fail. It also lists routes never tested with a refusal.
-- API tests run against a throw-away database and bucket. Unit tests cover the curve, the editor model, the geometry and coverage maths, the GPS check and the quality flags.
-- Not covered by tests yet: the phone code (`web/src/worker/*`: recorder, uploader, local database), the React screens, and `server/index.ts` start-up. Those were checked by hand in a browser.
-
-## What is enforced where
-
-| Rule | Where |
+| Command | Does |
 | --- | --- |
-| Argon2id passwords | `server/auth/password.ts` |
-| Server-side sessions, `__Host-sid` cookie: HttpOnly, Secure, SameSite=Lax; only a SHA-256 of the token is stored | `server/auth/sessions.ts` |
-| New token on every login; deactivate / reset-password / change-password delete sessions | `server/routes/*` |
-| Only admins set worker passwords; a worker cannot change their own | `routes/adminUsers.ts`, `routes/auth.ts` |
-| Admin vs worker, worker sees only own assignments (404 for others) | `server/app.ts`, `routes/assignments.ts` |
-| CSRF: Origin allow-list + JSON-only + SameSite | `server/http.ts` |
-| Login lockout: 5 failures per username, 20 per IP, per 15 min | `routes/auth.ts` |
-| Published/archived route versions are immutable | DB triggers in `db/migrations/001_init.sql` (and the API) |
-| One draft and one published version per route | partial unique indexes |
-| Only published versions can be assigned, only to workers | DB trigger + API |
-| Required segments can never be skipped | CHECK constraint |
-| Assignment keeps its version and its own segment snapshot | `assignments`, `assignment_segments` |
+| `npm run dev` | rebuild the web app on change and run the server against the compose database and storage |
+| `npm run build` | build the web app (`dist/web`) and bundle the server (`dist/server.js`) |
+| `npm start` | run the built server |
+| `npm test` | all tests (needs the database and storage up), then the endpoint check |
+| `npm run test:unit` | pure-logic tests only, nothing else needed |
+| `npm run test:coverage` | all tests with a coverage table |
+| `npm run typecheck` | TypeScript check |
 
-## Decisions made without asking
+## Configuration
 
-- Plain SQL migrations + `pg`, no ORM (PostGIS geometry columns).
-- Admins manage workers only. There is no admin-creates-admin.
-- A worker is a username, a display name and a password. Only an admin sets the password (typed, or generated and shown once), from the Workers page. It never expires and the worker cannot change it. Setting a new one signs the worker out everywhere. Worker passwords: 8+ characters. Only the admin account can change its own password (12+).
-- Assignments have no notes or schedule: an admin gives a route version to a worker, that is all.
-- Publishing a new version archives the previous published one. Archived versions cannot be newly assigned; existing assignments keep working.
-- A route needs at least one required segment and every segment at least 5 m to be published.
-- Session: 14 days absolute, 24 h idle (env-tunable).
-- Hash routing in the web app (no server-side route fallback needed).
+Environment variables (database, storage, allowed origins, cookies, admin bootstrap, session lengths, dev tools) and the tuning constants (GPS thresholds, coverage, chunk length, bitrate) are listed in [Configuration](docs/configuration.md). The example file is `.env.example`; `.env` is never committed.
 
-## Map tiles
+## Tech stack
 
-The street map uses the public OpenStreetMap tile server and the terrain layer uses OpenTopoMap. Both are free community servers with usage policies (they block apps with no `Referer`, and heavy or commercial use). Fine for development and small teams. For a real deployment use a tile provider you have an account with (MapTiler, Stadia, Thunderforest) or self-host tiles, and change the URLs in `web/src/ui.tsx` and the `img-src` list in `server/app.ts`.
+Node 22, Express 5, TypeScript, zod · React 19, Vite, Leaflet · PostgreSQL 17 with PostGIS · RustFS (S3-compatible) · Caddy · Argon2id · ffmpeg (video remux) · Docker Compose · `node:test` for tests.
 
-## VPS notes
+## Testing
 
-- Only Caddy publishes ports (80/443). Postgres, RustFS and the app have no `ports:` in the main compose file. Do not add any: Docker-published ports bypass `ufw`.
-- Set `PUBLIC_ORIGINS=https://your.domain`, `COOKIE_SECURE=true`, `TRUST_PROXY=1`.
-- Back up the `pgdata` and `rustfs-data` volumes.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs
+npm test
+```
 
-## Not done yet
+110+ tests run against a real database and real object storage (each file gets its own throw-away database and bucket). `npm test` also **fails if any API endpoint has no passing test**, so the claim "every endpoint is tested" cannot drift. Details, coverage and what is not tested: [Testing](docs/testing.md).
 
-- Not yet tried on a real phone (iPhone Safari, Android Chrome): camera, GPS, screen lock, and whether Safari's mp4 chunks play back joined. This is the first thing to check.
-- Skipping an optional segment needs a connection (recording and upload do not).
-- No admin delete for recordings, no automatic retention, no service worker (the app needs a connection to load).
-- Orphan chunk objects from two racing uploads of the same chunk are not cleaned up.
+## Security at a glance
+
+- Argon2id passwords; server-side sessions with hashed tokens in a `HttpOnly`, `Secure`, `SameSite=Lax` cookie; instant sign-out on deactivation or password change.
+- Roles and ownership enforced on the server; another worker's data answers `404`.
+- CSRF origin check, JSON-only bodies, CSP and other security headers, a login lockout.
+- Published routes and verified recordings are immutable in the database; every chunk is checksummed on the phone and the server.
+- Only the reverse proxy publishes ports; the database and storage stay private. Video is reachable only by admins and every access is audited.
+- **Not protected**: a determined user with their own phone can read browser storage. See [Security](docs/security.md#what-is-not-protected).
+
+## Status and limits
+
+Works end to end and is tested on the server side. Known limits:
+
+- Real iPhone/Android behaviour (camera, GPS, screen lock, playback of joined video) is to be validated on devices; the phone code has no automated tests yet.
+- No background recording (a browser limit): switching apps or locking the screen stops it.
+- No offline loading of the app, no admin delete or retention, no monitoring or CI yet.
+- The free OpenStreetMap tile servers are used; use a tile provider for production.
+
+The full list and the proposed next steps are in the [Roadmap](docs/roadmap.md).
+
+## Documentation
+
+| | |
+| --- | --- |
+| [Architecture](docs/architecture.md) | parts, request path, modules |
+| [Data model](docs/data-model.md) | tables, database rules, state machines |
+| [API reference](docs/api.md) | every endpoint |
+| [Field flow](docs/field-flow.md) | GPS check, recording, recovery, upload, assembly, completion rules |
+| [Security](docs/security.md) | controls, exposure, what is not protected, checklist |
+| [Configuration](docs/configuration.md) | environment variables and tuning constants |
+| [Deployment](docs/deployment.md) | Tailscale and public-server setup, updates |
+| [Operations](docs/operations.md) | backup and restore, troubleshooting, admin recovery |
+| [Testing](docs/testing.md) | how the tests work and what they cover |
+| [Decisions](docs/decisions.md) | why it is built this way |
+| [Roadmap](docs/roadmap.md) | limits and what comes next |
+| [Admin guide](docs/admin-guide.md) · [Worker guide](docs/worker-guide.md) | for the people using it |
+
+## License
+
+No license has been chosen yet. Until one is added, all rights are reserved by the author.

@@ -1,0 +1,254 @@
+# API reference
+
+All endpoints are JSON over HTTPS, served by the same Node process as the web app. This page lists every endpoint. A test (`test/docs.test.ts`) fails if an endpoint exists that is not listed here, and `npm test` fails if an endpoint has no test (see [testing](testing.md)).
+
+- [Conventions](#conventions)
+- [Health](#health) · [Auth](#auth) · [Admin: workers](#admin-workers) · [Admin: routes](#admin-routes-and-versions) · [Admin: assignments](#admin-assignments) · [Admin: recordings](#admin-recordings) · [Worker: assignments](#worker-assignments) · [Worker: recordings](#worker-recordings)
+- [Error codes](#error-codes)
+
+Shapes named in **bold** (for example **AssignmentDetail**) are the TypeScript types in `shared/types.ts`.
+
+## Conventions
+
+**Authentication.** A session cookie (`__Host-sid` over HTTPS, `sid` on plain-http development) set by `POST /api/auth/login`. It is `HttpOnly`, `Secure`, `SameSite=Lax`. There are no API keys or tokens.
+
+**Roles.** `admin` and `worker`. Routes under `/api/admin` need an admin; routes under `/api/me` need a worker. A wrong role answers `403 forbidden`, no login answers `401 unauthenticated`. A worker asking for another worker's assignment or recording gets `404 not_found`, never `403`, so ids cannot be probed.
+
+**State-changing requests** (`POST`, `PUT`, `PATCH`, `DELETE`) must pass the CSRF guard:
+- the `Origin` header must be one of `PUBLIC_ORIGINS` (a request with no `Origin` is accepted only if `Sec-Fetch-Site` is `same-origin` or `none`), otherwise `403 bad_origin`;
+- a request body must be `application/json`, otherwise `415 json_required`. The single exception is `PUT /api/me/recordings/:id/chunks/:seq`, which takes `application/octet-stream`.
+
+**Errors** are always JSON: `{ "error": "<code>", "message": "<human text>", ...extra }`. Validation failures are `400 invalid_input` with the offending fields in `message`. Database rules that refuse a change (immutable versions, unique names, check constraints) answer `409`. Codes are listed [at the end](#error-codes).
+
+**Caching.** Every `/api` response carries `Cache-Control: no-store`.
+
+**IDs** are UUIDs. A malformed id answers `404`, not `400`.
+
+**Times** are ISO strings, except GPS and recording times, which are milliseconds since the epoch (`t`, `startedAt`, `endedAt`, `*Ms`).
+
+**Coordinates** are GeoJSON order: `[longitude, latitude]`.
+
+## Health
+
+### GET /healthz
+No login. Runs `SELECT 1`. `200 { "ok": true }`, or `500` if the database is down.
+
+## Auth
+
+### POST /api/auth/login
+Body `{ username, password }`. `200 { user: { id, username, displayName, role }, devTools }` and sets the cookie. A new session token is made on every login.
+Errors: `401 invalid_credentials` (same text for a wrong password, an unknown user and a deactivated user), `429 too_many_attempts` (with `Retry-After: 900`). After 5 failed logins for one username, or 20 for one IP, within 15 minutes, logins are refused even with the right password.
+
+### POST /api/auth/logout
+Deletes the session and clears the cookie. `200 { ok: true }`. Harmless without a session.
+
+### GET /api/auth/me
+`200 { user, devTools }`. `devTools` is `true` only when the server runs with `ENABLE_DEV_TOOLS` (fake GPS and camera on the worker page).
+
+### POST /api/auth/change-password
+**Admin only.** Body `{ currentPassword, newPassword }` (new: 12 to 128 characters). `200 { ok: true }`. Signs out every other session of the admin; the current one stays.
+Errors: `403 forbidden` for a worker (workers cannot change their password; an admin sets it), `400 wrong_password`, `400 same_password`, `400 invalid_input`.
+
+## Admin: workers
+
+A worker is a username, a display name and a password that only an admin can set. Admin accounts cannot be managed here.
+
+### GET /api/admin/users
+`200 WorkerRow[]` where `WorkerRow = { id, username, displayName, active, createdAt }`. Active workers first, then by username.
+
+### POST /api/admin/users
+Body `{ username, displayName?, password? }`. Username: 3 to 32 characters of `a-z 0-9 . _ -`, lowercased by the server. Password: 8 to 128 characters; leave it out and the server generates one.
+`201 { user: WorkerRow, generatedPassword? }`. `generatedPassword` is returned **once**, and only when the server generated it. A password the admin typed is never sent back. Passwords are stored hashed (Argon2id) and cannot be shown again.
+Errors: `409 conflict` (name taken, in any letter case), `400 invalid_input`.
+
+### PATCH /api/admin/users/:id
+Body `{ displayName }` (up to 80 characters). `200 WorkerRow`. `404` for an unknown id or an admin account.
+
+### POST /api/admin/users/:id/deactivate
+`200 WorkerRow`. The worker is signed out everywhere at once and cannot log in.
+
+### POST /api/admin/users/:id/activate
+`200 WorkerRow`. Old sessions are not revived.
+
+### POST /api/admin/users/:id/password
+Body `{ password? }` (8 to 128 characters, or empty to generate). `200 { generatedPassword }` when generated, else `200 { ok: true }`. Deletes every session of that worker.
+
+## Admin: routes and versions
+
+A route is a name plus numbered **versions** (`draft`, `published`, `archived`). Only a draft can be edited. A route has at most one draft and one published version. See [data model](data-model.md#route-versions).
+
+**Segment input** (used by create and save):
+
+| Field | Rules |
+| --- | --- |
+| `name` | optional, up to 80 characters |
+| `required` | boolean |
+| `smooth` | optional boolean (default `false`). `true`: `coords` are control points and the server draws a smooth curve through them |
+| `coords` | 2 to 5000 points `[lng, lat]`, longitude within ±180, latitude within ±90 |
+| `minCoverageRatio` | optional, 0.5 to 1 (default 0.9) |
+
+**RouteVersion** returned by the endpoints below: `{ id, routeId, routeName, version, status, createdAt, publishedAt, segments: [{ id, order, name, required, smooth, coords, minCoverageRatio, lengthM }] }`. For a smooth segment `coords` are the control points; `lengthM` is the length of the stored curve.
+
+### GET /api/admin/routes
+`200` list of `{ id, name, createdAt, versions: [{ id, version, name, status, publishedAt, createdAt, segmentCount, lengthM, assignmentCount }] }`, newest route first, newest version first. The route `name` follows the latest published version (the creation name until something is published); each version also carries its own `name`.
+
+### GET /api/admin/routes/:id
+`200 { id, name, versions: RouteVersion[] }`. `404` if unknown.
+
+### GET /api/admin/route-versions/:vid
+`200 RouteVersion`. `404` if unknown.
+
+### POST /api/admin/routes
+Body `{ name (1 to 120 characters), segments: SegmentInput[] }` (0 to 200 segments). Creates the route and a **draft v1**. `201 RouteVersion`.
+
+### PUT /api/admin/route-versions/:vid
+Body `{ name?, segments }`. Replaces the draft's segments (and renames the draft). `200 RouteVersion`.
+Errors: `409 not_a_draft` (published and archived versions never change).
+
+### DELETE /api/admin/route-versions/:vid
+Deletes a **draft**. If it was the route's last version, the route goes too. `200 { ok: true }`. `409 not_a_draft` for any other status.
+
+### POST /api/admin/routes/:id/new-version
+Copies the latest version (segments, curve control points and name) into a new draft with the next number. `201 RouteVersion`. `409 draft_exists` (with `draftId`) if a draft is already open.
+
+### POST /api/admin/route-versions/:vid/publish
+Publishes a draft and archives the previously published version, in one transaction. `200 RouteVersion`.
+Errors: `400 empty_route` (no segments), `400 no_required_segment`, `400 bad_segment` (a segment shorter than 5 m or invalid), `409 not_a_draft`.
+
+### POST /api/admin/route-versions/:vid/archive
+Retires a published version: it can no longer be assigned, existing assignments carry on. `200 RouteVersion`. `409 not_published`.
+
+## Admin: assignments
+
+**AssignmentSummary** = `{ id, status, createdAt, updatedAt, worker: { id, username, displayName }, route: { id, name, versionId, version }, progress: { segmentsDone, segmentsTotal, requiredDone, requiredTotal } }`.
+
+**AssignmentDetail** = AssignmentSummary plus `{ reasons[], preflight, quality, completedAt, recordings: RecordingSummary[], segments: [{ id, routeSegmentId, order, name, required, status, skipReason, completedAt, coords, minCoverageRatio, lengthM, coverage, evidence: [{ recordingId, coverage, firstTMs, lastTMs }] }] }`. Segment `coords` are the stored (smoothed) line the worker must walk.
+
+**RecordingSummary** = `{ id, status ("uploading" | "server_verified"), startedAtMs, endedAtMs, chunkCount, bytes, gpsCount, simulated, stopReason, assembly ("none" | "pending" | "running" | "done" | "failed"), fileBytes }`.
+
+### GET /api/admin/assignments
+Query `status` and `userId` (both optional). `200 AssignmentSummary[]`, newest first, at most 500. A malformed `userId` answers `404`.
+
+### GET /api/admin/assignments/:id
+`200 AssignmentDetail`. `404` if unknown.
+
+### POST /api/admin/assignments
+Body `{ routeVersionId, userId }`. Copies the version's segment list into the assignment. `201 AssignmentDetail`.
+Errors: `409 not_published` (only published versions), `409 worker_inactive`, `404` (unknown version, or the user is not a worker).
+
+### DELETE /api/admin/assignments/:id
+Withdraws an assignment nobody has started. `200 { ok: true }`. `409 already_started` once it has left `assigned`.
+
+### GET /api/admin/assignments/:id/audit
+`200` list of `{ id, at, action, details, actor }` for the assignment and its recordings, newest first, at most 200.
+
+### POST /api/admin/assignments/:id/review
+Body `{ decision: "approve" | "reject" }`. Only for an assignment in `needs_review`. Approve gives `completed`; reject gives `in_progress` (the worker can record more). `200 AssignmentDetail`. `409 not_in_review`.
+
+### POST /api/admin/assignments/:id/re-evaluate
+Runs the server's completion check again (see [field flow](field-flow.md#how-the-server-decides)). `200 AssignmentDetail`.
+
+### GET /api/admin/assignments/:id/export.json
+Download (`Content-Disposition: attachment`): assignment, worker, route as GeoJSON, every verified recording with its GPS points and video-relative times, and the audit trail. Audited as `assignment_exported`.
+
+### GET /api/admin/assignments/:id/export.zip
+Download: `assignment.json`, one `gps-N-<id>.json` per verified recording, and the videos that are ready. Videos are streamed from storage one at a time, never held in memory. `409 nothing_to_export` if no recording is verified. Audited.
+
+## Admin: recordings
+
+Video leaves the system only through these routes, and each view or download is written to the audit log.
+
+### GET /api/admin/recordings/:id/gps
+`200` list of `{ seq, t, lat, lng, acc }`.
+
+### GET /api/admin/recordings/:id/video
+Streams the assembled video. Supports `Range` and answers `206` with `Content-Range` and `Accept-Ranges: bytes` (needed for seeking and for iOS Safari). `416` for a range past the end. `409 not_verified`, or `409 not_ready` while the file is still being built. Audited as `recording_viewed` (once per play, not per range request).
+
+### GET /api/admin/recordings/:id/download
+The same file as an attachment. Audited as `recording_downloaded`.
+
+### GET /api/admin/recordings/:id/gps.json
+GPS as an attachment: `{ recordingId, assignmentId, mime, simulated, videoStartedAt, videoStartedAtMs, note, points: [{ seq, timestamp, timestampMs, latitude, longitude, accuracyM, videoTimeS }] }`. `videoTimeS` is seconds from the start of the video, so points line up with the footage. Audited as `gps_downloaded`.
+
+### POST /api/admin/recordings/:id/reassemble
+Starts the video build again for a recording whose build `failed` and whose chunks are still stored. `200 { ok: true }`. `409 cannot_reassemble` if the recording is not verified or its chunks were already cleaned up after a good build.
+
+## Worker: assignments
+
+Every route below is scoped to the signed-in worker's own assignments; anything else is `404`.
+
+### GET /api/me/assignments
+`200 AssignmentSummary[]`, newest first.
+
+### GET /api/me/assignments/:id
+`200 AssignmentDetail` (this worker's recordings only).
+
+### POST /api/me/assignments/:id/preflight
+Body `{ result: "passed" | "skipped", durationMs, samples, bestAccuracyM | null, note? }`. Stores the GPS-check outcome. A `skipped` check sends the assignment to review. `200 { ok: true }`.
+
+### POST /api/me/assignments/:id/segments/:segId/skip
+Body `{ reason? }` (up to 200 characters). `:segId` is the assignment segment's `id`. **Optional segments only**: `400 required_segment` for a required one (the database refuses it too). `200 AssignmentDetail`.
+
+### POST /api/me/assignments/:id/segments/:segId/unskip
+Puts a skipped segment back to pending and recomputes. `200 AssignmentDetail`.
+
+### POST /api/me/assignments/:id/finish
+"I am done": the server checks uploads, GPS and coverage and decides the status. `200 AssignmentDetail` with `status` and `reasons`. `409 completed` once the assignment is completed. All the worker actions above also answer `409 completed` after completion.
+
+## Worker: recordings
+
+The upload protocol is described in [field flow](field-flow.md#upload-protocol).
+
+### POST /api/me/recordings
+Registers a recording. Body `{ id (UUID made on the phone), assignmentId, mime (video/*), startedAt (ms), simulated? }`. Idempotent: registering the same id again for the same assignment answers `200 { ok, existing: true }`. `201 { ok: true }` when new. Moves the assignment to `in_progress`.
+Errors: `404` if the assignment is not the caller's **or** the id already belongs to someone else's recording (same answer, so ids cannot be probed), `409 completed`, `400 dev_tools_off` (`simulated: true` is accepted only while dev tools are on).
+
+### GET /api/me/recordings/:id/status
+`200 { verified, chunkSeqs[], gpsSeqs[] }`: what the server already holds, so a phone resends only the rest.
+
+### GET /api/me/recordings/:id/gps
+`200` list of `{ seq, t, lat, lng, acc }`: the worker's own track (used to draw what is already covered). Never video.
+
+### PUT /api/me/recordings/:id/chunks/:seq
+Body: the raw chunk bytes, `Content-Type: application/octet-stream`, header `x-sha256: <hex digest of the body>`. Limits: 1 byte to 32 MiB, `seq` 0 to 99,999.
+- `200 { ok: true }` stored; `200 { ok, duplicate: true }` the same bytes were already stored for this `seq` (safe to retry);
+- `422 checksum_mismatch` the body does not match its digest (nothing stored);
+- `409 seq_conflict` this `seq` is stored with different bytes; `409 already_verified`;
+- `400 bad_seq`, `400 empty_chunk`.
+
+### POST /api/me/recordings/:id/gps
+Body `{ points: [{ seq, t, lat, lng, acc }] }`, 1 to 1000 points per call. Idempotent (an existing `seq` is left alone). `200 { ok: true }`.
+
+### POST /api/me/recordings/:id/finalize
+Body `{ startedAt?, endedAt?, stopReason?, chunks: [{ seq, sha256 }], gpsCount }`. The manifest must list chunks `0..n-1`. The server checks it against what it holds: every chunk present with a matching hash, nothing extra, and GPS `seq` values exactly `0..gpsCount-1`. On success the recording becomes `server_verified` (frozen), segment coverage is recomputed and the video build is queued. Safe to repeat.
+`409 manifest_mismatch` with `{ missingChunks[], mismatched[], extra[], gpsOk, gpsHave }`.
+
+### DELETE /api/me/recordings/:id
+Drops a recording that never received a chunk. `200 { ok: true }`. `409 has_chunks`, `409 already_verified`.
+
+## Error codes
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 400 | `invalid_input` | body or query failed validation (`message` lists the fields) |
+| 400 | `invalid_json` | body is not valid JSON |
+| 400 | `bad_seq`, `empty_chunk` | chunk upload problems |
+| 400 | `bad_segment`, `empty_route`, `no_required_segment` | route cannot be published, or a segment is bad |
+| 400 | `required_segment` | tried to skip a required segment |
+| 400 | `wrong_password`, `same_password` | admin password change |
+| 400 | `dev_tools_off` | simulated recording sent while dev tools are off |
+| 401 | `unauthenticated`, `invalid_credentials` | no or bad login |
+| 403 | `forbidden` | wrong role |
+| 403 | `bad_origin` | CSRF origin check failed |
+| 404 | `not_found` | unknown id, or not yours |
+| 409 | `conflict`, `rule_violation` | a database rule refused the change (unique, immutable, check) |
+| 409 | `not_a_draft`, `draft_exists`, `not_published` | route version state |
+| 409 | `already_started`, `completed`, `not_in_review` | assignment state |
+| 409 | `worker_inactive` | assigning to a deactivated worker |
+| 409 | `seq_conflict`, `already_verified`, `has_chunks`, `manifest_mismatch` | recording upload state |
+| 409 | `not_verified`, `not_ready`, `cannot_reassemble`, `nothing_to_export` | video or export not available |
+| 413 | `too_large` | body over the size limit (JSON 2 MB, chunk 32 MiB) |
+| 415 | `json_required` | wrong content type |
+| 422 | `checksum_mismatch` | chunk bytes do not match `x-sha256` |
+| 429 | `too_many_attempts` | login lockout |
+| 500 | `server_error` | a bug; check the app log |
