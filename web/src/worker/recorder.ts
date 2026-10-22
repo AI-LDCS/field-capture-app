@@ -39,6 +39,11 @@ export async function startRecording(opts: {
   };
   await putRecording(meta); // exists locally before the first byte, so recovery can find it
 
+  // While this tab is recording it holds a lock. The start-up scan of another tab can then tell a live
+  // recording from a dead one. The lock is released when we stop, or by the browser if the page dies.
+  let releaseLock: (() => void) | null = null;
+  void navigator.locks?.request(`fc-rec-${id}`, () => new Promise<void>((res) => { releaseLock = res; }));
+
   const stats: RecStats = { chunks: 0, bytes: 0, gps: 0, error: null, startedAt: meta.startedAt };
   let chunkSeq = 0;
   let gpsSeq = 0;
@@ -107,6 +112,7 @@ export async function startRecording(opts: {
       await chunkQ;
       await gpsQ;
       try { await wake?.release(); } catch { /* ignore */ }
+      releaseLock?.();
       await putRecording({ ...meta, status: "pending_upload", endedAt: Date.now(), stopReason: reason });
       opts.onStopped(reason);
       opts.onChange();

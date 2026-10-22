@@ -126,7 +126,10 @@ export async function deleteRecording(id: string) {
 export async function scanInterrupted(): Promise<LocalRecording[]> {
   const all = await allRecordings();
   const out: LocalRecording[] = [];
+  // a recording that another tab of this browser is still writing is not cut off
+  const held = new Set((await navigator.locks?.query?.().catch(() => undefined))?.held?.map((l) => l.name) ?? []);
   for (const r of all) {
+    if (r.status === "recording" && held.has(`fc-rec-${r.id}`)) continue;
     if (r.status === "recording") {
       const chunks = await chunksOf(r.id);
       const gps = await gpsOf(r.id);

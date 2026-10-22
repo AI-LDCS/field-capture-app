@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { User } from "@shared/types.ts";
 import { api, setUnauthenticatedHandler } from "./api.ts";
-import { setLocalUser, unsentSummary } from "./worker/localdb.ts";
+import { scanInterrupted, setLocalUser, unsentSummary } from "./worker/localdb.ts";
 import { isRecording, useSession } from "./worker/session.ts";
 import { setDevTools } from "./worker/settings.ts";
 import { resumeUploader, startUploader, stopUploader } from "./worker/uploader.ts";
@@ -31,14 +31,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // a 401 must never replace the screen while someone is recording
-    setUnauthenticatedHandler(() => { if (isRecording()) setAuthLost(true); else setUserState(null); });
+    // A 401 only counts if the session is really gone: a request sent with the old cookie can fail after
+    // the person has already signed in again.
+    let checking = false;
+    setUnauthenticatedHandler(() => {
+      if (checking) return;
+      checking = true;
+      fetch("/api/auth/me", { credentials: "same-origin" })
+        .then((r) => { if (r.status === 401) { if (isRecording()) setAuthLost(true); else setUserState(null); } })
+        .catch(() => {})
+        .finally(() => { checking = false; });
+    });
     api.me().then((r) => signedIn(r.user, r.devTools)).catch(() => setUserState(null)).finally(() => setLoading(false));
   }, []);
 
   // what is stored on the phone belongs to the signed-in user, and only their uploader runs
   useEffect(() => {
-    if (user?.role === "worker") { setLocalUser(user.id); startUploader(); }
-    else { stopUploader(); setLocalUser(null); }
+    if (user?.role === "worker") {
+      setLocalUser(user.id);
+      // anything still marked "recording" was cut off (refresh, crash, closed tab): mark it before the uploader runs
+      void scanInterrupted().catch(() => {}).finally(startUploader);
+    } else { stopUploader(); setLocalUser(null); }
   }, [user?.id, user?.role]);
 
   // the recording ended: now the lost session can show the login screen
