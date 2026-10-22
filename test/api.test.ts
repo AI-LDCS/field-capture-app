@@ -106,7 +106,10 @@ describe("account lifecycle", () => {
     assert.equal((await admin.post(`/api/admin/users/${w.id}/deactivate`)).status, 200);
     assert.equal((await w.client.get("/api/me/assignments")).status, 401);
     assert.equal((await new Client(t.base).post("/api/auth/login", { username: "leaver", password: w.password })).status, 401);
+    // the session row itself is gone, so re-activating must not bring the old cookie back to life
+    assert.equal((await t.pool.query("SELECT 1 FROM sessions WHERE user_id = $1", [w.id])).rowCount, 0);
     assert.equal((await admin.post(`/api/admin/users/${w.id}/activate`)).status, 200);
+    assert.equal((await w.client.get("/api/me/assignments")).status, 401);
     assert.equal((await new Client(t.base).post("/api/auth/login", { username: "leaver", password: w.password })).status, 200);
   });
 
