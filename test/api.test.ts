@@ -221,6 +221,14 @@ describe("request safety", () => {
     assert.equal(r.status, 403);
     assert.equal(r.body.error, "bad_origin");
   });
+  it("CSP allows both map tile hosts (street and terrain) and nothing else for images", async () => {
+    const r = await fetch(t.base + "/healthz");
+    const csp = r.headers.get("content-security-policy") ?? "";
+    const img = /img-src ([^;]+)/.exec(csp)?.[1].split(" ") ?? [];
+    assert.ok(img.includes("https://tile.openstreetmap.org"), csp);
+    assert.ok(img.includes("https://tile.opentopomap.org"), csp);
+    assert.ok(!img.some((x) => x === "*" || x === "https:" || x === "http:"), csp);
+  });
   it("rejects a form-style content type", async () => {
     const c = new Client(t.base);
     const r = await c.req("POST", "/api/auth/login", "username=testadmin&password=x", { "content-type": "application/x-www-form-urlencoded" });
@@ -279,10 +287,19 @@ describe("routes and versions", () => {
       segments: [{ required: true, coords: line(101.0, 14.0, 900) }],
     });
     assert.equal(edit.status, 200);
+    // a rename in a DRAFT must not leak into the published version or its assignments
+    assert.equal((await admin.get(`/api/admin/route-versions/${v1.id}`)).body.routeName, "Snap");
+    assert.equal((await w.client.get(`/api/me/assignments/${a.body.id}`)).body.route.name, "Snap");
     assert.equal((await admin.post(`/api/admin/route-versions/${nv.body.id}/publish`)).status, 200);
 
     const after = await w.client.get(`/api/me/assignments/${a.body.id}`);
     assert.equal(after.body.route.version, 1);
+    assert.equal(after.body.route.name, "Snap");
+    // the routes list shows the current name; the old version keeps its own
+    const list = await admin.get("/api/admin/routes");
+    assert.equal(list.body.find((r: any) => r.id === v1.routeId).name, "Snap renamed");
+    assert.equal((await admin.get(`/api/admin/route-versions/${v1.id}`)).body.routeName, "Snap");
+    await assert.rejects(t.pool.query("UPDATE route_versions SET name = 'sneaky' WHERE id = $1", [v1.id]), /name is immutable/);
     assert.equal(after.body.segments.length, 3);
     assert.deepEqual(after.body.segments.map((s: any) => s.coords), before.body.segments.map((s: any) => s.coords));
     assert.deepEqual(after.body.segments.map((s: any) => s.required), [true, false, true]);

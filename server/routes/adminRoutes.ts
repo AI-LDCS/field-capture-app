@@ -26,7 +26,7 @@ const SEG_SQL = `SELECT id, ord, name, required, ST_AsGeoJSON(geom)::json AS g, 
 
 export async function loadVersion(db: Db, versionId: string) {
   const v = await q1(
-    `SELECT v.*, r.name AS route_name FROM route_versions v JOIN routes r ON r.id = v.route_id WHERE v.id = $1`,
+    `SELECT v.*, v.name AS route_name FROM route_versions v WHERE v.id = $1`,
     [versionId], db,
   );
   if (!v) return undefined;
@@ -64,7 +64,7 @@ async function draftOrThrow(db: Db, versionId: string) {
 adminRoutesRouter.get("/routes", async (_req, res) => {
   const routes = await q("SELECT * FROM routes ORDER BY created_at DESC");
   const versions = await q(
-    `SELECT v.id, v.route_id, v.version, v.status, v.published_at, v.created_at,
+    `SELECT v.id, v.route_id, v.version, v.name, v.status, v.published_at, v.created_at,
             count(s.id)::int AS segment_count, COALESCE(sum(ST_Length(s.geom::geography)), 0) AS length_m,
             (SELECT count(*)::int FROM assignments a WHERE a.route_version_id = v.id) AS assignment_count
        FROM route_versions v LEFT JOIN route_segments s ON s.route_version_id = v.id
@@ -73,7 +73,7 @@ adminRoutesRouter.get("/routes", async (_req, res) => {
   res.json(routes.map((r) => ({
     id: r.id, name: r.name, createdAt: r.created_at,
     versions: versions.filter((v) => v.route_id === r.id).map((v) => ({
-      id: v.id, version: v.version, status: v.status, publishedAt: v.published_at, createdAt: v.created_at,
+      id: v.id, version: v.version, name: v.name, status: v.status, publishedAt: v.published_at, createdAt: v.created_at,
       segmentCount: v.segment_count, lengthM: Math.round(v.length_m), assignmentCount: v.assignment_count,
     })),
   })));
@@ -98,7 +98,7 @@ adminRoutesRouter.post("/routes", async (req, res) => {
   const body = DraftIn.extend({ name: z.string().trim().min(1).max(120) }).parse(req.body);
   const out = await tx(async (c) => {
     const [r] = await q("INSERT INTO routes (name, created_by) VALUES ($1,$2) RETURNING id", [body.name, req.user!.id], c);
-    const [v] = await q("INSERT INTO route_versions (route_id, version, status, created_by) VALUES ($1,1,'draft',$2) RETURNING id", [r.id, req.user!.id], c);
+    const [v] = await q("INSERT INTO route_versions (route_id, version, name, status, created_by) VALUES ($1,1,$2,'draft',$3) RETURNING id", [r.id, body.name, req.user!.id], c);
     await writeSegments(c, v.id, body.segments);
     await audit(req.user!.id, "route_created", { type: "route", id: r.id }, { name: body.name }, req.ip, c);
     return loadVersion(c, v.id);
@@ -111,7 +111,7 @@ adminRoutesRouter.put("/route-versions/:vid", async (req, res) => {
   const body = DraftIn.parse(req.body);
   const out = await tx(async (c) => {
     const v = await draftOrThrow(c, vid);
-    if (body.name) await q("UPDATE routes SET name = $1 WHERE id = $2", [body.name, v.route_id], c);
+    if (body.name) await q("UPDATE route_versions SET name = $1 WHERE id = $2", [body.name, vid], c); // the draft only
     await writeSegments(c, vid, body.segments);
     await audit(req.user!.id, "route_draft_saved", { type: "route_version", id: vid }, { segments: body.segments.length }, req.ip, c);
     return loadVersion(c, vid);
@@ -140,10 +140,10 @@ adminRoutesRouter.post("/routes/:id/new-version", async (req, res) => {
     if (!r) throw notFound("route not found");
     const draft = await q1("SELECT id FROM route_versions WHERE route_id = $1 AND status = 'draft'", [id], c);
     if (draft) throw new HttpError(409, "draft_exists", "this route already has a draft", { draftId: draft.id });
-    const src = await q1("SELECT id, version FROM route_versions WHERE route_id = $1 ORDER BY version DESC LIMIT 1", [id], c);
+    const src = await q1("SELECT id, version, name FROM route_versions WHERE route_id = $1 ORDER BY version DESC LIMIT 1", [id], c);
     const [v] = await q(
-      "INSERT INTO route_versions (route_id, version, status, created_by) VALUES ($1,$2,'draft',$3) RETURNING id",
-      [id, src.version + 1, req.user!.id], c,
+      "INSERT INTO route_versions (route_id, version, name, status, created_by) VALUES ($1,$2,$3,'draft',$4) RETURNING id",
+      [id, src.version + 1, src.name, req.user!.id], c,
     );
     await q(
       `INSERT INTO route_segments (route_version_id, ord, name, required, geom, min_coverage_ratio)
@@ -175,6 +175,7 @@ adminRoutesRouter.post("/route-versions/:vid/publish", async (req, res) => {
 
     await q("UPDATE route_versions SET status='archived' WHERE route_id = $1 AND status='published'", [v.route_id], c);
     await q("UPDATE route_versions SET status='published', published_at=now() WHERE id = $1", [vid], c);
+    await q("UPDATE routes SET name = $1 WHERE id = $2", [v.name, v.route_id], c); // routes.name = name of the latest published version
     await audit(req.user!.id, "route_published", { type: "route_version", id: vid }, { version: v.version }, req.ip, c);
     return loadVersion(c, vid);
   });

@@ -8,7 +8,7 @@ import { HttpError, notFound, uuidParam } from "../http.ts";
 const SUMMARY = `
   SELECT a.id, a.status, a.note, a.created_at, a.updated_at,
          a.user_id, u.username, u.display_name,
-         v.id AS route_version_id, v.version, r.id AS route_id, r.name AS route_name,
+         v.id AS route_version_id, v.version, r.id AS route_id, v.name AS route_name,
          (SELECT count(*)::int FROM assignment_segments s WHERE s.assignment_id = a.id) AS segment_total,
          (SELECT count(*)::int FROM assignment_segments s WHERE s.assignment_id = a.id AND s.status = 'completed') AS segment_done,
          (SELECT count(*)::int FROM assignment_segments s WHERE s.assignment_id = a.id AND s.required) AS required_total,

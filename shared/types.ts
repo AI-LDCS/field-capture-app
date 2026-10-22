@@ -26,7 +26,7 @@ export type RouteVersion = {
 export type RouteSummary = {
   id: string; name: string; createdAt: string;
   versions: {
-    id: string; version: number; status: RouteVersionStatus; publishedAt: string | null; createdAt: string;
+    id: string; version: number; name: string; status: RouteVersionStatus; publishedAt: string | null; createdAt: string;
     segmentCount: number; lengthM: number; assignmentCount: number;
   }[];
 };
