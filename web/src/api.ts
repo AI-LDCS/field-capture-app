@@ -74,6 +74,7 @@ export const api = {
   myRecordingGps: (rid: string) => get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/me/recordings/${rid}/gps`),
   recordingGps: (rid: string) => get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/admin/recordings/${rid}/gps`),
   reviewAssignment: (id: string, decision: "approve" | "reject") => post<AssignmentDetail>(`/api/admin/assignments/${id}/review`, { decision }),
+  assignmentAudit: (id: string) => get<{ id: number; at: string; action: string; details: unknown; actor: string | null }[]>(`/api/admin/assignments/${id}/audit`),
   reEvaluate: (id: string) => post<AssignmentDetail>(`/api/admin/assignments/${id}/re-evaluate`),
   reassemble: (rid: string) => post(`/api/admin/recordings/${rid}/reassemble`),
 };

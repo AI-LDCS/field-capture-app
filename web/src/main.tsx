@@ -4,8 +4,9 @@ import { Component, StrictMode, useEffect, useState, type ReactNode } from "reac
 import { createRoot } from "react-dom/client";
 import { Assignments, RoutesPage, Workers } from "./admin.tsx";
 import { AuthProvider, ChangePassword, Login, SessionBanner, useAuth } from "./auth.tsx";
+import Review from "./Review.tsx";
 import { EditVersion, NewRoute } from "./RouteEditor.tsx";
-import { AssignmentView, MyAssignments } from "./worker.tsx";
+import { MyAssignments } from "./worker.tsx";
 import WorkerRun from "./worker/RunPage.tsx";
 
 const useHash = () => {
@@ -57,7 +58,7 @@ function Shell() {
       : page === "routes" && a === "edit" && b ? <EditVersion key={b} versionId={b} />
       : page === "routes" ? <RoutesPage />
       : page === "assign" ? <Assignments key={a} presetVersionId={a} />
-      : page === "assignment" && a ? <AssignmentView key={a} id={a} admin />
+      : page === "assignment" && a ? <Review key={a} id={a} />
       : page === "password" ? <ChangePassword />
       : <Assignments />;
   } else {

@@ -120,6 +120,16 @@ adminAssignmentsRouter.post("/", async (req, res) => {
   res.status(201).json(await detail(id));
 });
 
+adminAssignmentsRouter.get("/:id/audit", async (req, res) => {
+  const id = uuidParam(req, "id");
+  const recs = (await q("SELECT id FROM recordings WHERE assignment_id = $1", [id])).map((r) => r.id);
+  res.json(await q(
+    `SELECT l.id, l.at, l.action, l.details, u.username AS actor
+       FROM audit_log l LEFT JOIN users u ON u.id = l.actor_id
+      WHERE l.target_id = $1 OR l.target_id = ANY($2::text[]) ORDER BY l.id DESC LIMIT 200`, [id, recs],
+  ));
+});
+
 /** Admin decision on an assignment that needs review. */
 adminAssignmentsRouter.post("/:id/review", async (req, res) => {
   const id = uuidParam(req, "id");

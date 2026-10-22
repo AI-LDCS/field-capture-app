@@ -139,3 +139,6 @@ main:has(.editor) { max-width: 1320px; }
 .rv-hint .skip { margin-left: auto; padding: 4px 12px; flex: none; }
 .banner { position: sticky; top: 0; z-index: 4000; background: #fef3c7; color: #78350f; padding: 10px 14px; border-bottom: 2px solid #f59e0b; font-size: 14px; }
 .banner .row { margin-top: 6px; } .banner input { max-width: 240px; margin: 0; }
+.b-simulated { background: #fecaca; color: #7f1d1d; }
+.b-uploading, .b-open { background: #bfdbfe; color: #1e3a8a; }
+button.small, a.btn.small { padding: 3px 10px; font-size: 13px; }
