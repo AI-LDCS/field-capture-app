@@ -63,6 +63,13 @@ workerRecordingsRouter.get("/:id/status", async (req, res) => {
   });
 });
 
+/** A worker's own GPS track (not video): the app uses it to show what is already covered. */
+workerRecordingsRouter.get("/:id/gps", async (req, res) => {
+  const rec = await owned(req);
+  res.json((await q("SELECT seq, t_ms, lat, lng, acc FROM gps_points WHERE recording_id = $1 ORDER BY seq", [rec.id]))
+    .map((p) => ({ seq: p.seq, t: Number(p.t_ms), lat: p.lat, lng: p.lng, acc: p.acc })));
+});
+
 // Chunks are content-addressed: the key holds the hash, so two racing uploads of the same seq cannot overwrite each other.
 workerRecordingsRouter.put("/:id/chunks/:seq", express.raw({ type: "application/octet-stream", limit: MAX_CHUNK_BYTES }), async (req, res) => {
   const rec = await owned(req);

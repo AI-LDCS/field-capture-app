@@ -64,13 +64,7 @@ export function AssignmentView({ id, admin }: { id: string; admin?: boolean }) {
         ))}
       </Card>
 
-      {!admin && (
-        <Card title="Recording">
-          <p className="muted">Recording and upload arrive in the next milestone. For now you can see the route you are assigned.</p>
-          <a className="btn ghost" href="#/">Back to my assignments</a>
-        </Card>
-      )}
-      {admin && <a className="btn ghost" href="#/">Back</a>}
+      <a className="btn ghost" href="#/">Back</a>
     </>
   );
 }

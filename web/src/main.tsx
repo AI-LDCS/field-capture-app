@@ -3,9 +3,10 @@ import "./styles.css";
 import { Component, StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Assignments, RoutesPage, Workers } from "./admin.tsx";
-import { AuthProvider, ChangePassword, Login, useAuth } from "./auth.tsx";
+import { AuthProvider, ChangePassword, Login, SessionBanner, useAuth } from "./auth.tsx";
 import { EditVersion, NewRoute } from "./RouteEditor.tsx";
 import { AssignmentView, MyAssignments } from "./worker.tsx";
+import WorkerRun from "./worker/RunPage.tsx";
 
 const useHash = () => {
   const [h, setH] = useState(location.hash || "#/");
@@ -36,7 +37,7 @@ class Boundary extends Component<{ children: ReactNode }, { error: string | null
 }
 
 function Shell() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, authLost, logout } = useAuth();
   const hash = useHash();
   const [, page, a, b] = hash.split("/");
 
@@ -61,7 +62,7 @@ function Shell() {
       : <Assignments />;
   } else {
     body =
-      page === "assignment" && a ? <AssignmentView key={a} id={a} />
+      page === "assignment" && a ? <WorkerRun key={a} id={a} />
       : <MyAssignments />;
   }
 
@@ -84,6 +85,7 @@ function Shell() {
           : <span className="small muted">{user.displayName || user.username}</span>}
         <button className="ghost small" onClick={() => void logout()}>Sign out</button>
       </header>
+      {authLost && <SessionBanner />}
       <main>{body}</main>
     </>
   );

@@ -117,3 +117,25 @@ main:has(.editor) { max-width: 1320px; }
 .vtx-mid { width: 18px; height: 18px; line-height: 14px; text-align: center; background: var(--card, #fff); color: #111; font: 700 14px system-ui; border: 2px solid #111827; border-radius: 50%; opacity: .75; cursor: copy; box-sizing: border-box; }
 .vtx-mid:hover { opacity: 1; background: #fde047; }
 .pwrow { margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; }
+/* ---- recording view: map + camera split ---- */
+.rv { position: fixed; inset: 0; z-index: 3000; background: var(--bg); display: flex; flex-direction: column; height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
+.rv-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top)); background: var(--card); border-bottom: 1px solid var(--line); }
+.rv-bar .grow, .grow { flex: 1; }
+.rv-bar button { padding: 6px 12px; }
+.danger-text { color: var(--danger); border-color: var(--danger); }
+.rv-hint { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--line); font-size: 15px; }
+.rv-hint .arrow { display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; font-size: 22px; font-weight: 700; color: #fff; background: #dc2626; border-radius: 50%; flex: none; }
+.rv-area { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.rv-pane { position: relative; min-height: 0; overflow: hidden; background: #000; }
+.rv-pane.grow { flex: 1; }
+.rv-video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+.rv-handle { flex: none; height: 22px; background: var(--card); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: center; cursor: row-resize; touch-action: none; }
+.rv-handle i { width: 48px; height: 5px; border-radius: 3px; background: var(--muted); }
+.rv-locate { position: absolute; left: 10px; bottom: 10px; z-index: 1000; padding: 6px 12px; }
+.rv-segs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: var(--card); border-top: 1px solid var(--line); }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--line); }
+.chip.done { background: #bbf7d0; color: #14532d; } .chip.skip { background: #e5e7eb; color: #6b7280; text-decoration: line-through; }
+.chip.now { outline: 2px solid #dc2626; }
+.rv-hint .skip { margin-left: auto; padding: 4px 12px; flex: none; }
+.banner { position: sticky; top: 0; z-index: 4000; background: #fef3c7; color: #78350f; padding: 10px 14px; border-bottom: 2px solid #f59e0b; font-size: 14px; }
+.banner .row { margin-top: 6px; } .banner input { max-width: 240px; margin: 0; }

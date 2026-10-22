@@ -4,6 +4,9 @@ import type { LngLat } from "@shared/types.ts";
 
 export const Badge = ({ s }: { s: string }) => <span className={`badge b-${s}`}>{s.replace(/_/g, " ")}</span>;
 
+export const fmtBytes = (n: number) =>
+  n > 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1e3)} KB`;
+
 export const km = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`);
 export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "never");
 export const ll = (c: LngLat): [number, number] => [c[1], c[0]];

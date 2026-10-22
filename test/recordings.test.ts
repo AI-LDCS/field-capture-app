@@ -105,6 +105,8 @@ describe("ownership", () => {
     const chunk = crypto.randomBytes(2000);
     assert.equal((await putChunk(b.client, id, 0, chunk)).status, 404);
     assert.equal((await b.client.get(`/api/me/recordings/${id}/status`)).status, 404);
+    assert.equal((await b.client.get(`/api/me/recordings/${id}/gps`)).status, 404);
+    assert.equal((await a.client.get(`/api/me/recordings/${id}/gps`)).status, 200);
     assert.equal((await b.client.post(`/api/me/recordings/${id}/gps`, { points: [{ seq: 0, t: 1, lat: 1, lng: 1, acc: 1 }] })).status, 404);
     assert.equal((await b.client.post(`/api/me/recordings/${id}/finalize`, manifest([chunk], []))).status, 404);
     assert.equal((await b.client.del(`/api/me/recordings/${id}`)).status, 404);

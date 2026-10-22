@@ -1,5 +1,5 @@
 import type {
-  AssignmentDetail, AssignmentSummary, RouteSummary, RouteVersion, SegmentInput, User, WorkerRow,
+  AssignmentDetail, AssignmentSummary, PreflightOutcome, RouteSummary, RouteVersion, SegmentInput, User, WorkerRow,
 } from "@shared/types.ts";
 
 export class ApiError extends Error {
@@ -32,8 +32,8 @@ const patch = <T>(p: string, b: unknown) => request<T>("PATCH", p, b);
 const del = <T>(p: string) => request<T>("DELETE", p);
 
 export const api = {
-  me: () => get<{ user: User }>("/api/auth/me"),
-  login: (username: string, password: string) => post<{ user: User }>("/api/auth/login", { username, password }),
+  me: () => get<{ user: User; devTools: boolean }>("/api/auth/me"),
+  login: (username: string, password: string) => post<{ user: User; devTools: boolean }>("/api/auth/login", { username, password }),
   logout: () => post("/api/auth/logout"),
   changePassword: (currentPassword: string, newPassword: string) => post("/api/auth/change-password", { currentPassword, newPassword }),
 
@@ -66,4 +66,14 @@ export const api = {
 
   myAssignments: () => get<AssignmentSummary[]>("/api/me/assignments"),
   myAssignment: (id: string) => get<AssignmentDetail>(`/api/me/assignments/${id}`),
+  myPreflight: (id: string, outcome: PreflightOutcome) => post(`/api/me/assignments/${id}/preflight`, outcome),
+  mySkip: (id: string, segId: string, reason: string) => post<AssignmentDetail>(`/api/me/assignments/${id}/segments/${segId}/skip`, { reason }),
+  myUnskip: (id: string, segId: string) => post<AssignmentDetail>(`/api/me/assignments/${id}/segments/${segId}/unskip`),
+  myFinish: (id: string) => post<AssignmentDetail>(`/api/me/assignments/${id}/finish`),
+  /** raw GPS of one recording, for the admin review map */
+  myRecordingGps: (rid: string) => get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/me/recordings/${rid}/gps`),
+  recordingGps: (rid: string) => get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/admin/recordings/${rid}/gps`),
+  reviewAssignment: (id: string, decision: "approve" | "reject") => post<AssignmentDetail>(`/api/admin/assignments/${id}/review`, { decision }),
+  reEvaluate: (id: string) => post<AssignmentDetail>(`/api/admin/assignments/${id}/re-evaluate`),
+  reassemble: (rid: string) => post(`/api/admin/recordings/${rid}/reassemble`),
 };

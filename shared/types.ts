@@ -5,6 +5,8 @@ export type GpsPoint = { seq: number; t: number; lat: number; lng: number; acc: 
 export type Role = "admin" | "worker";
 export type RouteVersionStatus = "draft" | "published" | "archived";
 export type SegmentStatus = "pending" | "in_progress" | "completed" | "skipped";
+/** On the phone. The server only knows "uploading" and "server_verified". */
+export type RecordingStatus = "recording" | "interrupted" | "pending_upload" | "uploading" | "upload_interrupted" | "server_verified";
 export type AssignmentStatus = "assigned" | "in_progress" | "pending_sync" | "completed" | "needs_review";
 
 export type User = { id: string; username: string; displayName: string; role: Role };

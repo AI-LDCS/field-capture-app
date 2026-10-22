@@ -52,7 +52,7 @@ authRouter.post("/login", async (req, res) => {
   await q("DELETE FROM login_attempts WHERE username = $1", [uname]);
   await createSession(user.id, req, res);
   await audit(user.id, "login", { type: "user", id: user.id }, undefined, ip);
-  res.json({ user: publicUser({ id: user.id, username: user.username, displayName: user.display_name, role: user.role }) });
+  res.json({ user: publicUser({ id: user.id, username: user.username, displayName: user.display_name, role: user.role }), devTools: config.devTools });
 });
 
 authRouter.post("/logout", async (req, res) => {
