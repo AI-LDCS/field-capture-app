@@ -184,4 +184,4 @@ Fake GPS (walks the route, starts inaccurate, can simulate an inaccurate start) 
 - No background recording: switching apps or locking the screen stops it.
 - Local data is not a strong security boundary against someone who controls the device and knows how to read IndexedDB. A web app cannot guarantee a worker never extracts a video. The app keeps recordings in application storage, offers no download to workers, and never returns video bytes to them; for a strict guarantee, use managed devices or a native app. See [security](security.md#what-is-not-protected).
 - Storage quota varies by browser and device and can be cleared by the user.
-- Behaviour on specific iPhone and Android browsers must be checked on real devices; automated tests do not cover the phone code.
+- Browsers differ (codec, how long a screen lock lets a page live, storage limits). The phone code was used by the owner on phones in normal use but is not covered by automated tests and has not been stress-tested; see the [roadmap](roadmap.md#known-limits).

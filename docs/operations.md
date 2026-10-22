@@ -133,7 +133,7 @@ UPDATE users SET password_hash = '<paste the hash>', password_changed_at = now()
 DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = 'admin');
 ```
 
-(The hash command was checked to produce a hash the app verifies.) Choose at least 12 characters.
+Choose at least 12 characters. A password typed on the command line is saved in your shell history: start the command with a space (most shells then skip it) or clear the history entry afterwards. The hash command was run exactly as written and its output verified by the app's own check.
 
 ## Resetting a development environment
 

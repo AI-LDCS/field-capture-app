@@ -4,7 +4,7 @@ A web app for collecting **video and GPS data along walking routes**. Administra
 
 It is built to be careful with the data: a recording survives a refresh or crash, uploads resume where they stopped, every chunk is checksummed, and a phone deletes its copy only after the server has verified it.
 
-> **Status:** working end to end and covered by automated tests on the server side. Behaviour on real iPhone and Android browsers still has to be checked on devices. See [Status and limits](#status-and-limits).
+> **Status:** working end to end. The server side is covered by automated tests; the phone side was tested by the owner on phones in normal use, but has not been stress-tested (long walks, low storage, poor network) and the results are not recorded here. See [Status and limits](#status-and-limits).
 
 ## What it does
 
@@ -161,7 +161,7 @@ npm test
 
 Works end to end and is tested on the server side. Known limits:
 
-- Real iPhone/Android behaviour (camera, GPS, screen lock, playback of joined video) is to be validated on devices; the phone code has no automated tests yet.
+- The phone code has no automated tests. It was checked by hand in a desktop browser with fake GPS and camera, and by the owner on phones in normal use. Not yet stress-tested: long walks (25 minutes or more), low storage, a poor or interrupted network, several phone models. Which phones and what was found is not recorded here yet.
 - No background recording (a browser limit): switching apps or locking the screen stops it.
 - No offline loading of the app, no admin delete or retention, no monitoring or CI yet.
 - The free OpenStreetMap tile servers are used; use a tile provider for production.

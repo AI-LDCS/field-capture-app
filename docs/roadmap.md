@@ -10,7 +10,7 @@ What is built, what is known to be missing, and what is planned next. Nothing he
 
 ## Known limits
 
-**Not yet verified on real devices.** Camera, GPS, screen lock and playback of joined chunks on iPhone Safari and Android Chrome need checking on real phones. The automated tests do not cover the phone code; it was exercised in a desktop browser with fake GPS and camera.
+**Phone testing is light so far.** The owner has used the app on phones in normal use; the results (which phones, what worked, what did not) are not recorded here yet. Still to do: long walks, low storage, a poor network, and more phone models and browsers. The automated tests do not cover the phone code; it was also exercised in a desktop browser with fake GPS and camera.
 
 **Browser limits** (cannot be fixed in a web app): no background recording; local data is not a strong security boundary; storage quota and eviction vary by device. See [field flow](field-flow.md#limits-of-a-browser) and [security](security.md#what-is-not-protected).
 
@@ -30,7 +30,7 @@ What is built, what is known to be missing, and what is planned next. Nothing he
 
 ## Next: milestone 3 (proposed order)
 
-1. **Fix what real-phone testing shows.** First, always.
+1. **Record and fix what phone testing shows.** First, always. Write down the phones and browsers used and any problems found.
 2. **Data lifecycle**: admin delete of a recording or assignment (audited, removes the video from storage); a storage page (space per worker and route); a cleanup job for stale unfinished recordings and orphan objects.
 3. **Ready for a public server**: scheduled backups and a rehearsed restore; a production tile provider; alerts for failed builds, stuck uploads and low disk; CI that runs `npm test`.
 4. **Offline**: a service worker so the app loads without a connection; skip and un-skip queued on the phone and synced later.
