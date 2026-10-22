@@ -1,0 +1,9 @@
+{
+	auto_https off
+}
+
+https://{$TAILNET_HOST} {
+	tls /certs/{$TAILNET_HOST}.crt /certs/{$TAILNET_HOST}.key
+	encode zstd gzip
+	reverse_proxy app:3100
+}

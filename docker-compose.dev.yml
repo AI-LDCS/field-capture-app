@@ -1,0 +1,9 @@
+# Local development: expose services on 127.0.0.1 ONLY so the app and tests can run on the host.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs
+services:
+  db:
+    ports: ["127.0.0.1:5433:5432"]
+  rustfs:
+    ports: ["127.0.0.1:9000:9000"]
+  app:
+    ports: ["127.0.0.1:3100:3100"]
