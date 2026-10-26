@@ -44,7 +44,7 @@ So adding a route without a test makes `npm test` fail and names the route. The 
 
 ## Not covered by automated tests
 
-- The **phone-side code** (`web/src/worker/*`: recorder, uploader, local database, recovery, camera and GPS wrappers). It was exercised by hand in a desktop browser with the dev tools (fake GPS and camera), including crash recovery, offline resume, a lost session mid-recording and two users on one browser. The owner has also used it on phones in normal use; long walks, low storage and a poor network have not been tried.
+- The **phone-side code** (`web/src/worker/*`: recorder, uploader, local database, recovery, camera and GPS wrappers). Only the write-retry and error-text helper (`retry.ts`) has automated tests. The rest was exercised by hand in a desktop browser with the dev tools (fake GPS and camera), including crash recovery, offline resume, a lost session mid-recording and two users on one browser. The owner has also used it on phones in normal use; long walks, low storage and a poor network have not been tried.
 - The **React screens** (login, editor, review, worker pages).
 - `server/index.ts` (start-up wiring) beyond what the tests import.
 

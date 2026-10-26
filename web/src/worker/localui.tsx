@@ -27,32 +27,34 @@ export function useLocalRecordings(assignmentId?: string): LocalRow[] {
 }
 
 export function LocalRecordings({ assignmentId }: { assignmentId?: string }) {
-  const rows = useLocalRecordings(assignmentId);
+  // a verified recording has had its chunks and GPS deleted from this phone on purpose; it is listed under "Saved on the server"
+  const rows = useLocalRecordings(assignmentId).filter((r) => r.status !== "server_verified");
   const [, force] = useState(0);
   useEffect(() => onUploaderChange(() => force((n) => n + 1)), []);
   return (
     <section className="card">
       <h3>On this phone</h3>
       {uploaderPaused() && <p className="warn-box">Uploads are paused because you were signed out. Sign in again; nothing is lost.</p>}
-      {rows.length === 0 ? <p className="muted">Nothing is waiting on this phone.</p> : (
-        <table>
-          <thead><tr><th>id</th><th>status</th><th>chunks</th><th>unsent</th><th>size</th><th>gps</th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>{r.id.slice(0, 8)}{r.simulated && <div className="small muted">simulated</div>}</td>
-                <td><Badge s={r.status} />{r.lastError && <div className="err small">{r.lastError}</div>}</td>
-                <td>{r.chunks}</td>
-                <td>{r.chunksPending}c / {r.gpsPending}g</td>
-                <td>{fmtBytes(r.bytes)}</td>
-                <td>{r.gps}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <div className="row"><button className="ghost" onClick={() => void uploadTick()}>Upload now</button></div>
-      {uploaderLog().length > 0 && <pre className="log">{uploaderLog().slice(0, 6).join("\n")}</pre>}
+      {rows.length === 0 ? <p className="muted">Nothing is waiting on this phone.</p> : rows.map((r) => (
+        <div key={r.id} className="local-rec">
+          <div className="row between wrap">
+            <span><code>{r.id.slice(0, 8)}</code>{r.simulated && <> <Badge s="simulated" /></>}</span>
+            <Badge s={r.status} />
+          </div>
+          <div className="small muted local-stats">
+            <span>{r.chunks} chunks</span>
+            <span>unsent {r.chunksPending}c / {r.gpsPending}g</span>
+            <span>{fmtBytes(r.bytes)}</span>
+            <span>{r.gps} gps</span>
+          </div>
+          {r.lastError && <div className="err small">{r.lastError}</div>}
+        </div>
+      ))}
+      <div className="row">
+        <button className="ghost" disabled={rows.length === 0 || uploaderPaused()} onClick={() => void uploadTick()}
+          title={rows.length === 0 ? "Nothing to upload" : uploaderPaused() ? "Sign in again to upload" : undefined}>Upload now</button>
+      </div>
+      {rows.length > 0 && uploaderLog().length > 0 && <pre className="log">{uploaderLog().slice(0, 6).join("\n")}</pre>}
     </section>
   );
 }

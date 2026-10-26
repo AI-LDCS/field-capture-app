@@ -1,6 +1,7 @@
 import { CONFIG } from "@shared/config.ts";
 import type { GpsSource } from "./gps.ts";
-import { type LocalRecording, getRecording, putChunk, putGps, putRecording } from "./localdb.ts";
+import { type LocalRecording, getRecording, putChunk, putGps, putRecording, resetDb } from "./localdb.ts";
+import { describeError, withRetry } from "./retry.ts";
 
 export async function sha256Hex(blob: Blob): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
@@ -12,7 +13,7 @@ export function pickMime(): string {
   return list.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
 }
 
-export type RecStats = { chunks: number; bytes: number; gps: number; error: string | null; startedAt: number };
+export type RecStats = { chunks: number; bytes: number; gps: number; error: string | null; startedAt: number; freeBytes: number | null };
 export type ActiveRecording = { id: string; stop: (reason: string) => Promise<void>; stats: () => RecStats };
 
 /**
@@ -44,17 +45,20 @@ export async function startRecording(opts: {
   let releaseLock: (() => void) | null = null;
   void navigator.locks?.request(`fc-rec-${id}`, () => new Promise<void>((res) => { releaseLock = res; }));
 
-  const stats: RecStats = { chunks: 0, bytes: 0, gps: 0, error: null, startedAt: meta.startedAt };
+  const stats: RecStats = { chunks: 0, bytes: 0, gps: 0, error: null, startedAt: meta.startedAt, freeBytes: null };
   let chunkSeq = 0;
   let gpsSeq = 0;
   let chunkQ: Promise<void> = Promise.resolve();
   let gpsQ: Promise<void> = Promise.resolve();
   let stopping: Promise<void> | null = null;
 
+  // A write that fails is tried again (on a fresh connection) before the recording is given up on.
+  const write = <T,>(fn: () => Promise<T>) => withRetry(fn, { onRetry: () => resetDb() });
+  // The stop reason goes to the server, which allows 100 characters; the full text stays on screen.
   const fail = (e: unknown) => {
-    stats.error = e instanceof Error ? e.message : String(e);
+    stats.error = `Could not save to this phone: ${describeError(e)}`;
     opts.onChange();
-    setTimeout(() => void stop("storage error"), 0);
+    setTimeout(() => void stop(`storage error: ${describeError(e, 80)}`), 0);
   };
 
   rec.ondataavailable = (e) => {
@@ -63,8 +67,8 @@ export async function startRecording(opts: {
     const blob = e.data;
     chunkQ = chunkQ
       .then(async () => {
-        const sha256 = await sha256Hex(blob);
-        await putChunk({ recordingId: id, seq, blob, size: blob.size, t: Date.now(), sha256, uploaded: false });
+        const sha256 = await write(() => sha256Hex(blob));
+        await write(() => putChunk({ recordingId: id, seq, blob, size: blob.size, t: Date.now(), sha256, uploaded: false }));
         stats.chunks++; // committed only after the IndexedDB transaction finished
         stats.bytes += blob.size;
         opts.onChange();
@@ -83,7 +87,7 @@ export async function startRecording(opts: {
     const seq = gpsSeq++;
     gpsQ = gpsQ
       .then(async () => {
-        await putGps({ recordingId: id, seq, t: f.t, lat: f.lat, lng: f.lng, acc: f.acc, uploaded: false });
+        await write(() => putGps({ recordingId: id, seq, t: f.t, lat: f.lat, lng: f.lng, acc: f.acc, uploaded: false }));
         stats.gps++;
         opts.onChange();
       })
@@ -96,10 +100,19 @@ export async function startRecording(opts: {
   const onVis = () => { if (document.hidden) void stop("page hidden"); };
   document.addEventListener("visibilitychange", onVis);
 
-  const storageTimer = window.setInterval(async () => {
-    const est = await navigator.storage?.estimate?.();
-    if (est?.quota && est.usage !== undefined && est.quota - est.usage < 100 * 1024 * 1024) void stop("low storage");
-  }, 10_000);
+  // Free space is read right away and every 10 s: shown on the recording screen, and a recording stops
+  // cleanly while there is still room to save its last chunks.
+  const checkStorage = async () => {
+    try {
+      const est = await navigator.storage?.estimate?.();
+      if (!est?.quota || est.usage === undefined) return;
+      stats.freeBytes = est.quota - est.usage;
+      opts.onChange();
+      if (stats.freeBytes < CONFIG.recording.stopFreeBytes) void stop("low storage");
+    } catch { /* the browser cannot tell; the write retries and the stop reason still protect the data */ }
+  };
+  const storageTimer = window.setInterval(checkStorage, 10_000);
+  void checkStorage();
 
   function stop(reason: string): Promise<void> {
     stopping ??= (async () => {

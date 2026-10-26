@@ -153,6 +153,7 @@ export default function RecordingView(props: {
       <div className="rv-bar">
         <span className="rec">● {mmss(Date.now() - st.startedAt)}</span>
         <span className="small muted">{st.chunks} chunks · {fmtBytes(st.bytes)} · {st.gps} gps</span>
+        {st.freeBytes !== null && <span className={`small ${st.freeBytes < CONFIG.recording.minFreeBytes ? "err" : "muted"}`}>{fmtBytes(st.freeBytes)} free</span>}
         <span className="grow" />
         <button className="ghost" onClick={() => setSwap(!swap)} title="Swap panes">⇅</button>
         <button className={confirmStop ? "danger" : "ghost danger-text"}
@@ -161,6 +162,9 @@ export default function RecordingView(props: {
         </button>
       </div>
       {st.error && <div className="rv-hint err">{st.error}</div>}
+      {!st.error && st.freeBytes !== null && st.freeBytes < CONFIG.recording.minFreeBytes && (
+        <div className="rv-hint err">Phone storage is low ({fmtBytes(st.freeBytes)} free). Recording stops by itself at {fmtBytes(CONFIG.recording.stopFreeBytes)} so nothing is lost. Free up space or finish soon.</div>
+      )}
 
       <div className="rv-hint">
         {!target ? (

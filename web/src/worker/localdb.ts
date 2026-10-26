@@ -30,6 +30,11 @@ let dbName = "";
 let dbp: Promise<IDBDatabase> | null = null;
 export function setLocalUser(userId: string | null) {
   dbName = userId ? `field-capture-${userId}` : "";
+  resetDb();
+}
+
+/** Forget the open connection (closing it if it still works), so the next call opens a fresh one. */
+export function resetDb() {
   void dbp?.then((d) => d.close()).catch(() => {});
   dbp = null;
 }

@@ -162,7 +162,7 @@ npm test
 
 Works end to end and is tested on the server side. Known limits:
 
-- The phone code has no automated tests. It was checked by hand in a desktop browser with fake GPS and camera, and by the owner on phones in normal use. Not yet stress-tested: long walks (25 minutes or more), low storage, a poor or interrupted network, several phone models. Which phones and what was found is not recorded here yet.
+- The phone code has almost no automated tests (only the retry and error-text helper, `test/retry.test.ts`). The storage retry and the storage readout have not been tried on a real phone with a full disk. It was checked by hand in a desktop browser with fake GPS and camera, and by the owner on phones in normal use. Not yet stress-tested: long walks (25 minutes or more), low storage, a poor or interrupted network, several phone models. Which phones and what was found is not recorded here yet.
 - No background recording (a browser limit): switching apps or locking the screen stops it.
 - No offline loading of the app, no admin delete or retention, no monitoring or CI yet.
 - The free OpenStreetMap, OpenTopoMap and Esri satellite tile servers are used; use a tile provider for production.

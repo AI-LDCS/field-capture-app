@@ -47,7 +47,7 @@ After **90 seconds** without a pass, a **Skip GPS check** button appears. The ou
 ## Camera and storage check
 
 - `getUserMedia` asks for the rear camera (`facingMode: { ideal: "environment" }`), ideal 1920×1080, no audio. If the browser does not report the rear camera (normal on a laptop) the screen warns but allows it.
-- It reads `navigator.storage.estimate()` and asks for persistent storage (`navigator.storage.persist()`). Neither is a guarantee: a browser can still evict data under pressure. The screen warns when less than **500 MB** is free; it does not block starting.
+- It reads `navigator.storage.estimate()` and asks for persistent storage (`navigator.storage.persist()`). Neither is a guarantee: a browser can still evict data under pressure. With less than **500 MB** free the step shows a red warning and **Start recording** stays off until there is room (close the camera and check again after freeing space). When both checks pass the step shows **✓ ready**, the Record step gets a green border and the page scrolls to it.
 
 ## Recording
 
@@ -59,7 +59,8 @@ Implemented in `web/src/worker/recorder.ts`.
 - **`startedAt` is set when the recorder's `start` event fires** (video t = 0), not when the button was tapped, so video time and GPS time line up for review.
 - **Screen wake lock** is requested so the screen does not sleep during a long walk.
 - **Recording stops when the page becomes hidden** (app switch, screen lock). Background recording is not supported by browsers; the stop reason is saved.
-- **Storage guard**: every 10 s the free space is checked; below 100 MB the recording stops cleanly. A failed IndexedDB write also stops it (`storage error`) instead of silently losing data.
+- **Storage guard**: free space is shown on the recording screen and checked every 10 s. Below 500 MB the screen warns; below 200 MB the recording stops cleanly (`low storage`) while there is still room to save its last chunks.
+- **Failed writes**: a failed IndexedDB write is tried again up to three times (after 0.2, 0.6 and 1.5 s), each time on a fresh database connection, because a browser can drop the connection for a moment. Only if all tries fail does the recording stop, with the reason `storage error: <error name and message>` (cut to 100 characters, the most the server accepts), for example `QuotaExceededError` for a full phone. The admin sees it as the stop reason on the recording; the full text stays on the worker's screen.
 - While recording, the recording tab holds a **Web Lock** named `fc-rec-<id>`. It is released on stop, or by the browser if the page dies. Another tab's start-up scan uses it to tell a live recording from a dead one.
 - A single continuous recording may cover several segments; there is no per-segment video file. Which part of the video belongs to which segment comes from GPS timestamps and is stored as [evidence](data-model.md#work).
 

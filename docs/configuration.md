@@ -68,7 +68,8 @@ In `shared/config.ts` (shared by the phone and the server, so they cannot disagr
 | `recording` | `timesliceMs` | 2000 | chunk length |
 | | `videoBitsPerSecond` | 4 000 000 | video bitrate |
 | | `idealWidth`, `idealHeight` | 1920, 1080 | requested resolution |
-| | `minFreeBytes` | 500 MB | free-space warning |
+| | `minFreeBytes` | 500 MB | needed to start a recording (the button stays off below it); the recording screen warns below it |
+| | `stopFreeBytes` | 200 MB | below this a recording stops cleanly |
 | `upload` | `retryIntervalMs` | 3000 | how often the phone tries to upload |
 | | `gpsBatchSize` | 200 | GPS points per request |
 

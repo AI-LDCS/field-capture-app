@@ -18,8 +18,8 @@ For the person walking the route with a phone. Your supervisor gives you a usern
 On the assignment page, do the three steps in order:
 
 1. **GPS check.** Tap **Start GPS check**. Stand still outside with a clear view of the sky. It passes when your position is steady and accurate. If it does not settle after 90 seconds you may tap **Skip GPS check**; the walk is then looked at by an administrator.
-2. **Camera & storage.** Tap **Check camera & storage**. You should see the camera picture. Hold the phone so the camera faces forward.
-3. **Record.** Tap **Start recording**, then walk.
+2. **Camera & storage.** Tap **Check camera & storage**. You should see the camera picture and, after a moment, a green **✓ Camera and storage are fine**; the page then moves to step 3. If it says there is not enough storage, free up space on the phone, close the camera and check again. Hold the phone so the camera faces forward.
+3. **Record.** When this step shows a green **✓ Ready**, tap **Start recording**, then walk. If the button is grey, the line under it says what is still missing.
 
 ## While recording
 
@@ -41,7 +41,9 @@ Tap **Finish & check with the server**. The server checks that everything upload
 - **in progress** with a reason: something is missing (for example a segment is not covered enough). Record again.
 - **pending sync**: a recording is still uploading. Wait for a connection and tap Finish again.
 
-Do not close or clear the browser until **On this phone** shows nothing waiting.
+Do not close or clear the browser until **On this phone** shows nothing waiting. It lists only what is still stored on the phone (recording, or uploading). Once the server has verified a recording, the phone deletes its copy and the recording moves to **Saved on the server**.
+
+**Saved on the server** lists your recordings that have reached the server. Once one is verified you can download your **Video** (after the server has finished preparing it) and the **GPS (.json)**. Only your own files appear. A recording that is still uploading cannot be downloaded yet.
 
 ## If something goes wrong
 

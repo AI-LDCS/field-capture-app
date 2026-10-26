@@ -25,7 +25,8 @@ export const CONFIG = {
     videoBitsPerSecond: 4_000_000,
     idealWidth: 1920,
     idealHeight: 1080,
-    minFreeBytes: 500 * 1024 * 1024,
+    minFreeBytes: 500 * 1024 * 1024, // needed to start; below this the recording screen warns
+    stopFreeBytes: 200 * 1024 * 1024, // below this a recording stops cleanly, while there is still room to save it
   },
   upload: {
     retryIntervalMs: 3000,

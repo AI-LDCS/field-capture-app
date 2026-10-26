@@ -41,7 +41,11 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { text
 .meter > i { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--fg); }
 .seg { padding: 8px 0; border-top: 1px solid var(--line); } .seg:first-of-type { border-top: 0; }
 .rec { color: var(--danger); font-weight: 600; } .rec-pill { color: #fff; background: var(--danger); padding: 2px 10px; border-radius: 999px; font-size: 13px; }
-.log { background: var(--bg); padding: 8px; border-radius: 6px; font-size: 12px; overflow: auto; max-height: 120px; white-space: pre-wrap; }
+.log { background: var(--bg); padding: 8px; border-radius: 6px; font-size: 12px; overflow: auto; max-height: 120px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.local-rec { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; } .local-rec:first-of-type { border-top: 0; }
+.local-rec .row { margin-top: 0; }
+.local-stats { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 4px; }
+.card.ready { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
 .map.sticky { position: sticky; top: 52px; height: 260px; z-index: 5; }
 
 

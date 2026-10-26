@@ -5,7 +5,7 @@ import { coverageMask, distToLineM } from "@shared/geo.ts";
 import { type PreflightEval, type PreflightSample, evaluatePreflight } from "@shared/preflight.ts";
 import type { AssignmentDetail, LngLat, PreflightOutcome } from "@shared/types.ts";
 import { api } from "../api.ts";
-import { Badge, Tiles, fmtBytes, ll } from "../ui.tsx";
+import { Badge, Tiles, fmtBytes, ll, when } from "../ui.tsx";
 import { openCamera, storageCheck } from "./camera.ts";
 import { type Fix, fakeGps, gpsSource } from "./gps.ts";
 import { getAssignment, gpsOf, putAssignment } from "./localdb.ts";
@@ -99,15 +99,27 @@ function Preflight({ assignmentId, onDone }: { assignmentId: string; onDone: (o:
 }
 
 // ---------- step 2: camera + storage ----------
-function CameraCheck() {
+type StorageInfo = Awaited<ReturnType<typeof storageCheck>>;
+
+/** Free space, read once the camera is open (that is the moment the worker asked for the check). */
+function useStorage(cameraOpen: boolean): StorageInfo | null {
+  const [st, setSt] = useState<StorageInfo | null>(null);
+  useEffect(() => {
+    if (!cameraOpen) { setSt(null); return; }
+    let dead = false;
+    void storageCheck().then((s) => { if (!dead) setSt(s); });
+    return () => { dead = true; };
+  }, [cameraOpen]);
+  return st;
+}
+
+function CameraCheck({ st, nextStep }: { st: StorageInfo | null; nextStep: string }) {
   const { camera } = useSession();
-  const [st, setSt] = useState<Awaited<ReturnType<typeof storageCheck>> | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const vid = useRef<HTMLVideoElement>(null);
 
   useEffect(() => { if (vid.current) vid.current.srcObject = camera?.stream ?? null; }, [camera]);
-  useEffect(() => { if (camera) void storageCheck().then(setSt); }, [camera]);
 
   const open = async () => {
     setBusy(true);
@@ -133,19 +145,21 @@ function CameraCheck() {
         {camera.label || "camera"} · {camera.width}×{camera.height} · facing: {camera.facing ?? "unknown"}
         {!camera.fake && camera.facing !== "environment" && <span className="err"> — rear camera not confirmed (normal on a laptop)</span>}
       </p>
+      {!st && <p className="small muted">Checking storage…</p>}
       {st && (
         <p className={`small ${st.ok ? "" : "err"}`}>
           Storage: {fmtBytes(st.free)} free of {fmtBytes(st.quota)} · persistent: {st.persisted ? "yes" : "no (the browser may delete it)"}
-          {!st.ok && ` — need at least ${fmtBytes(CONFIG.recording.minFreeBytes)}`}
+          {!st.ok && ` — need at least ${fmtBytes(CONFIG.recording.minFreeBytes)}. Free up space on the phone, then close the camera and check again.`}
         </p>
       )}
+      {st?.ok && <p className="ok">✓ Camera and storage are fine. {nextStep}</p>}
       <button className="ghost" onClick={closeCamera}>Close camera</button>
     </>
   );
 }
 
 // ---------- step 3: record ----------
-function RecordPanel({ run, preflightDone }: { run: AssignmentDetail; preflightDone: boolean }) {
+function RecordPanel({ run, preflightDone, storage }: { run: AssignmentDetail; preflightDone: boolean; storage: StorageInfo | null }) {
   const { camera, active, activeAssignmentId, lastStop } = useSession();
   const s = useSettings();
   const local = useLocalRecordings(run.id);
@@ -167,14 +181,25 @@ function RecordPanel({ run, preflightDone }: { run: AssignmentDetail; preflightD
   };
 
   const why = !preflightDone ? "Finish the GPS check first"
-    : !camera ? "Check the camera first"
+    : !camera ? "Check the camera first (step 2)"
+    : !storage ? "Checking storage…"
+    : !storage.ok ? `Not enough free storage (${fmtBytes(storage.free)} free, need ${fmtBytes(CONFIG.recording.minFreeBytes)})`
     : interrupted ? "Finalize the cut-off recording first"
     : run.status === "completed" ? "This assignment is completed" : "";
   const walkable = run.segments.filter((x) => x.status !== "skipped");
 
+  // The last check just passed (not: the page was opened already ready): bring this step into view, so the worker does not have to find it.
+  const top = useRef<HTMLDivElement>(null);
+  const wasReady = useRef(!why);
+  useEffect(() => {
+    if (!why && !wasReady.current) top.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    wasReady.current = !why;
+  }, [why]);
+
   return (
-    <>
+    <div ref={top}>
       {lastStop && <p className="warn-box">Last recording stopped: {lastStop}. Start a new recording to continue.</p>}
+      {!why && !mine && <p className="ok">✓ Ready. Tap Start recording when you are at the start of the route.</p>}
       <button onClick={() => void start()} disabled={!!why || !!mine}>Start recording</button>
       {why && <p className="muted small">{why}</p>}
       {err && <p className="err">{err}</p>}
@@ -186,7 +211,7 @@ function RecordPanel({ run, preflightDone }: { run: AssignmentDetail; preflightD
           <button className="ghost" onClick={() => fakeGps.stopWalking()}>Fake: stop</button>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -205,6 +230,8 @@ export default function WorkerRun({ id }: { id: string }) {
   const s = useSettings();
   const session = useSession();
   const local = useLocalRecordings(id);
+  const storage = useStorage(!!session.camera);
+  const readyToRecord = !!session.camera && !!storage?.ok;
 
   const load = async () => {
     try {
@@ -287,6 +314,8 @@ export default function WorkerRun({ id }: { id: string }) {
   const requiredTotal = run.segments.filter((x) => x.required).length;
   const requiredDone = run.segments.filter((x, i) => x.required && (x.status === "completed" || cov(i) >= x.minCoverageRatio)).length;
 
+  const nothingRecorded = run.recordings.length === 0 && local.length === 0;
+
   const act = async (fn: () => Promise<AssignmentDetail>) => {
     setMsg("");
     try { setRun(await fn()); } catch (e: any) { setMsg(e.message); }
@@ -341,13 +370,13 @@ export default function WorkerRun({ id }: { id: string }) {
       </section>
 
       <section className="card">
-        <h3>2 · Camera &amp; storage</h3>
-        <CameraCheck />
+        <h3>2 · Camera &amp; storage {readyToRecord && <span className="ok">✓ ready</span>}{session.camera && storage && !storage.ok && <span className="err">✗ not enough space</span>}</h3>
+        <CameraCheck st={storage} nextStep={preflightDone ? "Next: start recording below." : "Next: finish the GPS check (step 1)."} />
       </section>
 
-      <section className="card">
+      <section className={`card${readyToRecord && preflightDone ? " ready" : ""}`}>
         <h3>3 · Record</h3>
-        <RecordPanel run={run} preflightDone={preflightDone} />
+        <RecordPanel run={run} preflightDone={preflightDone} storage={storage} />
       </section>
 
       <section className="card">
@@ -377,8 +406,29 @@ export default function WorkerRun({ id }: { id: string }) {
       <section className="card">
         <h3>Finish</h3>
         <p className="small muted">The server checks the uploads, the GPS and the coverage, then decides. It is not marked done on this phone.</p>
-        <button onClick={() => void act(() => api.myFinish(id))} disabled={run.status === "completed"}>Finish &amp; check with the server</button>
-        <p className="small">Recordings on the server: {run.recordings.map((r) => r.status === "server_verified" ? "verified" : "uploading").join(", ") || "none"}</p>
+        <button onClick={() => void act(() => api.myFinish(id))} disabled={run.status === "completed" || nothingRecorded}>Finish &amp; check with the server</button>
+        {nothingRecorded && run.status !== "completed" && <p className="small muted">Record at least once before you finish.</p>}
+      </section>
+
+      <section className="card">
+        <h3>Saved on the server</h3>
+        {run.recordings.length === 0 && <p className="muted">Nothing has reached the server yet.</p>}
+        {run.recordings.map((r) => (
+          <div key={r.id} className="local-rec">
+            <div className="row between wrap">
+              <span><code>{r.id.slice(0, 8)}</code> <span className="small muted">{when(new Date(r.startedAtMs).toISOString())}</span></span>
+              <Badge s={r.status} />
+            </div>
+            {r.status === "server_verified" ? (
+              <div className="row wrap">
+                {r.assembly === "done"
+                  ? <a className="btn ghost small" href={`/api/me/recordings/${r.id}/download`}>Video{r.fileBytes !== null && ` (${fmtBytes(r.fileBytes)})`}</a>
+                  : <span className="small muted">{r.assembly === "failed" ? "video could not be prepared" : "preparing video…"}</span>}
+                <a className="btn ghost small" href={`/api/me/recordings/${r.id}/gps.json`}>GPS (.json)</a>
+              </div>
+            ) : <p className="small muted">Still uploading. Files can be downloaded once the server has verified them.</p>}
+          </div>
+        ))}
       </section>
 
       {devToolsOn() && <DevPanel />}
