@@ -12,21 +12,26 @@ export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(
 export const ll = (c: LngLat): [number, number] => [c[1], c[0]];
 
 const LAYER_KEY = "fc-map-layer";
-const saved = () => { try { return localStorage.getItem(LAYER_KEY) ?? "Street"; } catch { return "Street"; } };
+const saved = () => { try { return localStorage.getItem(LAYER_KEY) ?? "Satellite"; } catch { return "Satellite"; } };
 
-/** Street or terrain base map; the choice is remembered. */
+/** Street, terrain or satellite base map; satellite by default; the choice is remembered. */
 export function Tiles() {
   useMapEvents({ baselayerchange: (e) => { try { localStorage.setItem(LAYER_KEY, e.name); } catch { /* ignore */ } } });
   const cur = saved();
   return (
     <LayersControl position="topright">
-      <LayersControl.BaseLayer name="Street" checked={cur !== "Terrain"}>
+      <LayersControl.BaseLayer name="Street" checked={cur === "Street"}>
         <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />
       </LayersControl.BaseLayer>
       <LayersControl.BaseLayer name="Terrain" checked={cur === "Terrain"}>
         <TileLayer
           attribution='Map data &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>, SRTM | Style &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'
           url="https://tile.opentopomap.org/{z}/{x}/{y}.png" maxNativeZoom={17} maxZoom={19} />
+      </LayersControl.BaseLayer>
+      <LayersControl.BaseLayer name="Satellite" checked={cur !== "Street" && cur !== "Terrain"}>
+        <TileLayer
+          attribution="Imagery &copy; Esri, Maxar, Earthstar Geographics"
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxNativeZoom={18} maxZoom={19} />
       </LayersControl.BaseLayer>
     </LayersControl>
   );

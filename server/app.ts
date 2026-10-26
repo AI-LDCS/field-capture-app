@@ -62,7 +62,7 @@ export function createApp(opts: { onHit?: (endpoint: string, status: number) => 
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"], // Leaflet positions with inline styles
-          imgSrc: ["'self'", "data:", "blob:", "https://tile.openstreetmap.org", "https://tile.opentopomap.org"],
+          imgSrc: ["'self'", "data:", "blob:", "https://tile.openstreetmap.org", "https://tile.opentopomap.org", "https://server.arcgisonline.com"],
           mediaSrc: ["'self'", "blob:"],
           connectSrc: ["'self'"],
           frameAncestors: ["'none'"],

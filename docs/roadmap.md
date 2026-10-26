@@ -22,7 +22,7 @@ What is built, what is known to be missing, and what is planned next. Nothing he
 - No global audit screen, no storage usage page, no dashboard of assignments needing attention.
 - No password reset by email and no two-factor login (an admin resets worker passwords).
 - Login is rate-limited; the rest of the API relies on authentication and size limits.
-- Free OpenStreetMap and OpenTopoMap tile servers are used; they are not meant for production.
+- Free OpenStreetMap, OpenTopoMap and Esri World Imagery (satellite) tile servers are used; they are not meant for production.
 - Several recordings of one assignment are reviewed separately; there is no merged video.
 - The route editor edits geometry only; there is no import of GPX or GeoJSON files (pasting `lat, lng` lines works).
 

@@ -55,7 +55,7 @@ What the system protects, how, and what it deliberately does **not** protect. Wr
 
 - **CSRF** (in addition to `SameSite=Lax`): a state-changing request must carry an `Origin` in `PUBLIC_ORIGINS` (or `Sec-Fetch-Site: same-origin`/`none` if there is no `Origin`), and its body must be `application/json`. The one exception is the chunk upload, which takes `application/octet-stream` on that route only; a cross-site HTML form cannot send either type.
 - **Validation**: every body is validated with zod. Ids that are not UUIDs are not found. JSON is limited to 2 MB, chunks to 32 MiB.
-- **Headers** (`helmet`): `Content-Security-Policy` allows scripts and connections only from the app itself, images from the app plus the two map tile hosts, `frame-ancestors 'none'`; `Strict-Transport-Security` when `COOKIE_SECURE`; `Referrer-Policy: strict-origin-when-cross-origin` (tile servers reject requests with no referrer); `X-Content-Type-Options: nosniff`.
+- **Headers** (`helmet`): `Content-Security-Policy` allows scripts and connections only from the app itself, images from the app plus the three map tile hosts, `frame-ancestors 'none'`; `Strict-Transport-Security` when `COOKIE_SECURE`; `Referrer-Policy: strict-origin-when-cross-origin` (tile servers reject requests with no referrer); `X-Content-Type-Options: nosniff`.
 - **SQL** uses parameters everywhere; no string-built queries from input.
 - **Proxy trust**: `TRUST_PROXY=1` means one proxy hop (Caddy). Without it, `Secure` cookies are never set behind the proxy and client IPs are wrong for the lockout.
 

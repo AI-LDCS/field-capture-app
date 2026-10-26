@@ -58,7 +58,7 @@ A route is an ordered list of **segments**. Each segment is **required** (must b
 
 **Safety**: **Ctrl/Cmd + Z** undoes, **Shift + Ctrl/Cmd + Z** redoes; leaving with unsaved changes warns you. **Save draft** keeps it as a draft; **Save & publish** publishes it.
 
-The street / terrain switch is at the top right of every map.
+The street / terrain / satellite switch is at the top right of every map.
 
 ## Assigning work
 

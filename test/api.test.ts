@@ -250,7 +250,7 @@ describe("request safety", () => {
     assert.equal(r.status, 403);
     assert.equal(r.body.error, "bad_origin");
   });
-  it("CSP allows both map tile hosts (street and terrain) and nothing else for images", async () => {
+  it("CSP allows the map tile hosts (street, terrain and satellite) and nothing else for images", async () => {
     const r = await fetch(t.base + "/healthz");
     const csp = r.headers.get("content-security-policy") ?? "";
     const img = /img-src ([^;]+)/.exec(csp)?.[1].split(" ") ?? [];
@@ -300,6 +300,7 @@ describe("routes and versions", () => {
     assert.equal(nv.body.status, "draft");
     assert.equal(nv.body.segments.length, 3);
     assert.equal((await admin.post(`/api/admin/routes/${v1.routeId}/new-version`)).status, 409); // one draft at a time
+    assert.ok(img.includes("https://server.arcgisonline.com"), csp);
 
     assert.equal((await admin.post(`/api/admin/route-versions/${nv.body.id}/publish`)).status, 200);
     const detail = await admin.get(`/api/admin/routes/${v1.routeId}`);
