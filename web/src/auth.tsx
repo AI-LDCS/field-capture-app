@@ -115,13 +115,20 @@ export function Login() {
     try { const r = await api.login(username, password); signedIn(r.user, r.devTools); } catch (x: any) { setErr(x.message); } finally { setBusy(false); }
   };
   return (
-    <form className="card narrow" onSubmit={submit}>
-      <h2>Sign in</h2>
-      <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus /></label>
-      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
-      {err && <p className="err">{err}</p>}
-      <button disabled={busy || !username || !password}>Sign in</button>
-    </form>
+    <div className="login">
+      <div className="login-brand">
+        <img src="/logo.svg" alt="" width="72" height="72" />
+        <h1>Field Capture</h1>
+        <p className="muted">Video and GPS along walking routes</p>
+      </div>
+      <form className="card narrow" onSubmit={submit}>
+        <h2>Sign in</h2>
+        <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus /></label>
+        <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+        {err && <p className="err">{err}</p>}
+        <button disabled={busy || !username || !password}>Sign in</button>
+      </form>
+    </div>
   );
 }
 
