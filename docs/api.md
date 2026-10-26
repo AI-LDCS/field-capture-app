@@ -67,6 +67,9 @@ Body `{ displayName }` (up to 80 characters). `200 WorkerRow`. `404` for an unkn
 ### POST /api/admin/users/:id/deactivate
 `200 WorkerRow`. The worker is signed out everywhere at once and cannot log in.
 
+### DELETE /api/admin/users/:id
+`200 { ok: true }`. Removes the worker's login: they are signed out at once and can never log in again, and they no longer appear in the worker list. Their assignments and recordings stay, and an assignment's `worker` then has `deleted: true`. The username can be used for a new worker. Cannot be undone; use deactivate for a reversible block. `404` for an unknown id, an admin account, or a worker that is already deleted.
+
 ### POST /api/admin/users/:id/activate
 `200 WorkerRow`. Old sessions are not revived.
 
@@ -104,6 +107,9 @@ Body `{ name (1 to 120 characters), segments: SegmentInput[] }` (0 to 200 segmen
 ### PUT /api/admin/route-versions/:vid
 Body `{ name?, segments }`. Replaces the draft's segments (and renames the draft). `200 RouteVersion`.
 Errors: `409 not_a_draft` (published and archived versions never change).
+
+### DELETE /api/admin/routes/:id
+`200 { ok: true }`. Hides the whole route from the list. Its drafts are deleted and its published version is archived (no new assignments); its published and archived versions are kept, so existing assignments and recordings continue to work and their `route` has `deleted: true`. A route that was never published is removed completely. Cannot be undone. `404` for an unknown or already-deleted route.
 
 ### DELETE /api/admin/route-versions/:vid
 Deletes a **draft**. If it was the route's last version, the route goes too. `200 { ok: true }`. `409 not_a_draft` for any other status.

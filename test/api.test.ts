@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { Client, line, startTestServer } from "./helpers.ts";
+import { Client, NIL, line, startTestServer } from "./helpers.ts";
 
 let t: Awaited<ReturnType<typeof startTestServer>>;
 const ADMIN = { username: "testadmin", password: "initial-admin-password-1" };
@@ -98,6 +98,48 @@ describe("authentication", () => {
 });
 
 describe("account lifecycle", () => {
+  it("deleting a worker removes the login but keeps their assignments, and frees the username", async () => {
+    const admin = await adminClient();
+    const w = await makeWorker(admin, "gone-soon");
+    const v = await publishedRoute(admin, "Kept");
+    const a = await admin.post("/api/admin/assignments", { routeVersionId: v.id, userId: w.id });
+    assert.equal(a.status, 201);
+
+    const me = await admin.get("/api/auth/me");
+    assert.equal((await admin.del(`/api/admin/users/${me.body.user.id}`)).status, 404, "admins are not managed here");
+    assert.equal((await admin.del("/api/admin/users/not-a-uuid")).status, 404);
+    assert.equal((await admin.del(`/api/admin/users/${NIL}`)).status, 404);
+
+    assert.deepEqual((await admin.del(`/api/admin/users/${w.id}`)).body, { ok: true });
+    assert.equal((await w.client.get("/api/me/assignments")).status, 401, "signed out at once");
+    assert.equal((await new Client(t.base).post("/api/auth/login", { username: "gone-soon", password: "worker-password-1" })).status, 401);
+    assert.equal((await t.pool.query("SELECT 1 FROM sessions WHERE user_id = $1", [w.id])).rowCount, 0);
+
+    // gone from the list and from every management action
+    assert.ok(!(await admin.get("/api/admin/users")).body.some((u: any) => u.id === w.id));
+    for (const [m, p] of [["patch", ""], ["post", "/activate"], ["post", "/deactivate"], ["post", "/password"], ["del", ""]] as const) {
+      assert.equal((await (admin as any)[m](`/api/admin/users/${w.id}${p}`, {})).status, 404, `${m} ${p}`);
+    }
+    assert.equal((await admin.post("/api/admin/assignments", { routeVersionId: v.id, userId: w.id })).status, 409);
+
+    // the history is still there and says who it was
+    const detail = await admin.get(`/api/admin/assignments/${a.body.id}`);
+    assert.equal(detail.status, 200);
+    assert.equal(detail.body.worker.username, "gone-soon");
+    assert.equal(detail.body.worker.deleted, true);
+    const listed = (await admin.get("/api/admin/assignments")).body.find((x: any) => x.id === a.body.id);
+    assert.equal(listed.worker.deleted, true);
+    assert.equal((await t.pool.query("SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NOT NULL AND NOT active", [w.id])).rowCount, 1);
+
+    // the name can be used again, by a different account that is not "deleted"
+    const again = await makeWorker(admin, "gone-soon");
+    assert.notEqual(again.id, w.id);
+    assert.equal((await again.client.get("/api/me/assignments")).status, 200);
+    const names = (await admin.get("/api/admin/users")).body.filter((u: any) => u.username === "gone-soon");
+    assert.equal(names.length, 1);
+    assert.equal((await admin.post("/api/admin/users", { username: "gone-soon", password: "worker-password-1" })).status, 409, "a live name is still unique");
+  });
+
   it("deactivating a worker kills their existing session and blocks login", async () => {
     const admin = await adminClient();
     const w = await makeWorker(admin, "leaver");
@@ -196,8 +238,10 @@ describe("authorization", () => {
     ["GET", "/api/admin/users"], ["POST", "/api/admin/users"],
     ["PATCH", "/api/admin/users/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/deactivate"],
+    ["DELETE", "/api/admin/users/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/password"],
     ["GET", "/api/admin/routes"], ["POST", "/api/admin/routes"],
+    ["DELETE", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
     ["GET", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
     ["PUT", "/api/admin/route-versions/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/route-versions/00000000-0000-4000-8000-000000000000/publish"],
@@ -256,6 +300,7 @@ describe("request safety", () => {
     const img = /img-src ([^;]+)/.exec(csp)?.[1].split(" ") ?? [];
     assert.ok(img.includes("https://tile.openstreetmap.org"), csp);
     assert.ok(img.includes("https://tile.opentopomap.org"), csp);
+    assert.ok(img.includes("https://server.arcgisonline.com"), csp);
     assert.ok(!img.some((x) => x === "*" || x === "https:" || x === "http:"), csp);
   });
   it("sends our origin as Referer to tile servers (OSM blocks requests without one)", async () => {
@@ -300,7 +345,6 @@ describe("routes and versions", () => {
     assert.equal(nv.body.status, "draft");
     assert.equal(nv.body.segments.length, 3);
     assert.equal((await admin.post(`/api/admin/routes/${v1.routeId}/new-version`)).status, 409); // one draft at a time
-    assert.ok(img.includes("https://server.arcgisonline.com"), csp);
 
     assert.equal((await admin.post(`/api/admin/route-versions/${nv.body.id}/publish`)).status, 200);
     const detail = await admin.get(`/api/admin/routes/${v1.routeId}`);
@@ -393,6 +437,39 @@ describe("routes and versions", () => {
     assert.equal((await admin.del(`/api/admin/assignments/${b.body.id}`)).status, 200);
   });
 
+  it("deleting a route hides it but keeps what was done on it", async () => {
+    const admin = await adminClient();
+    const w = await makeWorker(admin, "route-walker");
+    const used = await publishedRoute(admin, "Used route");
+    const a = await admin.post("/api/admin/assignments", { routeVersionId: used.id, userId: w.id });
+    assert.equal(a.status, 201);
+    const nv = await admin.post(`/api/admin/routes/${used.routeId}/new-version`);
+    assert.equal(nv.status, 201);
+
+    assert.equal((await admin.del("/api/admin/routes/not-a-uuid")).status, 404);
+    assert.equal((await admin.del(`/api/admin/routes/${NIL}`)).status, 404);
+    assert.deepEqual((await admin.del(`/api/admin/routes/${used.routeId}`)).body, { ok: true });
+
+    assert.ok(!(await admin.get("/api/admin/routes")).body.some((r: any) => r.id === used.routeId));
+    assert.equal((await admin.get(`/api/admin/routes/${used.routeId}`)).status, 404);
+    assert.equal((await admin.del(`/api/admin/routes/${used.routeId}`)).status, 404, "already deleted");
+    assert.equal((await admin.post(`/api/admin/routes/${used.routeId}/new-version`)).status, 404);
+    assert.equal((await admin.get(`/api/admin/route-versions/${nv.body.id}`)).status, 404, "the draft is gone");
+    assert.equal((await admin.post("/api/admin/assignments", { routeVersionId: used.id, userId: w.id })).status, 409, "no new assignments");
+
+    // what was already assigned still works, for the worker and for review
+    assert.equal((await w.client.get(`/api/me/assignments/${a.body.id}`)).status, 200);
+    const detail = await admin.get(`/api/admin/assignments/${a.body.id}`);
+    assert.equal(detail.status, 200);
+    assert.equal(detail.body.route.deleted, true);
+    assert.equal((await admin.get(`/api/admin/route-versions/${used.id}`)).status, 200);
+
+    // a route that was never published has nothing to keep and goes completely
+    const draft = await admin.post("/api/admin/routes", { name: "Never published", segments: [] });
+    assert.equal((await admin.del(`/api/admin/routes/${draft.body.routeId}`)).status, 200);
+    assert.equal((await t.pool.query("SELECT 1 FROM routes WHERE id = $1", [draft.body.routeId])).rowCount, 0);
+  });
+
   it("a curved segment is stored as the smooth line, and its control points come back for editing", async () => {
     const admin = await adminClient();
     const ctrl = [[100.5, 13.75], [100.5006, 13.7506], [100.5012, 13.7504], [100.5018, 13.751]];
@@ -438,7 +515,7 @@ describe("routes and versions", () => {
   it("writes an audit trail for sensitive actions", async () => {
     const { rows } = await t.pool.query("SELECT DISTINCT action FROM audit_log");
     const actions = rows.map((r) => r.action);
-    for (const a of ["admin_bootstrapped", "login", "login_failed", "user_created", "user_deactivated", "password_set", "password_changed", "route_published", "assignment_created"]) {
+    for (const a of ["admin_bootstrapped", "login", "login_failed", "user_created", "user_deactivated", "user_deleted", "route_deleted", "password_set", "password_changed", "route_published", "assignment_created"]) {
       assert.ok(actions.includes(a), `missing audit action ${a}`);
     }
   });

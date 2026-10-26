@@ -36,8 +36,8 @@ export type RouteSummary = {
 
 export type AssignmentSummary = {
   id: string; status: AssignmentStatus; createdAt: string; updatedAt: string;
-  worker: { id: string; username: string; displayName: string };
-  route: { id: string; name: string; versionId: string; version: number };
+  worker: { id: string; username: string; displayName: string; deleted: boolean };
+  route: { id: string; name: string; versionId: string; version: number; deleted: boolean };
   progress: { segmentsDone: number; segmentsTotal: number; requiredDone: number; requiredTotal: number };
 };
 export type GpsQuality = { total: number; poorAccuracy: number; gaps: number; jumps: number; offRoute: number };

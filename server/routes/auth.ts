@@ -35,7 +35,7 @@ authRouter.post("/login", async (req, res) => {
     throw new HttpError(429, "too_many_attempts", `too many failed logins; try again in ${windowMinutes} minutes`);
   }
 
-  const user = await q1("SELECT * FROM users WHERE username = $1", [uname]);
+  const user = await q1("SELECT * FROM users WHERE username = $1 AND deleted_at IS NULL", [uname]);
   // always run one Argon2 verification, so a wrong username costs the same time as a wrong password
   const ok = await verifyPassword(user?.password_hash ?? (await dummyHash()), password);
   if (!user || !ok || !user.active) {

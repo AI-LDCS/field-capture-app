@@ -42,6 +42,7 @@ export const api = {
   createWorker: (username: string, displayName: string, password?: string) =>
     post<{ user: WorkerRow; generatedPassword?: string }>("/api/admin/users", { username, displayName, ...(password ? { password } : {}) }),
   renameWorker: (id: string, displayName: string) => patch<WorkerRow>(`/api/admin/users/${id}`, { displayName }),
+  deleteWorker: (id: string) => del<{ ok: true }>(`/api/admin/users/${id}`),
   setWorkerActive: (id: string, active: boolean) => post<WorkerRow>(`/api/admin/users/${id}/${active ? "activate" : "deactivate"}`),
   setWorkerPassword: (id: string, password?: string) =>
     post<{ generatedPassword?: string; ok?: boolean }>(`/api/admin/users/${id}/password`, password ? { password } : {}),
@@ -51,6 +52,7 @@ export const api = {
   createRoute: (name: string, segments: SegmentInput[]) => post<RouteVersion>("/api/admin/routes", { name, segments }),
   saveDraft: (vid: string, name: string, segments: SegmentInput[]) => put<RouteVersion>(`/api/admin/route-versions/${vid}`, { name, segments }),
   deleteDraft: (vid: string) => del(`/api/admin/route-versions/${vid}`),
+  deleteRoute: (routeId: string) => del<{ ok: true }>(`/api/admin/routes/${routeId}`),
   newVersion: (routeId: string) => post<RouteVersion>(`/api/admin/routes/${routeId}/new-version`),
   publish: (vid: string) => post<RouteVersion>(`/api/admin/route-versions/${vid}/publish`),
   archive: (vid: string) => post<RouteVersion>(`/api/admin/route-versions/${vid}/archive`),

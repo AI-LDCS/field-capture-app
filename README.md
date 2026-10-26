@@ -9,7 +9,7 @@ It is built to be careful with the data: a recording survives a refresh or crash
 ## What it does
 
 **Administrators**
-- Create and deactivate field workers; set their passwords (workers cannot change them).
+- Create, deactivate and delete field workers (their recorded data is kept); set their passwords (workers cannot change them).
 - Draw routes on a map: required and optional segments, curved or straight, points edited on the map or typed as latitude and longitude, segment order changed by drag and drop, undo and redo.
 - Publish routes as immutable **versions**; assign a version to a worker. Changing a route later makes a new version and never changes work already handed out.
 - Review each assignment: the server's verdict and reasons, the recorded track on a map, the video playing with a marker that follows it, jump to any segment, approve or send back.

@@ -83,8 +83,8 @@ export default function Review({ id }: { id: string }) {
 
   return (
     <>
-      <Card title={`${run.route.name} · v${run.route.version}`} right={<Badge s={run.status} />}>
-        <p className="small muted">Worker <strong>{run.worker.username}</strong> · assigned {when(run.createdAt)}{run.completedAt && <> · completed {when(run.completedAt)}</>}</p>
+      <Card title={`${run.route.name}${run.route.deleted ? " (deleted)" : ""} · v${run.route.version}`} right={<Badge s={run.status} />}>
+        <p className="small muted">Worker <strong>{run.worker.username}</strong>{run.worker.deleted && " (deleted)"} · assigned {when(run.createdAt)}{run.completedAt && <> · completed {when(run.completedAt)}</>}</p>
         {run.reasons.length > 0 && <ul className="small">{run.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
         <p className="small muted">
           GPS check: {run.preflight ? `${run.preflight.result} (${run.preflight.samples} samples, best ±${run.preflight.bestAccuracyM?.toFixed(0) ?? "?"} m)` : "not recorded"}

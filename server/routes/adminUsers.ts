@@ -16,7 +16,7 @@ export const adminUsersRouter = Router();
 const row = (u: any) => ({ id: u.id, username: u.username, displayName: u.display_name, active: u.active, createdAt: u.created_at });
 
 adminUsersRouter.get("/", async (_req, res) => {
-  res.json((await q("SELECT * FROM users WHERE role = 'worker' ORDER BY active DESC, username")).map(row));
+  res.json((await q("SELECT * FROM users WHERE role = 'worker' AND deleted_at IS NULL ORDER BY active DESC, username")).map(row));
 });
 
 const createSchema = z.object({
@@ -43,7 +43,7 @@ adminUsersRouter.post("/", async (req, res) => {
 });
 
 async function worker(id: string) {
-  const u = await q1("SELECT * FROM users WHERE id=$1 AND role='worker'", [id]);
+  const u = await q1("SELECT * FROM users WHERE id=$1 AND role='worker' AND deleted_at IS NULL", [id]);
   if (!u) throw notFound("worker not found");
   return u;
 }
@@ -74,6 +74,21 @@ adminUsersRouter.post("/:id/activate", async (req, res) => {
   await q("UPDATE users SET active=true, updated_at=now() WHERE id=$1", [id]);
   await audit(req.user!.id, "user_activated", { type: "user", id }, undefined, req.ip);
   res.json(row(await q1("SELECT * FROM users WHERE id=$1", [id])));
+});
+
+/**
+ * Deleting removes the login, not the history: the row stays (marked deleted) so their assignments and
+ * recordings remain, and the username is free to reuse. Deactivate is the reversible alternative.
+ */
+adminUsersRouter.delete("/:id", async (req, res) => {
+  const id = uuidParam(req, "id");
+  const u = await worker(id);
+  await tx(async (c) => {
+    await q("UPDATE users SET active=false, deleted_at=now(), password_hash='deleted', updated_at=now() WHERE id=$1", [id], c);
+    await deleteUserSessions(id, undefined, c);
+    await audit(req.user!.id, "user_deleted", { type: "user", id }, { username: u.username }, req.ip, c);
+  });
+  res.json({ ok: true });
 });
 
 /** The one way to change a worker's password: an admin types a new one, or leaves it out to generate one. */

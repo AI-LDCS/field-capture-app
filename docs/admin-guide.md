@@ -26,6 +26,8 @@ The top bar has **Assignments**, **Routes** and **Workers**.
 
 For each worker you can **Rename**, **Set password** (type a new one, or leave empty to generate one; the worker is signed out everywhere at once), and **Deactivate** or **Reactivate**. A deactivated worker is signed out immediately and cannot log in; their data stays.
 
+**Delete** removes a worker for good: they are signed out, cannot log in again, and disappear from the list, and you can reuse their username. Their assignments, recordings and video are kept and show as `username (deleted)`. Deleting cannot be undone; if you might want the worker back, deactivate instead.
+
 Share the server address with the worker. For the camera and GPS the address must be HTTPS.
 
 ## Routes
@@ -36,6 +38,8 @@ Share the server address with the worker. For the camera and GPS the address mus
 - A **published** version can never change. You can **assign** it, **view** it, or **archive** it (no new assignments; existing ones carry on).
 - To change a published route, press **+ New version**: it copies the latest version into a new draft. Existing assignments keep the version, and the segments, they were given.
 - Publishing a new version archives the previous one. A route needs at least one **required** segment, and every segment must be at least 5 m long.
+
+**Delete route** (top right of a route's card) removes the whole route from the list. You can no longer assign it, but its assignments, recordings and video are kept and show `(deleted)`, and workers can finish assignments they already have. A route that was never published is removed completely. Deleting cannot be undone; to only stop new assignments, archive the version instead.
 
 **+ New route** opens the editor.
 

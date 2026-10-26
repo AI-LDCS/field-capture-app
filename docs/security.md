@@ -41,7 +41,7 @@ What the system protects, how, and what it deliberately does **not** protect. Wr
 - The cookie is `__Host-sid` (needs `Secure`, `Path=/`, no `Domain`) over HTTPS, `HttpOnly`, `SameSite=Lax`. On plain-http local development (`COOKIE_SECURE=false`) it is `sid`.
 - The database stores only `SHA-256(token)`; a database leak does not leak usable sessions.
 - Limits: **14 days** absolute, **24 hours** idle (`SESSION_ABSOLUTE_HOURS`, `SESSION_IDLE_HOURS`). `last_seen_at` is refreshed at most once a minute.
-- **Sessions are killed when they should be**: deactivating a worker, an admin setting a worker's password, and a password change all delete the user's sessions immediately. A password change keeps only the current session.
+- **Sessions are killed when they should be**: deactivating or deleting a worker, an admin setting a worker's password, and a password change all delete the user's sessions immediately. A password change keeps only the current session.
 - If a session dies while a worker is recording, the recording continues and uploads pause until they sign in again (see [field flow](field-flow.md#when-the-session-ends-mid-recording)).
 
 ## Authorization

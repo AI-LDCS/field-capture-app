@@ -79,6 +79,7 @@ export function Workers() {
                 {w.active
                   ? <button className="ghost danger-text" onClick={() => confirm(`Deactivate ${w.username}? They are signed out immediately.`) && void act(() => api.setWorkerActive(w.id, false))}>Deactivate</button>
                   : <button className="ghost" onClick={() => void act(() => api.setWorkerActive(w.id, true))}>Reactivate</button>}
+                <button className="ghost danger-text" onClick={() => confirm(`Delete ${w.username}?\n\nThey are signed out and can never log in again. Their assignments, recordings and video stay, shown as "${w.username} (deleted)". This cannot be undone. To stop access only, use Deactivate.`) && void act(() => api.deleteWorker(w.id))}>Delete</button>
               </div>
             </div>
             {editing === w.id && (
@@ -97,6 +98,13 @@ export function Workers() {
 }
 
 // ---------- routes ----------
+const deleteRouteText = (r: { name: string; versions: { status: string; assignmentCount: number }[] }) => {
+  const used = r.versions.reduce((n, v) => n + v.assignmentCount, 0);
+  return used
+    ? `Delete the route "${r.name}"?\n\nIt is removed from this list and cannot be assigned again. Its ${used} assignment${used === 1 ? "" : "s"}, recordings and video are kept (shown as "(deleted)"), and workers can finish what they already have. This cannot be undone.`
+    : `Delete the route "${r.name}"? It has no assignments. This cannot be undone.`;
+};
+
 export function RoutesPage() {
   const { data, err, reload } = useLoad(() => api.routes());
   const [msg, setMsg] = useState("");
@@ -117,7 +125,11 @@ export function RoutesPage() {
         const hasDraft = r.versions.some((v) => v.status === "draft");
         return (
           <Card key={r.id} title={r.name}
-            right={!hasDraft && <button className="ghost" onClick={() => void act(async () => { const v = await api.newVersion(r.id); location.hash = `#/routes/edit/${v.id}`; })}>+ New version</button>}>
+            right={
+              <div className="row wrap">
+                {!hasDraft && <button className="ghost" onClick={() => void act(async () => { const v = await api.newVersion(r.id); location.hash = `#/routes/edit/${v.id}`; })}>+ New version</button>}
+                <button className="ghost danger-text" onClick={() => confirm(deleteRouteText(r)) && void act(() => api.deleteRoute(r.id))}>Delete route</button>
+              </div>}>
             {r.versions.map((v) => (
               <div key={v.id} className="item row between">
                 <div>
@@ -219,9 +231,9 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
         {list.data?.map((a) => (
           <div key={a.id} className="item row between">
             <div>
-              <strong>{a.route.name}</strong> <span className="muted">v{a.route.version}</span> <Badge s={a.status} />
+              <strong>{a.route.name}</strong>{a.route.deleted && <span className="muted"> (deleted)</span>} <span className="muted">v{a.route.version}</span> <Badge s={a.status} />
               <div className="small muted">
-                {a.worker.username} · required {a.progress.requiredDone}/{a.progress.requiredTotal} · {when(a.createdAt)}
+                {a.worker.username}{a.worker.deleted && " (deleted)"} · required {a.progress.requiredDone}/{a.progress.requiredTotal} · {when(a.createdAt)}
               </div>
             </div>
             <div className="row">

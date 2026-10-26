@@ -8,6 +8,8 @@ PostgreSQL 17 with PostGIS. Schema changes are plain SQL files in `db/migrations
 | `002_version_names.sql` | a name per route version (so renaming a draft cannot change a published version) |
 | `003_simple_workers_curves.sql` | curve control points on segments; drops the assignment note and the forced-password-change flag |
 | `004_recordings.sql` | recordings, chunks, GPS points, segment evidence, assignment progress columns, more guard triggers |
+| `005_delete_workers.sql` | `users.deleted_at` (a deleted worker keeps their row) and a username index that ignores deleted users |
+| `006_delete_routes.sql` | `routes.deleted_at` (a deleted route keeps its versions) |
 
 ## Entity overview
 
@@ -33,7 +35,7 @@ erDiagram
 
 ### Accounts
 
-**`users`**: `id`, `username` (unique, `^[a-z0-9._-]{3,32}$`), `display_name`, `password_hash` (Argon2id), `role` (`admin` or `worker`), `active`, `password_changed_at`, timestamps. There is no admin-creates-admin feature; the first admin comes from the environment.
+**`users`**: `id`, `username` (unique, `^[a-z0-9._-]{3,32}$`), `display_name`, `password_hash` (Argon2id), `role` (`admin` or `worker`), `active`, `password_changed_at`, `deleted_at`, timestamps. Deleting a worker sets `deleted_at` (and `active = false`, and scrubs the password hash) instead of removing the row, so their assignments and recordings keep their owner; the username is unique only among users that are not deleted. There is no admin-creates-admin feature; the first admin comes from the environment.
 
 **`sessions`**: `id` is the **SHA-256 of the cookie token** (a database leak does not leak live sessions), `user_id` (cascade delete), `expires_at`, `last_seen_at`, `ip`, `user_agent`. Deleting a user's rows signs them out at once.
 
@@ -41,7 +43,7 @@ erDiagram
 
 ### Routes (templates, versioned)
 
-**`routes`**: `id`, `name` (follows the latest published version), `created_by`.
+**`routes`**: `id`, `name` (follows the latest published version), `created_by`, `deleted_at`. Deleting a route sets `deleted_at` and keeps its published and archived versions, so assignments and recordings made on it stay intact. A route that was never published is removed outright.
 
 **`route_versions`**: `route_id`, `version` (unique per route), `name`, `status` (`draft`, `published`, `archived`), `published_at`. Partial unique indexes allow **one draft and one published version per route**.
 
@@ -63,7 +65,7 @@ erDiagram
 
 ### Audit
 
-**`audit_log`**: `at`, `actor_id`, `action`, `target_type`, `target_id`, `details jsonb`, `ip`. Actions written: `admin_bootstrapped`, `login`, `login_failed`, `login_locked`, `logout`, `password_changed`, `password_set`, `user_created`, `user_updated`, `user_activated`, `user_deactivated`, `route_created`, `route_draft_saved`, `route_draft_deleted`, `route_version_created`, `route_published`, `route_archived`, `assignment_created`, `assignment_withdrawn`, `assignment_evaluated`, `assignment_reviewed`, `assignment_exported`, `preflight`, `segment_skipped`, `segment_unskipped`, `recording_registered`, `recording_verified`, `recording_verify_failed`, `recording_discarded`, `recording_assembled`, `recording_assembly_failed`, `recording_viewed`, `recording_downloaded`, `gps_downloaded`.
+**`audit_log`**: `at`, `actor_id`, `action`, `target_type`, `target_id`, `details jsonb`, `ip`. Actions written: `admin_bootstrapped`, `login`, `login_failed`, `login_locked`, `logout`, `password_changed`, `password_set`, `user_created`, `user_updated`, `user_activated`, `user_deactivated`, `user_deleted`, `route_created`, `route_draft_saved`, `route_draft_deleted`, `route_deleted`, `route_version_created`, `route_published`, `route_archived`, `assignment_created`, `assignment_withdrawn`, `assignment_evaluated`, `assignment_reviewed`, `assignment_exported`, `preflight`, `segment_skipped`, `segment_unskipped`, `recording_registered`, `recording_verified`, `recording_verify_failed`, `recording_discarded`, `recording_assembled`, `recording_assembly_failed`, `recording_viewed`, `recording_downloaded`, `gps_downloaded`.
 
 ## Rules the database enforces itself
 

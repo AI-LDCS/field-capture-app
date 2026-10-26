@@ -68,7 +68,7 @@ async function draftOrThrow(db: Db, versionId: string) {
 
 // ---------- list / read ----------
 adminRoutesRouter.get("/routes", async (_req, res) => {
-  const routes = await q("SELECT * FROM routes ORDER BY created_at DESC");
+  const routes = await q("SELECT * FROM routes WHERE deleted_at IS NULL ORDER BY created_at DESC");
   const versions = await q(
     `SELECT v.id, v.route_id, v.version, v.name, v.status, v.published_at, v.created_at,
             count(s.id)::int AS segment_count, COALESCE(sum(ST_Length(s.geom::geography)), 0) AS length_m,
@@ -87,7 +87,7 @@ adminRoutesRouter.get("/routes", async (_req, res) => {
 
 adminRoutesRouter.get("/routes/:id", async (req, res) => {
   const id = uuidParam(req, "id");
-  const r = await q1("SELECT * FROM routes WHERE id = $1", [id]);
+  const r = await q1("SELECT * FROM routes WHERE id = $1 AND deleted_at IS NULL", [id]);
   if (!r) throw notFound("route not found");
   const ids = await q("SELECT id FROM route_versions WHERE route_id = $1 ORDER BY version DESC", [id]);
   res.json({ id: r.id, name: r.name, versions: await Promise.all(ids.map((x) => loadVersion(pool, x.id))) });
@@ -137,12 +137,32 @@ adminRoutesRouter.delete("/route-versions/:vid", async (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * Deleting a route hides it; it does not erase work done on it. Drafts are removed and the published version is
+ * archived (no new assignments), while published and archived versions stay, so existing assignments, recordings
+ * and the review pages keep working. A route that was never published has nothing to keep and is removed outright.
+ */
+adminRoutesRouter.delete("/routes/:id", async (req, res) => {
+  const id = uuidParam(req, "id");
+  await tx(async (c) => {
+    const r = await q1("SELECT id, name FROM routes WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", [id], c);
+    if (!r) throw notFound("route not found");
+    await q("DELETE FROM route_versions WHERE route_id = $1 AND status = 'draft'", [id], c);
+    await q("UPDATE route_versions SET status='archived' WHERE route_id = $1 AND status = 'published'", [id], c);
+    const kept = await q1("SELECT count(*)::int AS n FROM route_versions WHERE route_id = $1", [id], c);
+    if (kept.n === 0) await q("DELETE FROM routes WHERE id = $1", [id], c);
+    else await q("UPDATE routes SET deleted_at = now() WHERE id = $1", [id], c);
+    await audit(req.user!.id, "route_deleted", { type: "route", id }, { name: r.name, kept: kept.n }, req.ip, c);
+  });
+  res.json({ ok: true });
+});
+
 // ---------- versioning ----------
 /** "Edit" on a published route: copy it into a new draft. The published version stays as it is. */
 adminRoutesRouter.post("/routes/:id/new-version", async (req, res) => {
   const id = uuidParam(req, "id");
   const out = await tx(async (c) => {
-    const r = await q1("SELECT id FROM routes WHERE id = $1 FOR UPDATE", [id], c);
+    const r = await q1("SELECT id FROM routes WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", [id], c);
     if (!r) throw notFound("route not found");
     const draft = await q1("SELECT id FROM route_versions WHERE route_id = $1 AND status = 'draft'", [id], c);
     if (draft) throw new HttpError(409, "draft_exists", "this route already has a draft", { draftId: draft.id });

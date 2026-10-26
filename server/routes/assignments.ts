@@ -9,8 +9,8 @@ import { HttpError, notFound, uuidParam } from "../http.ts";
 // ---------- shared shape ----------
 const SUMMARY = `
   SELECT a.id, a.status, a.created_at, a.updated_at,
-         a.user_id, u.username, u.display_name,
-         v.id AS route_version_id, v.version, r.id AS route_id, v.name AS route_name,
+         a.user_id, u.username, u.display_name, (u.deleted_at IS NOT NULL) AS user_deleted,
+         v.id AS route_version_id, v.version, r.id AS route_id, v.name AS route_name, (r.deleted_at IS NOT NULL) AS route_deleted,
          (SELECT count(*)::int FROM assignment_segments s WHERE s.assignment_id = a.id) AS segment_total,
          (SELECT count(*)::int FROM assignment_segments s WHERE s.assignment_id = a.id AND s.status = 'completed') AS segment_done,
          (SELECT count(*)::int FROM assignment_segments s WHERE s.assignment_id = a.id AND s.required) AS required_total,
@@ -22,8 +22,8 @@ const SUMMARY = `
 
 const summary = (a: any) => ({
   id: a.id, status: a.status, createdAt: a.created_at, updatedAt: a.updated_at,
-  worker: { id: a.user_id, username: a.username, displayName: a.display_name },
-  route: { id: a.route_id, name: a.route_name, versionId: a.route_version_id, version: a.version },
+  worker: { id: a.user_id, username: a.username, displayName: a.display_name, deleted: a.user_deleted },
+  route: { id: a.route_id, name: a.route_name, versionId: a.route_version_id, version: a.version, deleted: a.route_deleted },
   progress: { segmentsDone: a.segment_done, segmentsTotal: a.segment_total, requiredDone: a.required_done, requiredTotal: a.required_total },
 });
 
