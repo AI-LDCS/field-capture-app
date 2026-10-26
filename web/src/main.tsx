@@ -70,7 +70,7 @@ function Shell() {
   return (
     <>
       <header>
-        <a href="#/" className="brand"><strong>Field Capture</strong></a>
+        <a href="#/" className="brand" title="Field Capture"><img src="/logo.svg" alt="" width="26" height="26" /><strong>Field Capture</strong></a>
         <nav>
           {admin ? (
             <>

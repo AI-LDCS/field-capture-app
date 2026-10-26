@@ -108,6 +108,7 @@ server/        Express API, completion logic, video assembler, storage, auth
   auth/          password hashing, sessions
 shared/        code used by both server and browser: types, thresholds, geometry,
                coverage, curve smoothing, GPS-check logic
+web/public/    the logo (SVG), tab icon and phone home-screen icon
 web/src/       React app
   editor/        the route editor (map, segment list, points table, edit model)
   worker/        phone-side recording, upload, local database, recording screen
