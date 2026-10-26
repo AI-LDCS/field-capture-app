@@ -3,6 +3,7 @@ import "./styles.css";
 import { Component, StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Assignments, RoutesPage, Workers } from "./admin.tsx";
+import { Downloads } from "./Downloads.tsx";
 import { AuthProvider, ChangePassword, Login, SessionBanner, useAuth } from "./auth.tsx";
 import Review from "./Review.tsx";
 import { EditVersion, NewRoute } from "./RouteEditor.tsx";
@@ -53,7 +54,8 @@ function Shell() {
   let body;
   if (admin) {
     body =
-      page === "workers" ? <Workers />
+      page === "downloads" ? <Downloads />
+      : page === "workers" ? <Workers />
       : page === "routes" && a === "new" ? <NewRoute />
       : page === "routes" && a === "edit" && b ? <EditVersion key={b} versionId={b} />
       : page === "routes" ? <RoutesPage />
@@ -77,6 +79,7 @@ function Shell() {
               {link("#/", "Assignments", ["", "assign", "assignment"])}
               {link("#/routes", "Routes", ["routes"])}
               {link("#/workers", "Workers", ["workers"])}
+              {link("#/downloads", "Downloads", ["downloads"])}
             </>
           ) : link("#/", "My assignments", ["", "assignment"])}
         </nav>

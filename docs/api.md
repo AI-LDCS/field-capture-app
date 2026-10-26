@@ -164,6 +164,9 @@ Download: `assignment.json`, one `gps-N-<id>.json` per verified recording, and t
 
 Video leaves the system only through these routes, and each view or download is written to the audit log.
 
+### GET /api/admin/recordings
+`200` list of every **verified** recording, newest first (at most 1000): `{ id, assignmentId, verifiedAt, startedAtMs, endedAtMs, gpsCount, fileBytes, assembly, simulated, worker: { id, username, displayName, deleted }, route: { name, version, deleted } }`. It lists what can be downloaded; the bytes come from the routes below. Used by the Downloads page.
+
 ### GET /api/admin/recordings/:id/gps
 `200` list of `{ seq, t, lat, lng, acc }`.
 
@@ -213,7 +216,13 @@ Errors: `404` if the assignment is not the caller's **or** the id already belong
 `200 { verified, chunkSeqs[], gpsSeqs[] }`: what the server already holds, so a phone resends only the rest.
 
 ### GET /api/me/recordings/:id/gps
-`200` list of `{ seq, t, lat, lng, acc }`: the worker's own track (used to draw what is already covered). Never video.
+`200` list of `{ seq, t, lat, lng, acc }`: the worker's own track (used to draw what is already covered). Not a download; see `gps.json` below.
+
+### GET /api/me/recordings/:id/download
+The worker's own video as an attachment, only once the server holds it: `409 not_verified` before verification, `409 not_ready` while the file is still being built. Another worker's recording is `404`, the same as a missing one. Audited as `recording_downloaded` with `details.by = "worker"`. There is no playback route for workers.
+
+### GET /api/me/recordings/:id/gps.json
+The worker's own GPS as an attachment (the same file the admin gets: points with `videoTimeS`). `409 not_verified` before verification, `404` for someone else's recording. Audited as `gps_downloaded` with `details.by = "worker"`.
 
 ### PUT /api/me/recordings/:id/chunks/:seq
 Body: the raw chunk bytes, `Content-Type: application/octet-stream`, header `x-sha256: <hex digest of the body>`. Limits: 1 byte to 32 MiB, `seq` 0 to 99,999.

@@ -49,7 +49,7 @@ What the system protects, how, and what it deliberately does **not** protect. Wr
 - Every `/api/admin` route requires an admin; every `/api/me` route requires a worker. Checks run on the server; the web app hiding a button is not a control.
 - **Ownership**: every worker query is scoped to the signed-in worker (`assignments.user_id`, `recordings.user_id`). Another worker's assignment or recording answers `404`, identical to a missing one, and registering a recording id that belongs to someone else also answers `404` (never "existing"), so ids cannot be probed.
 - **Admins manage workers only.** There is no admin-creates-admin feature.
-- **Workers never receive video bytes.** No `/api/me` route returns a recording. The worker interface has no download or export. Video, downloads and exports exist only under `/api/admin` and are audited.
+- **Workers download only what the server already holds, and only their own.** `GET /api/me/recordings/:id/download` and `/gps.json` answer only for the caller's own recording once it is verified (and, for video, built); another worker's id is a `404`. Nothing on the phone is exported before the server has verified it, there is no playback route for workers, and exports of whole assignments stay admin-only. Every download is audited, marked as made by a worker.
 
 ## Request safety
 
@@ -80,8 +80,8 @@ What the system protects, how, and what it deliberately does **not** protect. Wr
 
 ## What is not protected
 
-- **A determined user with their own device can extract local data.** Browser storage is not a security boundary. The app omits download features and keeps data in application-managed storage, but if preventing extraction is a strict requirement, use managed devices or a native app. UI restrictions alone are not enough.
-- **Hosted map tiles** (OpenStreetMap, OpenTopoMap) see the map area being viewed and the visitor's IP. Use a tile provider you have an agreement with, or self-host tiles, for production.
+- **A determined user with their own device can extract local data.** Browser storage is not a security boundary. The app offers workers no way to export what is still on the phone (downloads start only after the server has verified a recording), and keeps data in application-managed storage, but if preventing extraction is a strict requirement, use managed devices or a native app. UI restrictions alone are not enough.
+- **Hosted map tiles** (OpenStreetMap, OpenTopoMap, Esri World Imagery) see the map area being viewed and the visitor's IP. Use a tile provider you have an agreement with, or self-host tiles, for production.
 - **No two-factor login, no password reset by email** (an admin resets worker passwords).
 - **No automatic protection against an admin account being phished.** Use a long unique password.
 - **Dev tools** (`ENABLE_DEV_TOOLS`) must never be on a production server: they add fake-data features. Recordings made with them are flagged `simulated`, but the switch itself is a risk.

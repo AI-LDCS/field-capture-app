@@ -68,10 +68,11 @@ The choices that shaped the system, with the reason and what was rejected. Each 
 **Decided.** At sign-in, recordings still marked `recording` become `interrupted`, unless another tab holds a Web Lock for them.
 **Found by testing.** The scan was initially forgotten and recovery silently did nothing. Two tabs open at once would otherwise mark each other's live recordings as dead.
 
-## Video is only reachable by admins, and every access is audited
+## Workers download only what the server holds; playback and exports stay with admins
 
-**Decided.** No `/api/me` route returns recording bytes; playback, download and export are admin-only and audited.
-**Why.** The requirement is to stop workers from exporting data before it is uploaded. A web app cannot stop a determined user with the device in hand; this removes every route the app itself offers and logs what admins do.
+**Decided.** A worker can download their own video and GPS from `/api/me/recordings/:id/download` and `/gps.json`, but only after the server has verified the recording (and built the video). Playback and whole-assignment exports remain admin-only. Every download is audited and marked as made by a worker.
+**Why.** The original requirement was to stop workers exporting data before it is uploaded. Workers also need their own files back, so the rule became: nothing leaves the phone's storage, and what leaves the server is the worker's own, verified copy.
+**Changed.** Earlier, no `/api/me` route returned recording bytes at all. That was relaxed on request; the ownership and verification checks keep the original goal.
 
 ## Plain SQL migrations, no ORM
 

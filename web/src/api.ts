@@ -1,5 +1,5 @@
 import type {
-  AssignmentDetail, AssignmentSummary, PreflightOutcome, RouteSummary, RouteVersion, SegmentInput, User, WorkerRow,
+  AssignmentDetail, AssignmentSummary, DownloadRow, PreflightOutcome, RouteSummary, RouteVersion, SegmentInput, User, WorkerRow,
 } from "@shared/types.ts";
 
 export class ApiError extends Error {
@@ -78,5 +78,6 @@ export const api = {
   reviewAssignment: (id: string, decision: "approve" | "reject") => post<AssignmentDetail>(`/api/admin/assignments/${id}/review`, { decision }),
   assignmentAudit: (id: string) => get<{ id: number; at: string; action: string; details: unknown; actor: string | null }[]>(`/api/admin/assignments/${id}/audit`),
   reEvaluate: (id: string) => post<AssignmentDetail>(`/api/admin/assignments/${id}/re-evaluate`),
+  downloads: () => get<DownloadRow[]>("/api/admin/recordings"),
   reassemble: (rid: string) => post(`/api/admin/recordings/${rid}/reassemble`),
 };

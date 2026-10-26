@@ -57,6 +57,14 @@ export type RecordingSummary = {
   fileBytes: number | null;
 };
 
+/** One verified recording in the admin Downloads list. */
+export type DownloadRow = {
+  id: string; assignmentId: string; verifiedAt: string; startedAtMs: number; endedAtMs: number | null;
+  gpsCount: number; fileBytes: number | null; assembly: RecordingSummary["assembly"]; simulated: boolean;
+  worker: { id: string; username: string; displayName: string; deleted: boolean };
+  route: { name: string; version: number; deleted: boolean };
+};
+
 export type SegmentEvidence = { recordingId: string; coverage: number; firstTMs: number | null; lastTMs: number | null };
 
 export type AssignmentSegment = {

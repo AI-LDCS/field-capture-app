@@ -227,7 +227,7 @@ describe("finalize and assembly", () => {
     assert.ok(part.bytes.equals(whole.subarray(100, 200)));
     assert.equal((await admin.get(`/api/admin/recordings/${id}/video`, { range: `bytes=${whole.length + 10}-` })).status, 416);
 
-    // workers never get video bytes back, by any route
+    // the admin routes stay admin-only; a worker gets their own files from /api/me (see "worker downloads")
     for (const p of [`/api/admin/recordings/${id}/video`, `/api/admin/recordings/${id}/download`, `/api/admin/recordings/${id}/gps.json`]) {
       assert.equal((await w.client.get(p)).status, 403, p);
     }
@@ -433,6 +433,87 @@ describe("export", () => {
     const w2 = await makeWorker(admin, "exporter2");
     const asg2 = await assign(admin, (await publish(admin, "Empty export")).id, w2.id);
     assert.equal((await admin.get(`/api/admin/assignments/${asg2.id}/export.zip`)).status, 409);
+  });
+});
+
+describe("worker downloads", () => {
+  it("a worker can download their own verified video and GPS, but not someone else's, and not before it is on the server", async () => {
+    const admin = await adminClient();
+    const mine = await makeWorker(admin, "dl-owner");
+    const other = await makeWorker(admin, "dl-other");
+    const asg = await assign(admin, (await publish(admin, "Worker download")).id, mine.id);
+    const chunks = chunksOf(3, 5000);
+    const id = await upload(mine.client, asg.id, chunks, walk(await curveOf(mine.client, asg.id)));
+    await assembled(id);
+
+    const video = await mine.client.get(`/api/me/recordings/${id}/download`);
+    assert.equal(video.status, 200);
+    assert.match(video.headers.get("content-disposition") ?? "", /attachment; filename="recording-[0-9a-f]{8}\.webm"/);
+    assert.ok(video.bytes.equals(Buffer.concat(chunks)), "the same bytes that were uploaded");
+    const gps = await mine.client.get(`/api/me/recordings/${id}/gps.json`);
+    assert.equal(gps.status, 200);
+    assert.match(gps.headers.get("content-disposition") ?? "", /attachment/);
+    assert.equal(gps.body.recordingId, id);
+    assert.ok(gps.body.points.length > 0 && gps.body.points[0].videoTimeS !== undefined);
+
+    // another worker's id looks exactly like a missing one; nobody signed in gets 401; an admin account has no worker routes
+    for (const p of [`/api/me/recordings/${id}/download`, `/api/me/recordings/${id}/gps.json`]) {
+      assert.equal((await other.client.get(p)).status, 404, p);
+      assert.equal((await new Client(t.base).get(p)).status, 401, p);
+      assert.equal((await admin.get(p)).status, 403, p);
+    }
+    assert.equal((await mine.client.get(`/api/me/recordings/${crypto.randomUUID()}/download`)).status, 404);
+
+    // not on the server yet: registered but never verified
+    const half = await register(mine.client, asg.id);
+    assert.equal(half.res.status, 201);
+    for (const p of [`/api/me/recordings/${half.id}/download`, `/api/me/recordings/${half.id}/gps.json`]) {
+      const r = await mine.client.get(p);
+      assert.equal(r.status, 409, p);
+      assert.equal(r.body.error, "not_verified");
+    }
+
+    // verified but the video is still being built: the GPS is available, the video says so
+    await t.pool.query("UPDATE recordings SET assembly_state = 'pending' WHERE id = $1", [id]);
+    const early = await mine.client.get(`/api/me/recordings/${id}/download`);
+    assert.equal(early.status, 409);
+    assert.equal(early.body.error, "not_ready");
+    assert.equal((await mine.client.get(`/api/me/recordings/${id}/gps.json`)).status, 200);
+    await t.pool.query("UPDATE recordings SET assembly_state = 'done' WHERE id = $1", [id]);
+
+    // audited, and marked as done by the worker
+    const rows = (await t.pool.query("SELECT action, details FROM audit_log WHERE target_id = $1 AND action IN ('recording_downloaded','gps_downloaded')", [id])).rows;
+    assert.ok(rows.some((r) => r.action === "recording_downloaded" && r.details?.by === "worker"));
+    assert.ok(rows.some((r) => r.action === "gps_downloaded" && r.details?.by === "worker"));
+  });
+});
+
+describe("downloads list", () => {
+  it("admins get every verified recording with who, which route and what is ready; workers get 403; unverified ones are left out", async () => {
+    const admin = await adminClient();
+    const w = await makeWorker(admin, "lister");
+    const asg = await assign(admin, (await publish(admin, "Listed route")).id, w.id);
+    const id = await upload(w.client, asg.id, chunksOf(2, 4000), walk(await curveOf(w.client, asg.id)));
+    await assembled(id);
+    const half = await register(w.client, asg.id); // registered, never finished: not verified, so not listed
+    assert.equal(half.res.status, 201);
+
+    assert.equal((await w.client.get("/api/admin/recordings")).status, 403);
+    assert.equal((await new Client(t.base).get("/api/admin/recordings")).status, 401);
+    const list = await admin.get("/api/admin/recordings");
+    assert.equal(list.status, 200);
+    const row = list.body.find((r: any) => r.id === id);
+    assert.ok(row, "the verified recording is listed");
+    assert.equal(row.assignmentId, asg.id);
+    assert.equal(row.worker.username, "lister");
+    assert.equal(row.route.name, "Listed route");
+    assert.equal(row.assembly, "done");
+    assert.ok(row.fileBytes > 0 && row.gpsCount > 0);
+    assert.ok(!list.body.some((r: any) => r.id === half.id), "unverified recordings are not offered for download");
+
+    // deleting the worker keeps the row, marked
+    await admin.del(`/api/admin/users/${w.id}`);
+    assert.equal((await admin.get("/api/admin/recordings")).body.find((r: any) => r.id === id).worker.deleted, true);
   });
 });
 

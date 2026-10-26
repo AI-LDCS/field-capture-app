@@ -7,6 +7,7 @@ import { q, q1, tx } from "../db.ts";
 import { kickAssembler } from "../assemble.ts";
 import { refreshSegments } from "../evaluate.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
+import { sendGpsDownload, sendVideoDownload } from "../downloads.ts";
 import { putObject } from "../storage.ts";
 
 /** Everything a worker does with a recording. Each route is scoped to recordings the caller owns. */
@@ -68,6 +69,14 @@ workerRecordingsRouter.get("/:id/gps", async (req, res) => {
   const rec = await owned(req);
   res.json((await q("SELECT seq, t_ms, lat, lng, acc FROM gps_points WHERE recording_id = $1 ORDER BY seq", [rec.id]))
     .map((p) => ({ seq: p.seq, t: Number(p.t_ms), lat: p.lat, lng: p.lng, acc: p.acc })));
+});
+
+/** A worker's own files, once they are on the server (verified, and for the video, built). Someone else's id is a 404. */
+workerRecordingsRouter.get("/:id/download", async (req, res) => {
+  await sendVideoDownload(req, res, await owned(req));
+});
+workerRecordingsRouter.get("/:id/gps.json", async (req, res) => {
+  await sendGpsDownload(req, res, await owned(req));
 });
 
 // Chunks are content-addressed: the key holds the hash, so two racing uploads of the same seq cannot overwrite each other.

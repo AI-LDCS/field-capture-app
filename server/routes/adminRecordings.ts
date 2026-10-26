@@ -5,6 +5,7 @@ import { kickAssembler } from "../assemble.ts";
 import { q, q1 } from "../db.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
 import { getObject } from "../storage.ts";
+import { extOf, gpsExport, ready, sendGpsDownload, sendVideoDownload } from "../downloads.ts";
 import { detail } from "./assignments.ts";
 
 /**
@@ -14,32 +15,36 @@ import { detail } from "./assignments.ts";
 export const adminRecordingsRouter = Router();
 
 const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "route";
-const extOf = (mime: string) => (String(mime).includes("mp4") ? "mp4" : "webm");
 
 async function recording(req: Request) {
   const rec = await q1("SELECT * FROM recordings WHERE id = $1", [uuidParam(req, "id")]);
   if (!rec) throw notFound("recording not found");
   return rec;
 }
-function ready(rec: any) {
-  if (rec.status !== "server_verified") throw new HttpError(409, "not_verified", "this recording is not verified yet");
-  if (rec.assembly_state !== "done" || !rec.file_key) throw new HttpError(409, "not_ready", `the video is still being prepared (${rec.assembly_state})`);
-}
+const LIST_LIMIT = 1000;
 
-/** GPS with wall-clock and video-relative time so it can be matched to the footage. */
-async function gpsExport(rec: any) {
-  const pts = await q("SELECT seq, t_ms, lat, lng, acc FROM gps_points WHERE recording_id = $1 ORDER BY seq", [rec.id]);
-  const start = Number(rec.started_at_ms);
-  return {
-    recordingId: rec.id, assignmentId: rec.assignment_id, mime: rec.mime, simulated: rec.simulated,
-    videoStartedAt: new Date(start).toISOString(), videoStartedAtMs: start,
-    note: "videoTimeS = seconds from the start of the video file; approximate (camera and GPS delay under about 1 s)",
-    points: pts.map((p) => ({
-      seq: p.seq, timestamp: new Date(Number(p.t_ms)).toISOString(), timestampMs: Number(p.t_ms),
-      latitude: p.lat, longitude: p.lng, accuracyM: p.acc, videoTimeS: Number(((Number(p.t_ms) - start) / 1000).toFixed(3)),
-    })),
-  };
-}
+/** Every verified recording, newest first, for the Downloads page. Bytes still go through the routes below. */
+adminRecordingsRouter.get("/", async (_req, res) => {
+  const rows = await q(
+    `SELECT r.id, r.assignment_id, r.verified_at, r.started_at_ms, r.ended_at_ms, r.gps_count, r.file_bytes, r.assembly_state, r.simulated,
+            u.id AS user_id, u.username, u.display_name, (u.deleted_at IS NOT NULL) AS user_deleted,
+            v.name AS route_name, v.version, (rt.deleted_at IS NOT NULL) AS route_deleted
+       FROM recordings r
+       JOIN users u ON u.id = r.user_id
+       JOIN assignments a ON a.id = r.assignment_id
+       JOIN route_versions v ON v.id = a.route_version_id
+       JOIN routes rt ON rt.id = v.route_id
+      WHERE r.status = 'server_verified'
+      ORDER BY r.verified_at DESC LIMIT ${LIST_LIMIT}`,
+  );
+  res.json(rows.map((r) => ({
+    id: r.id, assignmentId: r.assignment_id, verifiedAt: r.verified_at,
+    startedAtMs: Number(r.started_at_ms), endedAtMs: r.ended_at_ms === null ? null : Number(r.ended_at_ms),
+    gpsCount: r.gps_count ?? 0, fileBytes: r.file_bytes === null ? null : Number(r.file_bytes), assembly: r.assembly_state, simulated: r.simulated,
+    worker: { id: r.user_id, username: r.username, displayName: r.display_name, deleted: r.user_deleted },
+    route: { name: r.route_name, version: r.version, deleted: r.route_deleted },
+  })));
+});
 
 adminRecordingsRouter.get("/:id/gps", async (req, res) => {
   const rec = await recording(req);
@@ -72,20 +77,11 @@ adminRecordingsRouter.get("/:id/video", async (req: Request, res: Response) => {
 });
 
 adminRecordingsRouter.get("/:id/download", async (req, res) => {
-  const rec = await recording(req);
-  ready(rec);
-  const obj = await getObject(rec.file_key);
-  await audit(req.user!.id, "recording_downloaded", { type: "recording", id: rec.id }, undefined, req.ip);
-  res.set({ "Content-Type": rec.file_mime, "Content-Length": String(obj.length), "Content-Disposition": `attachment; filename="recording-${rec.id.slice(0, 8)}.${extOf(rec.mime)}"` });
-  res.on("close", () => obj.body.destroy());
-  obj.body.pipe(res);
+  await sendVideoDownload(req, res, await recording(req));
 });
 
 adminRecordingsRouter.get("/:id/gps.json", async (req, res) => {
-  const rec = await recording(req);
-  if (rec.status !== "server_verified") throw new HttpError(409, "not_verified", "this recording is not verified yet");
-  await audit(req.user!.id, "gps_downloaded", { type: "recording", id: rec.id }, undefined, req.ip);
-  res.attachment(`gps-${rec.id.slice(0, 8)}.json`).type("json").send(JSON.stringify(await gpsExport(rec), null, 2));
+  await sendGpsDownload(req, res, await recording(req));
 });
 
 /** Try the build again after a failure (the chunks are still there until it succeeds). */

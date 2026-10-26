@@ -14,7 +14,7 @@ For the person who sets up workers and routes, hands out work and reviews result
 
 Use the admin username and password from the server's `.env` file (`ADMIN_USERNAME`, `ADMIN_PASSWORD`). **Change the password straight away**: click your username at the top right. It needs at least 12 characters; changing it signs out your other devices.
 
-The top bar has **Assignments**, **Routes** and **Workers**.
+The top bar has **Assignments**, **Routes**, **Workers** and **Downloads**.
 
 ## Workers
 
@@ -91,4 +91,6 @@ Coverage and completion are decided by the server from verified recordings only;
 
 ## Downloads
 
-On a reviewed assignment: **Download all (.zip)** (videos, one GPS JSON per recording, and `assignment.json`), **Data (.json)**, and per recording **Video** and **GPS (.json)**. GPS files include `videoTimeS` so points line up with the footage. Every view and download is recorded in the audit trail. Workers cannot download anything.
+The **Downloads** tab lists every verified recording, newest first: route and version, worker, start time, length, file size and GPS count. Filter by worker. Each row has **Video**, **GPS (.json)** and **All (.zip)** (the whole assignment: every video, the GPS files and `assignment.json`); click the route name to open the assignment. A video that is still being built shows "preparing video…" until it is ready. Recordings that were never fully uploaded and verified are not listed.
+
+The same downloads are also on a reviewed assignment: **Download all (.zip)** (videos, one GPS JSON per recording, and `assignment.json`), **Data (.json)**, and per recording **Video** and **GPS (.json)**. GPS files include `videoTimeS` so points line up with the footage. Every view and download is recorded in the audit trail. Workers cannot download anything.

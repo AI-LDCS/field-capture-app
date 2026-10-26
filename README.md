@@ -24,7 +24,7 @@ It is built to be careful with the data: a recording survives a refresh or crash
 **The platform**
 - Server-side sessions, Argon2id passwords, role and ownership checks on every endpoint, CSRF protection, a login lockout, an audit log.
 - Route versions and verified recordings are frozen by database rules, not only by the API.
-- Video goes through the app into S3-compatible storage (RustFS) and is assembled into one seekable file in the background. Workers can never download it.
+- Video goes through the app into S3-compatible storage (RustFS) and is assembled into one seekable file in the background. A worker can download their own verified video and GPS from the server; nothing is exported from the phone before the server has verified it.
 
 ## How it works
 
