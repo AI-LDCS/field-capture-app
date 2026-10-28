@@ -1,4 +1,8 @@
-# Field Capture
+<p align="center">
+  <img src="web/public/logo.svg" alt="Field Capture logo" width="96" height="96">
+</p>
+
+<h1 align="center">Field Capture</h1>
 
 A web app for collecting **video and GPS data along walking routes**. Administrators draw routes, hand them to field workers, and review what comes back. Workers follow the route on their phone, record video and GPS, and the app uploads it, even over a poor connection. The server, not the phone, decides whether the route was really completed.
 
