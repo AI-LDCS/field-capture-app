@@ -20,12 +20,11 @@ Browsers allow the camera and GPS only on **HTTPS** (or `localhost`), so a phone
 
 ```bash
 git clone <repo> field-capture-app && cd field-capture-app
-cp .env.example .env
+./scripts/init-env.sh     # creates .env and seeds the secrets; asks for a random or your own admin password
 ```
 
-Edit `.env`:
+The script makes `POSTGRES_PASSWORD` (and the copy in `DATABASE_URL`), `S3_ACCESS_KEY`, `S3_SECRET_KEY` and `ADMIN_PASSWORD` long and random. Then edit `.env`:
 
-- Make `POSTGRES_PASSWORD`, `ADMIN_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` long and random (for example `openssl rand -base64 33 | tr -d '/+='`).
 - `TAILNET_HOST`: your machine's Tailscale DNS name (`tailscale status` shows it; it ends in `.ts.net`).
 - `PUBLIC_ORIGINS=https://<TAILNET_HOST>:8444`
 - Leave `COOKIE_SECURE=true` and `TRUST_PROXY=1`.
@@ -56,8 +55,8 @@ Notes:
 
 1. Point your domain's DNS (`A` and, if you have it, `AAAA`) at the server.
 2. Open only what is needed on the host firewall: SSH, 80, 443.
-3. Install Docker, clone the repository, `cp .env.example .env` and edit it:
-   - the four secrets as above;
+3. Install Docker, clone the repository, `./scripts/init-env.sh`, then edit `.env`:
+   - the four secrets are already seeded;
    - `DOMAIN=<your domain>`;
    - `PUBLIC_ORIGINS=https://<your domain>` (**remove** any `localhost` entry);
    - `COOKIE_SECURE=true`, `TRUST_PROXY=1`.
@@ -104,7 +103,7 @@ Migrations only go forward. Before an update that adds one, make a [backup](oper
 ## Development on a laptop
 
 ```bash
-cp .env.example .env     # the example already points the host app at 127.0.0.1:5433 and :9000
+./scripts/init-env.sh     # the example already points the host app at 127.0.0.1:5433 and :9000
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs
 npm install
 npm run dev              # http://localhost:3100, plain http, dev tools on

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "concurrently -k -n web,api \"vite build --watch\" \"npm:dev:server\"",
+    "init:env": "bash scripts/init-env.sh",
     "build": "vite build && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.js",
     "start": "node dist/server.js",
     "test": "rm -rf .test-hits && tsx --env-file=.env --test --test-concurrency=1 test/*.test.ts && tsx test/check-endpoints.ts",

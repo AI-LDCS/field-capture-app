@@ -56,10 +56,10 @@ You need **Docker** (with Compose v2) and, for development on your machine, **No
 ### Develop on your laptop
 
 ```bash
-cp .env.example .env
+./scripts/init-env.sh      # or: npm run init:env
 ```
 
-Edit `.env`: set long random values for `POSTGRES_PASSWORD`, `ADMIN_PASSWORD`, `S3_ACCESS_KEY` and `S3_SECRET_KEY`, and put the same database password inside `DATABASE_URL`. (Set `POSTGRES_PASSWORD` **before** the first start: changing it later does not change the password inside an existing database volume.)
+It creates `.env` from `.env.example` with fresh random values for `POSTGRES_PASSWORD` (also put inside `DATABASE_URL`), `S3_ACCESS_KEY` and `S3_SECRET_KEY`, and asks whether the admin password should be random or your own. Run it **before** the first start: changing `POSTGRES_PASSWORD` later does not change the password inside an existing database volume. If `.env` exists it asks first and keeps a `.env.bak`.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs   # database and storage, on 127.0.0.1 only
