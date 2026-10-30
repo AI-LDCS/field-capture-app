@@ -33,9 +33,10 @@ The script makes `POSTGRES_PASSWORD` (and the copy in `DATABASE_URL`), `S3_ACCES
 Get the certificate (it must be named after the host, because the Caddyfile looks for `/certs/<TAILNET_HOST>.crt`):
 
 ```bash
-mkdir -p certs
-tailscale cert --cert-file certs/<TAILNET_HOST>.crt --key-file certs/<TAILNET_HOST>.key <TAILNET_HOST>
+./scripts/tailnet-cert.sh
 ```
+
+The script runs `tailscale cert` for `TAILNET_HOST` (from `.env`; if unset it uses this machine's name from `tailscale status`) and writes the files into `certs/`. If `caddy-tailnet` is running it restarts it. It does nothing while the current certificate has more than 30 days left, and `--force` renews anyway. A failed request leaves the old files in place.
 
 Start:
 
@@ -48,7 +49,7 @@ Open `https://<TAILNET_HOST>:8444` and sign in with `ADMIN_USERNAME` and the `AD
 
 Notes:
 
-- Tailscale certificates are short-lived (about 90 days). Renew by running the `tailscale cert` command again and then `docker compose restart caddy-tailnet`. Put it in a calendar or a cron job.
+- Tailscale certificates are short-lived (about 90 days). Renew by running `./scripts/tailnet-cert.sh` again (it restarts Caddy for you), or run `./scripts/tailnet-cert.sh --install-cron` once to add a daily check to your crontab; it only renews when fewer than 30 days remain and logs to `certs/renew.log`.
 - The port `8444` is published on all interfaces of the machine. To limit it to your Tailscale address, change the `caddy-tailnet` `ports:` line to `"<tailscale-ip>:8444:443"`.
 
 ## First start (public VPS)

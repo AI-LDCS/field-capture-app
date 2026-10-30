@@ -75,8 +75,7 @@ A phone only allows the camera and GPS on HTTPS.
 
 ```bash
 # TAILNET_HOST and PUBLIC_ORIGINS in .env first, then a certificate named after the host:
-mkdir -p certs
-tailscale cert --cert-file certs/<TAILNET_HOST>.crt --key-file certs/<TAILNET_HOST>.key <TAILNET_HOST>
+./scripts/tailnet-cert.sh
 
 docker compose --profile tailnet up -d --build
 ```
