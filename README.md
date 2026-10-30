@@ -74,7 +74,7 @@ Sign in as `ADMIN_USERNAME` with `ADMIN_PASSWORD`. Dev mode turns on **dev tools
 A phone only allows the camera and GPS on HTTPS.
 
 ```bash
-# TAILNET_HOST and PUBLIC_ORIGINS in .env first, then a certificate named after the host:
+# gets the certificate and fills in TAILNET_HOST and PUBLIC_ORIGINS in .env:
 ./scripts/tailnet-cert.sh
 
 docker compose --profile tailnet up -d --build

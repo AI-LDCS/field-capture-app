@@ -4,6 +4,10 @@
 # It does nothing while the current certificate has more than RENEW_DAYS left, so it is safe to
 # run often. Tailscale certificates last about 90 days.
 #
+# It also fills in .env (when it exists): TAILNET_HOST if it is missing or still the example
+# value, and PUBLIC_ORIGINS gets https://<host>:<TAILNET_HTTPS_PORT> added (the example
+# placeholder entry is dropped; other origins are kept).
+#
 #   ./scripts/tailnet-cert.sh                run now (renews only when due)
 #   ./scripts/tailnet-cert.sh --force        renew even if still valid
 #   ./scripts/tailnet-cert.sh --install-cron add a daily check to your crontab
@@ -17,6 +21,22 @@ export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:/usr/bin"
 
 say() { printf '%s\n' "$*" >&2; }
 die() { say "error: $*"; exit 1; }
+
+# env_get KEY: value from .env, quotes stripped.
+env_get() { sed -n "s/^$1=//p" .env | head -n 1 | tr -d "'\""; }
+
+# env_set KEY VALUE: replaces the KEY= line in .env, or appends it (value passed through the
+# environment so awk does not interpret backslashes). Rewrites in place to keep the file's mode.
+env_set() {
+  local tmp; tmp="$(mktemp)"
+  KEY="$1" VAL="$2" awk '
+    BEGIN { k = ENVIRON["KEY"] "="; v = ENVIRON["VAL"] }
+    index($0, k) == 1 { print k v; found = 1; next }
+    { print }
+    END { if (!found) print k v }
+  ' .env > "$tmp" && cat "$tmp" > .env
+  rm -f "$tmp"
+}
 
 FORCE=0
 case "${1:-}" in
@@ -42,14 +62,27 @@ command -v openssl >/dev/null || die "openssl is required"
 
 # Host name: TAILNET_HOST from the environment or .env (read, not sourced), else this machine's name.
 host="${TAILNET_HOST:-}"
-if [ -z "$host" ] && [ -f .env ]; then host="$(sed -n 's/^TAILNET_HOST=//p' .env | head -n 1 | tr -d "'\"")"; fi
+if [ -z "$host" ] && [ -f .env ]; then host="$(env_get TAILNET_HOST)"; fi
 case "$host" in
   ""|your-host.*)
     host="$(tailscale status --json | grep -o '"DNSName": *"[^"]*"' | head -n 1 | cut -d'"' -f4)"
     host="${host%.}"
     [ -n "$host" ] || die "set TAILNET_HOST in .env (tailscale status shows the machine's .ts.net name)"
-    say "TAILNET_HOST is not set in .env; using this machine's name: $host" ;;
+    say "TAILNET_HOST is not set; using this machine's name: $host" ;;
 esac
+
+if [ -f .env ]; then
+  case "$(env_get TAILNET_HOST)" in
+    ""|your-host.*) env_set TAILNET_HOST "$host"; say "set TAILNET_HOST=$host in .env" ;;
+  esac
+  origin="https://$host:$(env_get TAILNET_HTTPS_PORT)"
+  [ "$origin" != "https://$host:" ] || origin="https://$host:8444"
+  current="$(env_get PUBLIC_ORIGINS)"
+  wanted="$(printf '%s\n' "$current" | tr ',' '\n' | sed 's/^ *//;s/ *$//;/^$/d;/your-host/d' | { cat; echo "$origin"; } | awk '!seen[$0]++' | paste -sd, -)"
+  if [ "$wanted" != "$current" ]; then env_set PUBLIC_ORIGINS "$wanted"; say "set PUBLIC_ORIGINS=$wanted in .env"; fi
+else
+  say "no .env yet: run ./scripts/init-env.sh, then set TAILNET_HOST and PUBLIC_ORIGINS (or run this again)."
+fi
 
 crt="certs/$host.crt"
 key="certs/$host.key"

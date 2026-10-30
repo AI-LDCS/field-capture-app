@@ -23,10 +23,10 @@ git clone <repo> field-capture-app && cd field-capture-app
 ./scripts/init-env.sh     # creates .env and seeds the secrets; asks for a random or your own admin password
 ```
 
-The script makes `POSTGRES_PASSWORD` (and the copy in `DATABASE_URL`), `S3_ACCESS_KEY`, `S3_SECRET_KEY` and `ADMIN_PASSWORD` long and random. Then edit `.env`:
+The script makes `POSTGRES_PASSWORD` (and the copy in `DATABASE_URL`), `S3_ACCESS_KEY`, `S3_SECRET_KEY` and `ADMIN_PASSWORD` long and random. In `.env`:
 
-- `TAILNET_HOST`: your machine's Tailscale DNS name (`tailscale status` shows it; it ends in `.ts.net`).
-- `PUBLIC_ORIGINS=https://<TAILNET_HOST>:8444`
+- `TAILNET_HOST`: your machine's Tailscale DNS name (`tailscale status` shows it; it ends in `.ts.net`). The certificate script below fills it in if it is still the example value.
+- `PUBLIC_ORIGINS=https://<TAILNET_HOST>:8444`: the same script adds it.
 - Leave `COOKIE_SECURE=true` and `TRUST_PROXY=1`.
 - `DATABASE_URL` in the example file is only for developing on the host; the containers build their own and ignore it.
 
@@ -36,7 +36,7 @@ Get the certificate (it must be named after the host, because the Caddyfile look
 ./scripts/tailnet-cert.sh
 ```
 
-The script runs `tailscale cert` for `TAILNET_HOST` (from `.env`; if unset it uses this machine's name from `tailscale status`) and writes the files into `certs/`. If `caddy-tailnet` is running it restarts it. It does nothing while the current certificate has more than 30 days left, and `--force` renews anyway. A failed request leaves the old files in place.
+The script runs `tailscale cert` for `TAILNET_HOST` (from `.env`; if unset it uses this machine's name from `tailscale status`) and writes the files into `certs/`. It also sets `TAILNET_HOST` in `.env` when it is missing or still the example value, and adds `https://<host>:<TAILNET_HTTPS_PORT>` to `PUBLIC_ORIGINS` (dropping the example entry and keeping any other origins). If `caddy-tailnet` is running it restarts it. It does nothing while the current certificate has more than 30 days left, and `--force` renews anyway. A failed request leaves the old files in place.
 
 Start:
 
