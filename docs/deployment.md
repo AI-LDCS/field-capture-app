@@ -4,7 +4,7 @@ Everything runs with Docker Compose. Pick an edge profile:
 
 | Profile | For | Address | TLS certificate |
 | --- | --- | --- | --- |
-| `tailnet` | a laptop or server reachable over Tailscale | `https://<machine>.<tailnet>.ts.net:8444` | files made by `tailscale cert` |
+| `tailnet` | a laptop or server reachable over Tailscale | `https://<machine>.<tailnet>.ts.net` | files made by `tailscale cert` |
 | `public` | a VPS with a public IP | `https://<your domain>` | automatic (Let's Encrypt, by Caddy) |
 
 Browsers allow the camera and GPS only on **HTTPS** (or `localhost`), so a phone needs one of these.
@@ -26,7 +26,7 @@ git clone <repo> field-capture-app && cd field-capture-app
 The script makes `POSTGRES_PASSWORD` (and the copy in `DATABASE_URL`), `S3_ACCESS_KEY`, `S3_SECRET_KEY` and `ADMIN_PASSWORD` long and random. In `.env`:
 
 - `TAILNET_HOST`: your machine's Tailscale DNS name (`tailscale status` shows it; it ends in `.ts.net`). The certificate script below fills it in if it is still the example value.
-- `PUBLIC_ORIGINS=https://<TAILNET_HOST>:8444`: the same script adds it.
+- `PUBLIC_ORIGINS=https://<TAILNET_HOST>`: the same script adds it (with `:<port>` only if `TAILNET_HTTPS_PORT` is not 443; the origin must match the browser's address bar).
 - Leave `COOKIE_SECURE=true` and `TRUST_PROXY=1`.
 - `DATABASE_URL` in the example file is only for developing on the host; the containers build their own and ignore it.
 
@@ -45,12 +45,12 @@ docker compose --profile tailnet up -d --build
 docker compose logs -f app        # expect: migration applied, created bucket, app listening
 ```
 
-Open `https://<TAILNET_HOST>:8444` and sign in with `ADMIN_USERNAME` and the `ADMIN_PASSWORD` from `.env`. **Change that password** (click your username at the top). Then follow the [admin guide](admin-guide.md).
+Open `https://<TAILNET_HOST>` and sign in with `ADMIN_USERNAME` and the `ADMIN_PASSWORD` from `.env`. **Change that password** (click your username at the top). Then follow the [admin guide](admin-guide.md).
 
 Notes:
 
 - Tailscale certificates are short-lived (about 90 days). Renew by running `./scripts/tailnet-cert.sh` again (it restarts Caddy for you), or run `./scripts/tailnet-cert.sh --install-cron` once to add a daily check to your crontab; it only renews when fewer than 30 days remain and logs to `certs/renew.log`.
-- The port `8444` is published on all interfaces of the machine. To limit it to your Tailscale address, change the `caddy-tailnet` `ports:` line to `"<tailscale-ip>:8444:443"`.
+- The port `443` is published on all interfaces of the machine. To limit it to your Tailscale address, change the `caddy-tailnet` `ports:` line to `"<tailscale-ip>:443:443"`.
 
 ## First start (public VPS)
 

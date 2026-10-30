@@ -62,7 +62,7 @@ services:
     environment:
       TAILNET_HOST: ${TAILNET_HOST}
     ports:
-      - "${TAILNET_HTTPS_PORT:-8444}:443"
+      - "${TAILNET_HTTPS_PORT:-443}:443"
     volumes:
       - ./deploy/Caddyfile.tailnet:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro

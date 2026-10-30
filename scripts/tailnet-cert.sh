@@ -5,7 +5,7 @@
 # run often. Tailscale certificates last about 90 days.
 #
 # It also fills in .env (when it exists): TAILNET_HOST if it is missing or still the example
-# value, and PUBLIC_ORIGINS gets https://<host>:<TAILNET_HTTPS_PORT> added (the example
+# value, and PUBLIC_ORIGINS gets https://<host> (plus :<TAILNET_HTTPS_PORT> unless it is 443) added (the example
 # placeholder entry is dropped; other origins are kept).
 #
 #   ./scripts/tailnet-cert.sh                run now (renews only when due)
@@ -75,8 +75,10 @@ if [ -f .env ]; then
   case "$(env_get TAILNET_HOST)" in
     ""|your-host.*) env_set TAILNET_HOST "$host"; say "set TAILNET_HOST=$host in .env" ;;
   esac
-  origin="https://$host:$(env_get TAILNET_HTTPS_PORT)"
-  [ "$origin" != "https://$host:" ] || origin="https://$host:8444"
+  port="$(env_get TAILNET_HTTPS_PORT)"
+  origin="https://$host"
+  # browsers leave the port out of the Origin header when it is 443
+  case "${port:-443}" in 443) ;; *) origin="$origin:$port" ;; esac
   current="$(env_get PUBLIC_ORIGINS)"
   wanted="$(printf '%s\n' "$current" | tr ',' '\n' | sed 's/^ *//;s/ *$//;/^$/d;/your-host/d' | { cat; echo "$origin"; } | awk '!seen[$0]++' | paste -sd, -)"
   if [ "$wanted" != "$current" ]; then env_set PUBLIC_ORIGINS "$wanted"; say "set PUBLIC_ORIGINS=$wanted in .env"; fi

@@ -80,7 +80,7 @@ A phone only allows the camera and GPS on HTTPS.
 docker compose --profile tailnet up -d --build
 ```
 
-Open `https://<TAILNET_HOST>:8444` on a device that is on your tailnet. Full steps, including certificate renewal: [Deployment](docs/deployment.md).
+Open `https://<TAILNET_HOST>` on a device that is on your tailnet. Full steps, including certificate renewal: [Deployment](docs/deployment.md).
 
 ### Run on a public server
 

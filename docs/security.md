@@ -69,9 +69,9 @@ What the system protects, how, and what it deliberately does **not** protect. Wr
 
 ## Network exposure
 
-- In the main compose file **only Caddy publishes ports** (`8444` for the tailnet profile; `80` and `443` for the public profile). The app, Postgres and RustFS have no `ports:`.
+- In the main compose file **only Caddy publishes ports** (`443` for the tailnet profile; `80` and `443` for the public profile). The app, Postgres and RustFS have no `ports:`.
 - **Docker-published ports bypass `ufw`.** Do not add `ports:` to the database or storage on a public server, and do not trust a host firewall to hide one. `docker-compose.dev.yml` publishes them on `127.0.0.1` only and must not be used on a server.
-- The tailnet profile binds `8444` on all interfaces of the machine. To limit it to your Tailscale address, edit the `ports:` line of `caddy-tailnet` to `<tailscale-ip>:8444:443`.
+- The tailnet profile binds `443` on all interfaces of the machine. To limit it to your Tailscale address, edit the `ports:` line of `caddy-tailnet` to `<tailscale-ip>:443:443`.
 - The app runs as a non-root user in its container.
 
 ## Audit

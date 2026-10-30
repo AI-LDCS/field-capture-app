@@ -13,7 +13,7 @@ Copy `.env.example` to `.env` and fill it in. Docker Compose reads `.env` for su
 | `DATABASE_URL` | required | Postgres connection string. Compose builds it for the container; for host development use the `127.0.0.1:5433` URL from `.env.example`. |
 | `PORT` | `3100` | Port the app listens on. |
 | `HOST` | `0.0.0.0` | Address the app binds to. |
-| `PUBLIC_ORIGINS` | none | Comma-separated browser origins (for example `https://host.tailnet.ts.net:8444`) allowed to make state-changing requests. **Must match what the browser's address bar shows**, or every POST answers `403 bad_origin`. |
+| `PUBLIC_ORIGINS` | none | Comma-separated browser origins (for example `https://host.tailnet.ts.net`) allowed to make state-changing requests. **Must match what the browser's address bar shows**, or every POST answers `403 bad_origin`. |
 | `COOKIE_SECURE` | `true` | `true` uses the `Secure` `__Host-sid` cookie (HTTPS). `false` only for plain-http local development. |
 | `TRUST_PROXY` | `1` | Number of proxy hops in front of the app (Caddy = 1). |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | none | The first admin, created only if no admin exists yet. Password at least 12 characters. |
@@ -32,7 +32,7 @@ Copy `.env.example` to `.env` and fill it in. Docker Compose reads `.env` for su
 | --- | --- |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | The database the `db` container creates. |
 | `TAILNET_HOST` | The machine's Tailscale DNS name (`tailscale status` shows it); used for the certificate file names and the Caddy site. |
-| `TAILNET_HTTPS_PORT` | Host port for the tailnet profile (default `8444`). |
+| `TAILNET_HTTPS_PORT` | Host port for the tailnet profile (default `443`; if you change it, `PUBLIC_ORIGINS` must include the port). |
 | `DOMAIN` | Public hostname for the `public` profile; Caddy gets a Let's Encrypt certificate for it. |
 
 ### Compose profiles
