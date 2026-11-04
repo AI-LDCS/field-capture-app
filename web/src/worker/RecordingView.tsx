@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Swap } from "../icons.tsx";
 import { Circle, CircleMarker, MapContainer, Polyline, useMap, useMapEvents } from "react-leaflet";
 import { CONFIG } from "@shared/config.ts";
 import { bearingDeg, compass, distToLineM, haversineM } from "@shared/geo.ts";
@@ -215,8 +216,8 @@ export default function RecordingView(props: {
           <span className={`small ${st.freeBytes < CONFIG.recording.minFreeBytes ? "err" : "muted"}`}>{fmtBytes(st.freeBytes)} free</span>
         )}
         <span className="grow" />
-        <button className="ghost" onClick={() => setSwap(!swap)} title="Swap panes">
-          ⇅
+        <button className="ghost" onClick={() => setSwap(!swap)} title="Swap panes" aria-label="Swap panes">
+          <Swap />
         </button>
         <button
           className={confirmStop ? "danger" : "ghost danger-text"}

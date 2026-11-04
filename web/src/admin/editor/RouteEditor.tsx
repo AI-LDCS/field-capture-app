@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LngLat, RouteVersion } from "@shared/types.ts";
 import { api } from "../../api.ts";
+import { confirmDialog, toast } from "../../feedback.tsx";
+import { Pencil, Plus, Redo, Undo } from "../../icons.tsx";
 import EditorMap from "./EditorMap.tsx";
 import {
   commit,
@@ -56,7 +58,6 @@ function Editor({ version }: { version?: RouteVersion }) {
   const [center, setCenter] = useState<LngLat>([100.5018, 13.7563]);
   const [bulk, setBulk] = useState("");
   const [bulkErrors, setBulkErrors] = useState<string[]>([]);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [vid, setVid] = useState(version?.id);
   const snapshot = (n: string, s: Seg[]) => JSON.stringify([n.trim(), toInput(s)]);
@@ -161,14 +162,13 @@ function Editor({ version }: { version?: RouteVersion }) {
   };
 
   const save = async (): Promise<string | null> => {
-    setMsg(null);
     if (!name.trim()) {
-      setMsg({ ok: false, text: "Give the route a name" });
+      toast.error("Give the route a name");
       return null;
     }
     const bad = incompleteSegments(segs);
     if (bad.length) {
-      setMsg({ ok: false, text: `Segment ${bad.join(", ")} needs at least 2 points (or delete it)` });
+      toast.error(`Segment ${bad.join(", ")} needs at least 2 points (or delete it)`);
       setSel(segs[bad[0] - 1].key);
       return null;
     }
@@ -182,28 +182,36 @@ function Editor({ version }: { version?: RouteVersion }) {
       setSaved(snapshot(name, segs));
       return id;
     } catch (x: any) {
-      setMsg({ ok: false, text: x.message });
+      toast.error(x.message);
       return null;
     } finally {
       setBusy(false);
     }
   };
   const saveDraft = async () => {
-    if (await save()) setMsg({ ok: true, text: "Draft saved" });
+    if (await save()) toast.success("Draft saved");
   };
   const savePublish = async () => {
     const id = await save();
     if (!id) return;
     try {
       await api.publish(id);
+      toast.success("Route published");
       location.hash = "#/routes";
     } catch (x: any) {
-      setMsg({ ok: false, text: x.message });
+      toast.error(x.message);
     }
   };
 
-  const revert = () => {
-    if (!confirm("Discard all unsaved changes?")) return;
+  const revert = async () => {
+    const ok = await confirmDialog({
+      title: "Discard all unsaved changes?",
+      body: "The route goes back to how it was when last saved.",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      danger: true,
+    });
+    if (!ok) return;
     setH(hist(fromVersion(version)));
     setName(version?.routeName ?? "");
     setSel(null);
@@ -238,20 +246,28 @@ function Editor({ version }: { version?: RouteVersion }) {
         />
         {!readOnly && (
           <div className="ed-tools">
-            <button onClick={newSegment}>＋ New segment</button>
+            <button onClick={newSegment}>
+              <Plus /> New segment
+            </button>
             <button
               className={draw ? "on" : "ghost"}
               disabled={!selSeg}
               onClick={() => setDraw(!draw)}
               title="Click the map to add points to the selected segment"
             >
-              ✎ Draw
+              <Pencil /> Draw
             </button>
-            <button className="ghost" disabled={!h.past.length} onClick={() => setH(undo)} title="Undo (Ctrl/Cmd+Z)">
-              ↶
+            <button className="ghost" disabled={!h.past.length} onClick={() => setH(undo)} title="Undo (Ctrl/Cmd+Z)" aria-label="Undo">
+              <Undo />
             </button>
-            <button className="ghost" disabled={!h.future.length} onClick={() => setH(redo)} title="Redo (Ctrl/Cmd+Shift+Z)">
-              ↷
+            <button
+              className="ghost"
+              disabled={!h.future.length}
+              onClick={() => setH(redo)}
+              title="Redo (Ctrl/Cmd+Shift+Z)"
+              aria-label="Redo"
+            >
+              <Redo />
             </button>
           </div>
         )}
@@ -291,7 +307,7 @@ function Editor({ version }: { version?: RouteVersion }) {
               </button>
             )}
             {!readOnly && dirty && (
-              <button className="ghost" onClick={revert}>
+              <button className="ghost" onClick={() => void revert()}>
                 Revert
               </button>
             )}
@@ -299,7 +315,6 @@ function Editor({ version }: { version?: RouteVersion }) {
               {readOnly ? "Back" : "Close"}
             </a>
           </div>
-          {msg && <p className={msg.ok ? "ok" : "err"}>{msg.text}</p>}
         </Card>
 
         <Card
@@ -335,7 +350,9 @@ function Editor({ version }: { version?: RouteVersion }) {
           />
           {!readOnly && (
             <div className="row">
-              <button onClick={newSegment}>＋ New segment</button>
+              <button onClick={newSegment}>
+                <Plus /> New segment
+              </button>
             </div>
           )}
         </Card>

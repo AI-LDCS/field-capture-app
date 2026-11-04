@@ -2,6 +2,8 @@
 
 For the person walking the route with a phone. Your supervisor gives you a username and a password. You cannot change the password; if it stops working, ask them to set a new one.
 
+The sun, moon and monitor icons at the top choose a Light, Dark or System theme. Light is often easier to read in the sun.
+
 ## Before you go
 
 - Open the app's address in your phone's browser (Chrome on Android, Safari on iPhone) and **sign in**.

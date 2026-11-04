@@ -68,6 +68,17 @@ describe("file layout", () => {
       [],
     );
   });
+  it("the web app uses its own dialogs, never the browser's", () => {
+    const used = walk("web/src").filter((f) => /(^|[^.\w])(alert|confirm|prompt)\(/.test(fs.readFileSync(path.join(ROOT, f), "utf8")));
+    assert.deepEqual(used, []);
+  });
+  it("styles take colours from the theme tokens, outside the fixed-colour section", () => {
+    const css = fs.readFileSync(path.join(ROOT, "web/src/styles.css"), "utf8");
+    const [tokensEnd, fixedStart] = [css.indexOf("/* ---------- base"), css.indexOf("/* ---------- fixed colours")];
+    assert.ok(tokensEnd > 0 && fixedStart > tokensEnd, "the section comments are there");
+    const themed = css.slice(tokensEnd, fixedStart);
+    assert.deepEqual(themed.match(/#[0-9a-f]{3,8}\b|rgba?\(|gradient\(/gi) ?? [], []);
+  });
   it("the rules can see imports", () => {
     assert.ok(importsOf("server/app.ts").includes("server/config.ts"));
     assert.ok(importsOf("web/src/worker/RunPage.tsx").some((t) => t.startsWith("web/src/worker/lib/")));

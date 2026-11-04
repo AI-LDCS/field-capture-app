@@ -4,6 +4,7 @@ import { CONFIG } from "@shared/config.ts";
 import { coverageMask, distToLineM } from "@shared/geo.ts";
 import type { AssignmentDetail, LngLat, PreflightOutcome } from "@shared/types.ts";
 import { api } from "../api.ts";
+import { toast } from "../feedback.tsx";
 import { Badge, Tiles, fmtBytes, ll } from "../ui.tsx";
 import { Onboard, useCameraOpener, useStorage } from "./Onboard.tsx";
 import { type Fix, fakeGps, gpsSource } from "./lib/gps.ts";
@@ -42,14 +43,12 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
   const [preflightLocal, setPreflightLocal] = useState<PreflightOutcome | null>(null);
   const [redo, setRedo] = useState(false);
   const [skipReason, setSkipReason] = useState("");
-  const [msg, setMsg] = useState("");
   const s = useSettings();
   const session = useSession();
   const local = useLocalRecordings(id);
   const { storage, recheck } = useStorage(!!session.camera);
   const [gpsDenied, setGpsDenied] = useState(false);
   const [gpsNonce, setGpsNonce] = useState(0);
-  const [recErr, setRecErr] = useState("");
   // Onboard opens only from the Start Recording tap: that is the moment the worker says they are on site, and
   // the tap is what lets the browser show the camera prompt. A reload or the forward button lands on home instead.
   const [onboarding, setOnboarding] = useState(false);
@@ -223,7 +222,6 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
   };
   const startNow = async () => {
     if (whyNot) return;
-    setRecErr("");
     try {
       setSession({ lastStop: null });
       const ar = await startRecording({
@@ -240,7 +238,7 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
       setSession({ active: ar, activeAssignmentId: id });
       location.hash = `${home}/record`;
     } catch (e: any) {
-      setRecErr(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -264,7 +262,6 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
           onRedo={() => setRedo(true)}
           onStart={() => void startNow()}
         />
-        {recErr && <p className="err">{recErr}</p>}
         {devToolsOn() && <DevPanel />}
       </>
     );
@@ -305,12 +302,19 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
               : "";
 
   const act = async (fn: () => Promise<AssignmentDetail>) => {
-    setMsg("");
     try {
-      setRun(await fn());
+      const d = await fn();
+      setRun(d);
+      return d;
     } catch (e: any) {
-      setMsg(e.message);
+      toast.error(e.message);
     }
+  };
+  const finish = async () => {
+    const d = await act(() => api.myFinish(id));
+    if (d?.status === "completed") toast.success("Assignment completed");
+    else if (d?.status === "needs_review") toast.info("Sent for review");
+    else if (d) toast.warning("Not finished yet. See the reasons above the button.");
   };
 
   return (
@@ -423,13 +427,12 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
           )}
           {!completed && (
             <>
-              <button className="cta" onClick={() => void act(() => api.myFinish(id))} disabled={!!whyNotFinish}>
+              <button className="cta" onClick={() => void finish()} disabled={!!whyNotFinish}>
                 Check &amp; finish
               </button>
               {whyNotFinish && <p className="small muted center">{whyNotFinish}</p>}
             </>
           )}
-          {msg && <p className="err">{msg}</p>}
         </div>
       </section>
 

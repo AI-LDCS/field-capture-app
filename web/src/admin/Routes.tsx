@@ -1,26 +1,60 @@
-import { useState } from "react";
+import type { RouteSummary } from "@shared/types.ts";
 import { api } from "../api.ts";
-import { Badge, Card, km, useLoad, when } from "../ui.tsx";
-
-const deleteRouteText = (r: { name: string; versions: { status: string; assignmentCount: number }[] }) => {
-  const used = r.versions.reduce((n, v) => n + v.assignmentCount, 0);
-  return used
-    ? `Delete the route "${r.name}"?\n\nIt is removed from this list and cannot be assigned again. Its ${used} assignment${used === 1 ? "" : "s"}, recordings and video are kept (shown as "(deleted)"), and workers can finish what they already have. This cannot be undone.`
-    : `Delete the route "${r.name}"? It has no assignments. This cannot be undone.`;
-};
+import { confirmDialog, promptDialog, toast } from "../feedback.tsx";
+import { Plus } from "../icons.tsx";
+import { Badge, Card, km, Menu, useLoad, when } from "../ui.tsx";
 
 export function RoutesPage() {
   const { data, err, reload } = useLoad(() => api.routes());
-  const [msg, setMsg] = useState("");
-  const act = async (fn: () => Promise<unknown>, then?: () => void) => {
-    setMsg("");
+  const act = async (fn: () => Promise<unknown>, done?: string) => {
     try {
       await fn();
+      if (done) toast.success(done);
       reload();
-      then?.();
     } catch (x: any) {
-      setMsg(x.message);
+      toast.error(x.message);
     }
+  };
+
+  const rename = async (r: RouteSummary) => {
+    const name = await promptDialog({
+      title: "Rename route",
+      label: "Route name",
+      body: "This changes the name everywhere, including existing assignments.",
+      initial: r.name,
+      maxLength: 120,
+      confirmLabel: "Rename",
+    });
+    if (name !== null && name !== r.name) void act(() => api.renameRoute(r.id, name), "Route renamed");
+  };
+  const removeRoute = async (r: RouteSummary) => {
+    const used = r.versions.reduce((n, v) => n + v.assignmentCount, 0);
+    const ok = await confirmDialog({
+      title: `Delete the route "${r.name}"?`,
+      body: used
+        ? `It is removed from this list and cannot be assigned again. Its ${used} assignment${used === 1 ? "" : "s"}, recordings and video are kept (shown as "(deleted)"), and workers can finish what they already have. This cannot be undone.`
+        : "It has no assignments. This cannot be undone.",
+      confirmLabel: "Delete route",
+      danger: true,
+    });
+    if (ok) void act(() => api.deleteRoute(r.id), "Route deleted");
+  };
+  const removeDraft = async (id: string) => {
+    const ok = await confirmDialog({
+      title: "Delete this draft?",
+      body: "This cannot be undone.",
+      confirmLabel: "Delete draft",
+      danger: true,
+    });
+    if (ok) void act(() => api.deleteDraft(id), "Draft deleted");
+  };
+  const archive = async (id: string) => {
+    const ok = await confirmDialog({
+      title: "Archive this version?",
+      body: "No new assignments can use it. Existing ones continue.",
+      confirmLabel: "Archive",
+    });
+    if (ok) void act(() => api.archive(id), "Version archived");
   };
 
   return (
@@ -29,7 +63,7 @@ export function RoutesPage() {
         title="Routes"
         right={
           <a className="btn" href="#/routes/new">
-            + New route
+            <Plus /> New route
           </a>
         }
       >
@@ -38,7 +72,6 @@ export function RoutesPage() {
           they were given.
         </p>
         {err && <p className="err">{err}</p>}
-        {msg && <p className="err">{msg}</p>}
         {data?.length === 0 && <p className="muted">No routes yet.</p>}
       </Card>
       {data?.map((r) => {
@@ -48,16 +81,7 @@ export function RoutesPage() {
             key={r.id}
             title={r.name}
             right={
-              <div className="row wrap">
-                <button
-                  className="ghost"
-                  onClick={() => {
-                    const n = prompt("Route name (changes it everywhere, including existing assignments)", r.name);
-                    if (n !== null && n.trim() !== r.name) void act(() => api.renameRoute(r.id, n));
-                  }}
-                >
-                  Rename
-                </button>
+              <div className="row nogap">
                 {!hasDraft && (
                   <button
                     className="ghost"
@@ -68,17 +92,21 @@ export function RoutesPage() {
                       })
                     }
                   >
-                    + New version
+                    <Plus /> New version
                   </button>
                 )}
-                <button className="ghost danger-text" onClick={() => confirm(deleteRouteText(r)) && void act(() => api.deleteRoute(r.id))}>
-                  Delete route
-                </button>
+                <Menu
+                  label={`More actions for ${r.name}`}
+                  items={[
+                    { label: "Rename", onClick: () => void rename(r) },
+                    { label: "Delete route", danger: true, onClick: () => void removeRoute(r) },
+                  ]}
+                />
               </div>
             }
           >
             {r.versions.map((v) => (
-              <div key={v.id} className="item row between">
+              <div key={v.id} className="item row between wrap">
                 <div>
                   v{v.version} <Badge s={v.status} />
                   <div className="small muted">
@@ -86,19 +114,16 @@ export function RoutesPage() {
                     {v.publishedAt && <> · published {when(v.publishedAt)}</>}
                   </div>
                 </div>
-                <div className="row wrap">
+                <div className="row wrap nogap">
                   {v.status === "draft" ? (
                     <>
                       <a className="btn ghost" href={`#/routes/edit/${v.id}`}>
                         Edit
                       </a>
-                      <button className="ghost" onClick={() => void act(() => api.publish(v.id))}>
+                      <button className="ghost" onClick={() => void act(() => api.publish(v.id), "Version published")}>
                         Publish
                       </button>
-                      <button
-                        className="ghost danger-text"
-                        onClick={() => confirm("Delete this draft?") && void act(() => api.deleteDraft(v.id))}
-                      >
+                      <button className="ghost danger-text" onClick={() => void removeDraft(v.id)}>
                         Delete
                       </button>
                     </>
@@ -112,12 +137,7 @@ export function RoutesPage() {
                       <a className="btn" href={`#/assign/${v.id}`}>
                         Assign
                       </a>
-                      <button
-                        className="ghost"
-                        onClick={() =>
-                          confirm("Archive this version? No new assignments, existing ones continue.") && void act(() => api.archive(v.id))
-                        }
-                      >
+                      <button className="ghost" onClick={() => void archive(v.id)}>
                         Archive
                       </button>
                     </>

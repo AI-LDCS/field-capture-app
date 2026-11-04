@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Circle, CircleMarker, MapContainer, Polyline, useMap } from "react-leaflet";
 import type { AssignmentDetail, LngLat, RecordingSummary } from "@shared/types.ts";
 import { api } from "../api.ts";
+import { toast } from "../feedback.tsx";
+import { Play } from "../icons.tsx";
 import { Badge, Card, FitTo, Tiles, fmtBytes, ll, useLoad, when } from "../ui.tsx";
 
 type Row = { seq: number; t: number; lat: number; lng: number; acc: number };
@@ -47,7 +49,6 @@ export default function Review({ id }: { id: string }) {
   const [tracks, setTracks] = useState<Record<string, Row[]>>({});
   const [play, setPlay] = useState<{ recId: string; tMs: number } | null>(null);
   const [follow, setFollow] = useState(true);
-  const [msg, setMsg] = useState("");
   const videos = useRef(new Map<string, HTMLVideoElement>());
 
   // keep polling while any video is still being prepared
@@ -80,14 +81,14 @@ export default function Review({ id }: { id: string }) {
     );
   if (!run) return <p>Loading…</p>;
 
-  const act = async (fn: () => Promise<AssignmentDetail | unknown>) => {
-    setMsg("");
+  const act = async (fn: () => Promise<AssignmentDetail | unknown>, done: string) => {
     try {
       await fn();
+      toast.success(done);
       reload();
       audit.reload();
     } catch (e: any) {
-      setMsg(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -141,11 +142,11 @@ export default function Review({ id }: { id: string }) {
           )}
         </p>
         <div className="row wrap">
-          <button onClick={() => void act(() => api.reEvaluate(id))}>Re-evaluate</button>
+          <button onClick={() => void act(() => api.reEvaluate(id), "Re-evaluated")}>Re-evaluate</button>
           {run.status === "needs_review" && (
             <>
-              <button onClick={() => void act(() => api.reviewAssignment(id, "approve"))}>Approve</button>
-              <button className="ghost" onClick={() => void act(() => api.reviewAssignment(id, "reject"))}>
+              <button onClick={() => void act(() => api.reviewAssignment(id, "approve"), "Approved")}>Approve</button>
+              <button className="ghost" onClick={() => void act(() => api.reviewAssignment(id, "reject"), "Sent back to the worker")}>
                 Send back
               </button>
             </>
@@ -165,7 +166,6 @@ export default function Review({ id }: { id: string }) {
             <span className="small muted">{verified.length} verified recording(s): videos, GPS JSON, assignment.json</span>
           </div>
         )}
-        {msg && <p className="err">{msg}</p>}
       </Card>
 
       <div className="map sticky">
@@ -211,52 +211,54 @@ export default function Review({ id }: { id: string }) {
       </div>
 
       <Card title="Segments (decided by the server)">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>type</th>
-              <th>status</th>
-              <th>coverage</th>
-              <th>seen in</th>
-            </tr>
-          </thead>
-          <tbody>
-            {run.segments.map((s, i) => (
-              <tr key={s.id}>
-                <td>{i + 1}</td>
-                <td>{s.required ? "required" : "optional"}</td>
-                <td>
-                  <Badge s={s.status} />
-                  {s.skipReason && <div className="small muted">{s.skipReason}</div>}
-                </td>
-                <td>
-                  {(s.coverage * 100).toFixed(0)}% / {(s.minCoverageRatio * 100).toFixed(0)}%
-                </td>
-                <td>
-                  {s.evidence.length === 0 ? (
-                    <span className="muted small">no GPS on it</span>
-                  ) : (
-                    s.evidence.map((e) => {
-                      const ready = run.recordings.find((r) => r.id === e.recordingId)?.assembly === "done";
-                      return (
-                        <button
-                          key={e.recordingId}
-                          className="ghost small"
-                          disabled={!ready}
-                          title={ready ? "Jump to this part of the video" : "video not ready"}
-                          onClick={() => jump(e.recordingId, e.firstTMs)}
-                        >
-                          ▶ {e.recordingId.slice(0, 6)} {(e.coverage * 100).toFixed(0)}%
-                        </button>
-                      );
-                    })
-                  )}
-                </td>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>type</th>
+                <th>status</th>
+                <th>coverage</th>
+                <th>seen in</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {run.segments.map((s, i) => (
+                <tr key={s.id}>
+                  <td>{i + 1}</td>
+                  <td>{s.required ? "required" : "optional"}</td>
+                  <td>
+                    <Badge s={s.status} />
+                    {s.skipReason && <div className="small muted">{s.skipReason}</div>}
+                  </td>
+                  <td>
+                    {(s.coverage * 100).toFixed(0)}% / {(s.minCoverageRatio * 100).toFixed(0)}%
+                  </td>
+                  <td>
+                    {s.evidence.length === 0 ? (
+                      <span className="muted small">no GPS on it</span>
+                    ) : (
+                      s.evidence.map((e) => {
+                        const ready = run.recordings.find((r) => r.id === e.recordingId)?.assembly === "done";
+                        return (
+                          <button
+                            key={e.recordingId}
+                            className="ghost small"
+                            disabled={!ready}
+                            title={ready ? "Jump to this part of the video" : "video not ready"}
+                            onClick={() => jump(e.recordingId, e.firstTMs)}
+                          >
+                            <Play size={12} /> {e.recordingId.slice(0, 6)} {(e.coverage * 100).toFixed(0)}%
+                          </button>
+                        );
+                      })
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p className="small muted">Coverage counts only server-verified recordings and uses the stored (smoothed) line.</p>
       </Card>
 
@@ -277,7 +279,7 @@ export default function Review({ id }: { id: string }) {
                 <div className="row wrap">
                   <span className="small muted">{assemblyText[r.assembly]}</span>
                   {r.assembly === "failed" && (
-                    <button className="ghost small" onClick={() => void act(() => api.reassemble(r.id))}>
+                    <button className="ghost small" onClick={() => void act(() => api.reassemble(r.id), "Building the video again")}>
                       Retry
                     </button>
                   )}
@@ -313,17 +315,19 @@ export default function Review({ id }: { id: string }) {
       </Card>
 
       <Card title="Audit">
-        <table>
-          <tbody>
-            {audit.data?.map((a) => (
-              <tr key={a.id}>
-                <td className="small">{new Date(a.at).toLocaleString()}</td>
-                <td>{a.action}</td>
-                <td className="small muted">{a.actor ?? "system"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table>
+            <tbody>
+              {audit.data?.map((a) => (
+                <tr key={a.id}>
+                  <td className="small">{new Date(a.at).toLocaleString()}</td>
+                  <td>{a.action}</td>
+                  <td className="small muted">{a.actor ?? "system"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </>
   );

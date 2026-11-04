@@ -11,6 +11,8 @@ import Review from "./admin/Review.tsx";
 import { EditVersion, NewRoute } from "./admin/editor/RouteEditor.tsx";
 import { MyAssignments } from "./worker/AssignmentList.tsx";
 import WorkerRun from "./worker/RunPage.tsx";
+import { FeedbackHost } from "./feedback.tsx";
+import { ThemeSwitcher } from "./theme.tsx";
 
 const useHash = () => {
   const [h, setH] = useState(location.hash || "#/");
@@ -63,6 +65,9 @@ function Shell() {
   if (!user)
     return (
       <main>
+        <div className="login-theme">
+          <ThemeSwitcher />
+        </div>
         <Login />
       </main>
     );
@@ -120,15 +125,15 @@ function Shell() {
             link("#/", "My assignments", ["", "assignment"])
           )}
         </nav>
-        <span className="grow" />
         {admin ? (
-          <a href="#/password" className="small muted" title="Change my password">
+          <a href="#/password" className="who" title="Change my password">
             {user.username}
           </a>
         ) : (
-          <span className="small muted">{user.displayName || user.username}</span>
+          <span className="who">{user.displayName || user.username}</span>
         )}
-        <button className="ghost small" onClick={() => void logout()}>
+        <ThemeSwitcher />
+        <button type="button" className="signout small" onClick={() => void logout()}>
           Sign out
         </button>
       </header>
@@ -144,6 +149,7 @@ createRoot(document.getElementById("root")!).render(
       <AuthProvider>
         <Shell />
       </AuthProvider>
+      <FeedbackHost />
     </Boundary>
   </StrictMode>,
 );

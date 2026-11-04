@@ -1,4 +1,5 @@
 import { api } from "../api.ts";
+import { ChevronRight } from "../icons.tsx";
 import { Badge, Card, useLoad, when } from "../ui.tsx";
 
 export function MyAssignments() {
@@ -15,7 +16,9 @@ export function MyAssignments() {
               required {a.progress.requiredDone}/{a.progress.requiredTotal} · assigned {when(a.createdAt)}
             </div>
           </div>
-          <span className="muted">›</span>
+          <span className="chevron">
+            <ChevronRight />
+          </span>
         </a>
       ))}
     </Card>

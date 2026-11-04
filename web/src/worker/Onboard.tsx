@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { ChevronLeft } from "../icons.tsx";
 import { CONFIG } from "@shared/config.ts";
 import { type PreflightEval, type PreflightSample, evaluatePreflight, preflightProgress } from "@shared/preflight.ts";
 import type { AssignmentDetail, PreflightOutcome } from "@shared/types.ts";
@@ -228,7 +229,7 @@ export function Onboard(props: {
   return (
     <>
       <a className="back small" href={`#/assignment/${run.id}`}>
-        ‹ {run.route.name}
+        <ChevronLeft size={14} /> {run.route.name}
       </a>
 
       <section className="card">

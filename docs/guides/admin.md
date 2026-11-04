@@ -10,6 +10,8 @@ For the person who sets up workers and routes, hands out work and reviews result
 - [Reviewing](#reviewing)
 - [Downloads](#downloads)
 
+The sun, moon and monitor icons at the top choose a Light, Dark or System theme. This browser remembers the choice.
+
 ## First sign-in
 
 Use the admin username and password from the server's `.env` file (`ADMIN_USERNAME`, `ADMIN_PASSWORD`). **Change the password straight away**: click your username at the top right. It needs at least 12 characters; changing it signs out your other devices.
@@ -24,7 +26,7 @@ The top bar has **Assignments**, **Routes**, **Workers** and **Downloads**.
 - Type a **password** (8 or more characters) **or leave it empty** and the app generates one and shows it **once**. Copy it and give it to the worker. The app stores only a hash, so it cannot show it again.
 - A worker cannot change their password. It never expires.
 
-For each worker you can **Rename**, **Set password** (type a new one, or leave empty to generate one; the worker is signed out everywhere at once), and **Deactivate** or **Reactivate**. A deactivated worker is signed out immediately and cannot log in; their data stays.
+For each worker you can **Set password** (type a new one, or leave empty to generate one; the worker is signed out everywhere at once). The **⋯** menu beside it has **Rename**, **Deactivate** or **Reactivate**, and **Delete**. A deactivated worker is signed out immediately and cannot log in; their data stays.
 
 **Delete** removes a worker for good: they are signed out, cannot log in again, and disappear from the list, and you can reuse their username. Their assignments, recordings and video are kept and show as `username (deleted)`. Deleting cannot be undone; if you might want the worker back, deactivate instead.
 
@@ -39,9 +41,9 @@ Share the server address with the worker. For the camera and GPS the address mus
 - To change a published route, press **+ New version**: it copies the latest version into a new draft. Existing assignments keep the version, and the segments, they were given.
 - Publishing a new version archives the previous one. A route needs at least one **required** segment, and every segment must be at least 5 m long.
 
-**Rename** (top right of a route's card) changes the route's name everywhere: all its versions, existing assignments, reviews and downloads. Nothing else changes, and the old and new names are written to the audit log.
+**Rename** (in the **⋯** menu at the top right of a route's card) changes the route's name everywhere: all its versions, existing assignments, reviews and downloads. Nothing else changes, and the old and new names are written to the audit log.
 
-**Delete route** (top right of a route's card) removes the whole route from the list. You can no longer assign it, but its assignments, recordings and video are kept and show `(deleted)`, and workers can finish assignments they already have. A route that was never published is removed completely. Deleting cannot be undone; to only stop new assignments, archive the version instead.
+**Delete route** (same menu) removes the whole route from the list. You can no longer assign it, but its assignments, recordings and video are kept and show `(deleted)`, and workers can finish assignments they already have. A route that was never published is removed completely. Deleting cannot be undone; to only stop new assignments, archive the version instead.
 
 **+ New route** opens the editor.
 

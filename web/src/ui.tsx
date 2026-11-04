@@ -1,6 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { LayersControl, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import type { LngLat } from "@shared/types.ts";
+import { Modal } from "./feedback.tsx";
+import { More } from "./icons.tsx";
 
 export const Badge = ({ s }: { s: string }) => <span className={`badge b-${s}`}>{s.replace(/_/g, " ")}</span>;
 
@@ -105,21 +107,94 @@ export const Card = ({ title, children, right }: { title?: string; children: Rea
   </section>
 );
 
-/** Shows a generated password once. It is stored hashed and cannot be shown again. */
-export function SecretBox({ label, value, onClose }: { label: string; value: string; onClose: () => void }) {
+/** Shows a generated password once. It is stored hashed and cannot be shown again, so only the button closes this. */
+export function SecretModal({ label, value, onClose }: { label: string; value: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard?.writeText(value).then(() => setCopied(true));
+  };
   return (
-    <div className="secret">
-      <div className="small">{label}</div>
-      <code className="big">{value}</code>
-      <div className="row">
-        <button className="ghost" onClick={() => void navigator.clipboard?.writeText(value)}>
-          Copy
+    <Modal title={label} persistent onClose={onClose}>
+      <div className="modal-body">
+        <div className="secret">
+          <code className="big">{value}</code>
+        </div>
+        <p className="small muted row">Shown once. Give it to the worker; they cannot change it. You can set a new one any time.</p>
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="ghost" onClick={copy}>
+          {copied ? "Copied" : "Copy"}
         </button>
-        <button className="ghost" onClick={onClose}>
-          I saved it, hide
+        <button type="button" data-autofocus="" onClick={onClose}>
+          I saved it
         </button>
       </div>
-      <div className="small muted">Shown once. Give it to the worker; they cannot change it. You can set a new one any time.</div>
+    </Modal>
+  );
+}
+
+/** A small dropdown of actions, so a row shows only its main one. */
+export function Menu({ label, items }: { label: string; items: { label: string; onClick: () => void; danger?: boolean }[] }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const entries = () => [...(root.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
+
+  useEffect(() => {
+    if (!open) return;
+    entries()[0]?.focus();
+    const outside = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    addEventListener("pointerdown", outside);
+    return () => removeEventListener("pointerdown", outside);
+  }, [open]);
+
+  const keys = (e: KeyboardEvent) => {
+    const all = entries();
+    const at = all.indexOf(document.activeElement as HTMLElement);
+    if (e.key === "Escape") {
+      setOpen(false);
+      trigger.current?.focus();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      all[(at + (e.key === "ArrowDown" ? 1 : -1) + all.length) % all.length]?.focus();
+    } else if (e.key === "Tab") setOpen(false);
+  };
+
+  return (
+    <div className="menu" ref={root} onKeyDown={open ? keys : undefined}>
+      <button
+        ref={trigger}
+        type="button"
+        className="ghost icon-btn"
+        aria-label={label}
+        title={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <More />
+      </button>
+      {open && (
+        <div className="menu-list" role="menu" aria-label={label}>
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              className={it.danger ? "danger-item" : ""}
+              onClick={() => {
+                setOpen(false);
+                trigger.current?.focus();
+                it.onClick();
+              }}
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

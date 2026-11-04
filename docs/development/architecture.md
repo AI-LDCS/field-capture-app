@@ -69,7 +69,9 @@ The mount table in `server/app.ts` (`MOUNTS`) is the single list of routers and 
 | Path | What it does |
 | --- | --- |
 | `main.tsx` | Router, role-based shell, error boundary. |
-| `api.ts`, `ui.tsx`, `styles.css` | API client, shared components, all styles. |
+| `api.ts`, `ui.tsx`, `icons.tsx` | API client, shared components (cards, the row menu, map layers), inline SVG icons. |
+| `feedback.tsx` | Notifications (`toast.error(...)`) and dialogs (`await confirmDialog(...)`, `promptDialog`, `Modal`), callable from any code and drawn once by `FeedbackHost`. |
+| `theme.tsx`, `styles.css` | Light, Dark and System themes and the switcher; all styles, with every colour a token set per theme. `web/public/theme-init.js` applies the saved theme before the page paints. |
 | `auth.tsx` | Session context, login, admin password change, the "signed out while recording" banner. |
 | `admin/Workers.tsx`, `admin/Routes.tsx`, `admin/Assignments.tsx`, `admin/Downloads.tsx` | One page each. |
 | `admin/Review.tsx` | Admin review of an assignment: map, video, evidence, downloads, approve/send back, audit. |
@@ -87,6 +89,16 @@ The mount table in `server/app.ts` (`MOUNTS`) is the single list of routers and 
 - `services/` never imports `routes/`.
 - `admin/` and `worker/` never import each other. Code both need goes in `web/src/`.
 - `worker/lib/` never imports the worker's pages.
+- The web app uses its own dialogs, never the browser's `alert`, `confirm` or `prompt`.
+- `styles.css` takes every colour from the theme tokens, except its last section (things drawn over the map or video), and uses no gradients.
+
+## Interface rules
+
+- **Colour:** blue is for actions. Red is only for recording and destructive actions.
+- **Notifications** report the result of something the worker or admin just did, and leave by themselves (errors stay longest). They never carry anything that must be kept.
+- **Stays on the page, not in a notification:** form errors next to their field, load errors, and anything that stays true: why a button is locked, recovery, paused uploads, the last recording's stop reason.
+- **Dialogs** use the browser's `<dialog>`, so they sit above the recording view and trap focus. Destructive ones start on Cancel. A generated password only closes with its button, because it cannot be shown again.
+- **Stop while recording** stays a two-tap button, not a dialog, so nothing covers a live recording.
 
 ## Build and run
 

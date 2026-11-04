@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api.ts";
+import { confirmDialog, toast } from "../feedback.tsx";
 import { Badge, Card, useLoad, when } from "../ui.tsx";
 
 export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
@@ -11,7 +12,6 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
 
   const [versionId, setVersionId] = useState(presetVersionId ?? "");
   const [userId, setUserId] = useState("");
-  const [msg, setMsg] = useState("");
 
   const published = (routes.data ?? []).flatMap((r) =>
     r.versions.filter((v) => v.status === "published").map((v) => ({ id: v.id, label: `${r.name} · v${v.version}` })),
@@ -20,12 +20,12 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
-    setMsg("");
     try {
       await api.createAssignment(versionId, userId);
+      toast.success("Route assigned");
       list.reload();
     } catch (x: any) {
-      setMsg(x.message);
+      toast.error(x.message);
     }
   };
 
@@ -60,7 +60,6 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
             <button disabled={!versionId || !userId}>Assign</button>
           </div>
         </form>
-        {msg && <p className="err">{msg}</p>}
         {published.length === 0 && routes.data && <p className="muted small">Nothing to assign yet: publish a route first.</p>}
       </Card>
 
@@ -109,13 +108,22 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
               {a.status === "assigned" && (
                 <button
                   className="ghost danger-text"
-                  onClick={() =>
-                    confirm("Withdraw this assignment?") &&
-                    api
-                      .withdrawAssignment(a.id)
-                      .then(list.reload)
-                      .catch((x) => setMsg(x.message))
-                  }
+                  onClick={async () => {
+                    const ok = await confirmDialog({
+                      title: "Withdraw this assignment?",
+                      body: `${a.route.name} is taken back from ${a.worker.username}.`,
+                      confirmLabel: "Withdraw",
+                      danger: true,
+                    });
+                    if (!ok) return;
+                    try {
+                      await api.withdrawAssignment(a.id);
+                      toast.success("Assignment withdrawn");
+                      list.reload();
+                    } catch (x: any) {
+                      toast.error(x.message);
+                    }
+                  }}
                 >
                   Withdraw
                 </button>

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { User } from "@shared/types.ts";
 import { api, setUnauthenticatedHandler } from "./api.ts";
+import { confirmDialog, toast } from "./feedback.tsx";
 import { scanInterrupted, setLocalUser, unsentSummary } from "./worker/lib/localdb.ts";
 import { isRecording, useSession } from "./worker/lib/session.ts";
 import { setDevTools } from "./worker/lib/settings.ts";
@@ -80,16 +81,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     if (isRecording()) {
-      alert("Stop the recording first.");
+      toast.warning("Stop the recording first.");
       return;
     }
     if (user?.role === "worker") {
       const u = await unsentSummary().catch(() => ({ recordings: 0, chunks: 0 }));
       if (
         u.recordings > 0 &&
-        !confirm(
-          `${u.recordings} recording(s) have not finished uploading. They stay on this phone and upload when you sign in again. Sign out anyway?`,
-        )
+        !(await confirmDialog({
+          title: "Sign out with uploads waiting?",
+          body: `${u.recordings} recording(s) have not finished uploading. They stay on this phone and upload when you sign in again.`,
+          confirmLabel: "Sign out",
+          cancelLabel: "Stay signed in",
+        }))
       )
         return;
     }
@@ -191,16 +195,14 @@ export function ChangePassword() {
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
   const [err, setErr] = useState("");
-  const [done, setDone] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setErr("");
-    setDone(false);
     if (next !== again) return setErr("The new passwords do not match");
     try {
       await api.changePassword(cur, next);
-      setDone(true);
+      toast.success("Password changed. Your other devices were signed out.");
       setCur("");
       setNext("");
       setAgain("");
@@ -224,7 +226,6 @@ export function ChangePassword() {
         <input type="password" value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" />
       </label>
       {err && <p className="err">{err}</p>}
-      {done && <p className="ok">Password changed. Your other devices were signed out.</p>}
       <button disabled={!cur || !next || !again}>Change password</button>
     </form>
   );
