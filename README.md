@@ -10,6 +10,22 @@ It is built to be careful with the data: a recording survives a refresh or crash
 
 > **Status:** working end to end. The server side is covered by automated tests; the phone side was tested by the owner on phones in normal use, but has not been stress-tested (long walks, low storage, poor network) and the results are not recorded here. See [Status and limits](#status-and-limits).
 
+## Why Field Capture?
+
+| Feature | Fulcrum | ArcGIS Survey123 | QField + QFieldCloud | Open Foris Arena Mobile | Field Capture |
+| --- | --- | --- | --- | --- | --- |
+| **Cost** | 💳 From US$43/user/month | 💳 Paid ArcGIS licensing | 🆓 Free core app, optional paid cloud | 🆓 Free and open source | 🙌 No third-party per-user licensing |
+| **GPS** | ✅ | ✅ Tracking | ✅ Continuous tracking | ✅ Coordinates | ✅ |
+| **Synchronized video and GPS** | ✅ | ➖ | ❌ None documented | ❓ Not verified | ✅ |
+| **Video length** | ⚠️ Short clips suggested in practice | ⚠️ 10 MB field-app attachment limit | ➖ | ⚠️ 99 MB limit in our test | 🔍 To be verified |
+| **Offline collection** | ✅ | ✅ | ✅ | ✅ | 🔍 To be verified |
+| **Centralized storage** | ✅ | ✅ | ⚠️ Limited free cloud storage | ✅ | ✅ |
+| **Route-based work** | ➖ | ➖ | ✅ Route navigation | ➖ | ✅ Simple route-based recording |
+| **Standardized data exports** | ➖ | ➖ | ➖ | ➖ | ✅ |
+| **Getting started** | ➖ | ⚠️ Licensing and configuration complexity | ⚠️ Requires GIS setup | 📝 Form-based collection | 🏗️ Requires development and testing |
+
+✅ supported · ⚠️ limited · ❌ not available · ❓ / 🔍 still to verify · ➖ not assessed
+
 ## What it does
 
 **Administrators**
