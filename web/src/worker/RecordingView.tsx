@@ -91,7 +91,7 @@ function MapBehaviour({ fix, follow, setFollow, run }: { fix: Fix | null; follow
   useEffect(() => {
     if (fitted.current) return;
     const pts = run.segments.flatMap((s) => s.coords.map(ll));
-    if (pts.length) { map.fitBounds(pts, { padding: [30, 30] }); fitted.current = true; }
+    if (pts.length) { map.fitBounds(pts, { padding: [30, 30], animate: false }); fitted.current = true; }
   }, [map, run]);
   useEffect(() => {
     if (follow && fix) map.panTo([fix.lat, fix.lng], { animate: true, duration: 0.5 });

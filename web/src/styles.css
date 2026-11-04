@@ -46,6 +46,17 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { text
 .local-rec .row { margin-top: 0; }
 .local-stats { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 4px; }
 .card.ready { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
+.cta { display: block; width: 100%; padding: 14px; margin-top: 8px; font-size: 16px; font-weight: 600; text-align: center; }
+.step-dot { display: inline-block; width: 22px; height: 22px; line-height: 22px; margin-right: 4px; text-align: center; font-size: 13px; color: #fff; background: var(--accent); border-radius: 50%; }
+.step-dot.done { background: var(--ok); } .step-dot.bad { background: var(--danger); }
+.cta:disabled { background: var(--muted); border-color: var(--muted); }
+.center { text-align: center; }
+.back { display: inline-block; margin-top: 8px; color: var(--accent); text-decoration: none; }
+.finish { margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+.card.todo { opacity: .55; }
+.check-head { margin-top: 0; } .check-head h3 { margin: 0; }
+.gps-top { margin-top: 0; } .gps-time { font-variant-numeric: tabular-nums; }
+.gps-big { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .map.sticky { position: sticky; top: 52px; height: 260px; z-index: 5; }
 
 

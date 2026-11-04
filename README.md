@@ -99,7 +99,7 @@ Caddy gets a certificate automatically. Read the [security checklist](docs/secur
 3. **Routes → New route**: draw a route, **Save & publish**.
 4. **Assignments**: assign the published route to the worker.
 5. The worker signs in on a phone, opens the assignment, passes the GPS and camera checks, and records.
-6. After **Finish**, open the assignment as admin to review.
+6. After **Check & finish**, open the assignment as admin to review.
 
 Guides: [Admin guide](docs/admin-guide.md), [Worker guide](docs/worker-guide.md).
 

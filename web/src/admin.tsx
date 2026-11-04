@@ -116,7 +116,7 @@ export function RoutesPage() {
   return (
     <>
       <Card title="Routes" right={<a className="btn" href="#/routes/new">+ New route</a>}>
-        <p className="muted small">A published version never changes. To change a route, make a new version; existing assignments keep the version they were given.</p>
+        <p className="muted small">A published version never changes, except its name. To change a route, make a new version; existing assignments keep the version they were given.</p>
         {err && <p className="err">{err}</p>}
         {msg && <p className="err">{msg}</p>}
         {data?.length === 0 && <p className="muted">No routes yet.</p>}
@@ -127,6 +127,10 @@ export function RoutesPage() {
           <Card key={r.id} title={r.name}
             right={
               <div className="row wrap">
+                <button className="ghost" onClick={() => {
+                  const n = prompt("Route name (changes it everywhere, including existing assignments)", r.name);
+                  if (n !== null && n.trim() !== r.name) void act(() => api.renameRoute(r.id, n));
+                }}>Rename</button>
                 {!hasDraft && <button className="ghost" onClick={() => void act(async () => { const v = await api.newVersion(r.id); location.hash = `#/routes/edit/${v.id}`; })}>+ New version</button>}
                 <button className="ghost danger-text" onClick={() => confirm(deleteRouteText(r)) && void act(() => api.deleteRoute(r.id))}>Delete route</button>
               </div>}>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Badge, fmtBytes } from "../ui.tsx";
+import type { RecordingSummary } from "@shared/types.ts";
+import { Badge, fmtBytes, when } from "../ui.tsx";
 import { type LocalRecording, allRecordings, localSummary, putRecording } from "./localdb.ts";
-import { setSettings, useSettings, getRawSettings } from "./settings.ts";
+import { devToolsOn, setSettings, useSettings, getRawSettings } from "./settings.ts";
 import { onUploaderChange, uploadTick, uploaderLog, uploaderPaused } from "./uploader.ts";
 
 export type LocalRow = LocalRecording & { chunks: number; bytes: number; gps: number; chunksPending: number; gpsPending: number };
@@ -26,36 +27,57 @@ export function useLocalRecordings(assignmentId?: string): LocalRow[] {
   return rows;
 }
 
-export function LocalRecordings({ assignmentId }: { assignmentId?: string }) {
-  // a verified recording has had its chunks and GPS deleted from this phone on purpose; it is listed under "Saved on the server"
-  const rows = useLocalRecordings(assignmentId).filter((r) => r.status !== "server_verified");
+const WAITING = ["pending_upload", "pending_sync", "upload_interrupted"];
+
+/**
+ * One list for all recordings of an assignment, wherever each one is right now. The phone's copy
+ * tells the upload progress until the server has verified it; after that the server's row offers the files.
+ */
+export function RecordingList({ assignmentId, server }: { assignmentId: string; server: RecordingSummary[] }) {
+  const local = useLocalRecordings(assignmentId);
   const [, force] = useState(0);
   useEffect(() => onUploaderChange(() => force((n) => n + 1)), []);
+  const verified = new Set(server.filter((r) => r.status === "server_verified").map((r) => r.id));
+  const localIds = new Set(local.map((r) => r.id));
+  const onPhone = local.filter((r) => r.status !== "server_verified" && r.status !== "interrupted" && !verified.has(r.id)); // Recovery lists the interrupted ones
+  const fromServer = server.filter((r) => verified.has(r.id) || !localIds.has(r.id));
+  const rows = [
+    ...onPhone.map((r) => ({ at: r.startedAt, simulated: r.simulated, key: r.id, phone: r, saved: null })),
+    ...fromServer.map((r) => ({ at: r.startedAtMs, simulated: r.simulated, key: r.id, phone: null, saved: r })),
+  ].sort((a, b) => b.at - a.at);
+
   return (
-    <section className="card">
-      <h3>On this phone</h3>
+    <>
       {uploaderPaused() && <p className="warn-box">Uploads are paused because you were signed out. Sign in again; nothing is lost.</p>}
-      {rows.length === 0 ? <p className="muted">Nothing is waiting on this phone.</p> : rows.map((r) => (
-        <div key={r.id} className="local-rec">
+      {rows.length === 0 && <p className="muted">No recordings yet.</p>}
+      {rows.map(({ key, at, simulated, phone, saved }) => (
+        <div key={key} className="local-rec">
           <div className="row between wrap">
-            <span><code>{r.id.slice(0, 8)}</code>{r.simulated && <> <Badge s="simulated" /></>}</span>
-            <Badge s={r.status} />
+            <span className="small">{when(new Date(at).toISOString())}{simulated && <> <Badge s="simulated" /></>}</span>
+            {saved?.status === "server_verified" ? <span className="ok small">✓ Saved</span>
+              : phone && WAITING.includes(phone.status) ? <span className="small muted">Waiting to upload</span>
+              : phone?.status === "recording" ? <span className="small muted">Recording</span>
+              : <span className="small muted">Uploading{phone && phone.chunks > 0 && ` ${Math.round(((phone.chunks - phone.chunksPending) / phone.chunks) * 100)}%`}</span>}
           </div>
-          <div className="small muted local-stats">
-            <span>{r.chunks} chunks</span>
-            <span>unsent {r.chunksPending}c / {r.gpsPending}g</span>
-            <span>{fmtBytes(r.bytes)}</span>
-            <span>{r.gps} gps</span>
-          </div>
-          {r.lastError && <div className="err small">{r.lastError}</div>}
+          {phone?.lastError && <div className="err small">{phone.lastError}</div>}
+          {saved?.status === "server_verified" && (
+            <div className="row wrap">
+              {saved.assembly === "done"
+                ? <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/download`}>Video{saved.fileBytes !== null && ` (${fmtBytes(saved.fileBytes)})`}</a>
+                : <span className="small muted">{saved.assembly === "failed" ? "Video could not be prepared" : "Preparing video…"}</span>}
+              <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/gps.json`}>GPS (.json)</a>
+            </div>
+          )}
         </div>
       ))}
-      <div className="row">
-        <button className="ghost" disabled={rows.length === 0 || uploaderPaused()} onClick={() => void uploadTick()}
-          title={rows.length === 0 ? "Nothing to upload" : uploaderPaused() ? "Sign in again to upload" : undefined}>Upload now</button>
-      </div>
-      {rows.length > 0 && uploaderLog().length > 0 && <pre className="log">{uploaderLog().slice(0, 6).join("\n")}</pre>}
-    </section>
+      {onPhone.length > 0 && (
+        <div className="row between wrap">
+          <span className="small muted">Keep this browser until uploads finish.</span>
+          <button className="ghost small" disabled={uploaderPaused()} onClick={() => void uploadTick()}>Upload now</button>
+        </div>
+      )}
+      {devToolsOn() && onPhone.length > 0 && uploaderLog().length > 0 && <pre className="log">{uploaderLog().slice(0, 6).join("\n")}</pre>}
+    </>
   );
 }
 
@@ -66,7 +88,7 @@ export function Recovery({ assignmentId }: { assignmentId?: string }) {
   return (
     <section className="card warn">
       <h3>Recovery needed</h3>
-      <p>These recordings were cut off (refresh, crash, closed tab). What was saved is kept. They cannot continue: finalize them so they upload, then start a new recording.</p>
+      <p>A recording was cut off. What was saved is kept. Finalize it to upload, then you can record again.</p>
       {rows.map((r) => (
         <div key={r.id} className="row between">
           <span>{r.id.slice(0, 8)} · {r.chunks} chunks · {fmtBytes(r.bytes)} · {r.gps} gps</span>

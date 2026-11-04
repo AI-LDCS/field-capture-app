@@ -78,7 +78,7 @@ Body `{ password? }` (8 to 128 characters, or empty to generate). `200 { generat
 
 ## Admin: routes and versions
 
-A route is a name plus numbered **versions** (`draft`, `published`, `archived`). Only a draft can be edited. A route has at most one draft and one published version. See [data model](data-model.md#route-versions).
+A route is a name plus numbered **versions** (`draft`, `published`, `archived`). Only a draft can be edited; a rename applies to every version. A route has at most one draft and one published version. See [data model](data-model.md#route-versions).
 
 **Segment input** (used by create and save):
 
@@ -106,7 +106,10 @@ Body `{ name (1 to 120 characters), segments: SegmentInput[] }` (0 to 200 segmen
 
 ### PUT /api/admin/route-versions/:vid
 Body `{ name?, segments }`. Replaces the draft's segments (and renames the draft). `200 RouteVersion`.
-Errors: `409 not_a_draft` (published and archived versions never change).
+Errors: `409 not_a_draft` (published and archived versions cannot be edited; only their name can change, through a route rename).
+
+### PATCH /api/admin/routes/:id
+Body `{ name (1 to 120 characters) }`. Renames the route and all its versions, including published and archived ones, so existing assignments show the new name too. Segments do not change. `200 { id, name }`. `404` for an unknown or deleted route.
 
 ### DELETE /api/admin/routes/:id
 `200 { ok: true }`. Hides the whole route from the list. Its drafts are deleted and its published version is archived (no new assignments); its published and archived versions are kept, so existing assignments and recordings continue to work and their `route` has `deleted: true`. A route that was never published is removed completely. Cannot be undone. `404` for an unknown or already-deleted route.

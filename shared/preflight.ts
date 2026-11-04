@@ -41,3 +41,17 @@ export function evaluatePreflight(
   if (spread > cfg.maxSpreadM) return { ...r, stable: false, reason: `position drifting ${spread.toFixed(1)} m` };
   return { ...r, stable: true, reason: "stable" };
 }
+
+/**
+ * How close the check is to passing, 0 to 1: the unbroken run of accurate fixes ending now,
+ * against the count and span a pass needs. A bad fix sends it back to zero, as it blocks a pass.
+ */
+export function preflightProgress(samples: PreflightSample[], now: number, cfg: PreflightConfig = CONFIG.preflight): number {
+  const recent = samples.filter((s) => now - s.t <= cfg.windowMs);
+  const distinct = [...new Map(recent.map((s) => [s.t, s])).values()].sort((a, b) => a.t - b.t);
+  let start = distinct.length;
+  while (start > 0 && distinct[start - 1].acc <= cfg.targetAccuracyM) start--;
+  const good = distinct.slice(start);
+  if (!good.length) return 0;
+  return Math.min(1, good.length / cfg.minSamples, (good[good.length - 1].t - good[0].t) / (cfg.windowMs * 0.7));
+}

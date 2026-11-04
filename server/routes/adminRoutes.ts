@@ -137,6 +137,20 @@ adminRoutesRouter.delete("/route-versions/:vid", async (req, res) => {
   res.json({ ok: true });
 });
 
+/** The name is a label: renaming reaches every version, so workers, reviews and downloads all show the new name. */
+adminRoutesRouter.patch("/routes/:id", async (req, res) => {
+  const id = uuidParam(req, "id");
+  const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
+  await tx(async (c) => {
+    const r = await q1("SELECT name FROM routes WHERE id = $1 AND deleted_at IS NULL FOR UPDATE", [id], c);
+    if (!r) throw notFound("route not found");
+    await q("UPDATE routes SET name = $1 WHERE id = $2", [name, id], c);
+    await q("UPDATE route_versions SET name = $1 WHERE route_id = $2", [name, id], c);
+    await audit(req.user!.id, "route_renamed", { type: "route", id }, { from: r.name, to: name }, req.ip, c);
+  });
+  res.json({ id, name });
+});
+
 /**
  * Deleting a route hides it; it does not erase work done on it. Drafts are removed and the published version is
  * archived (no new assignments), while published and archived versions stay, so existing assignments, recordings

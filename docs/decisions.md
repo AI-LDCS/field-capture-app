@@ -36,6 +36,7 @@ The choices that shaped the system, with the reason and what was rejected. Each 
 **Decided.** A route is a container with numbered versions. Published and archived versions cannot change. "Edit" copies the latest version into a draft. Assignments point at a version and keep their own segment list. The rules live in database triggers as well as in the API.
 **Why.** "Editing a route must not silently change an existing assignment." A trigger holds even for code that bypasses the API.
 **Found by review.** The route *name* used to live on the route, so renaming a draft changed existing assignments. It now lives on the version.
+**Changed later.** Admins needed to fix a route's name without making a new version, so a route rename now changes the name on every version, on purpose, and is audited. Saving a draft with a new name still leaves earlier versions alone. Segments stay frozen.
 
 ## Smooth curves are drawn on the server
 

@@ -65,7 +65,7 @@ function Shell() {
       : <Assignments />;
   } else {
     body =
-      page === "assignment" && a ? <WorkerRun key={a} id={a} />
+      page === "assignment" && a ? <WorkerRun key={a} id={a} step={b === "onboard" || b === "record" ? b : "home"} />
       : <MyAssignments />;
   }
 

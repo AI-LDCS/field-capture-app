@@ -20,16 +20,19 @@ What happens from the moment a worker opens an assignment to the moment the serv
 
 ## Worker steps
 
-1. **Log in** and open an assignment (a published route version given to this worker).
-2. **GPS check**: wait for stable, accurate GPS (or skip after a timeout; the skip is recorded).
-3. **Camera and storage check**.
-4. **Record**: walk the route; video and GPS are saved on the phone as they arrive and upload in the background.
-5. **Skip** optional segments if needed. Required segments cannot be skipped.
-6. **Finish**: the server checks everything and decides the assignment's status.
+1. **Log in** and open an assignment (a published route version given to this worker). Its home page (`#/assignment/:id`) shows the map, **Start Recording**, segments and recordings with **Check & finish**.
+2. **Start Recording** opens the onboard sub-page (`#/assignment/:id/onboard`), which runs the checks:
+   - **GPS check**: wait for stable, accurate GPS (or skip after a timeout; the skip is recorded).
+   - **Camera and storage check**, once the GPS check is done.
+3. **Record** (`#/assignment/:id/record`): the **Start recording** button on onboard is the only way in. Walk the route; video and GPS are saved on the phone as they arrive and upload in the background. Stopping returns to home.
+4. **Skip** optional segments if needed. Required segments cannot be skipped.
+5. **Check & finish**: unlocked once recordings are uploaded and the required segments look covered. The server checks everything and decides the assignment's status.
+
+**Start recording** stays off until location is allowed, the GPS check is passed or skipped, the camera is open and there is enough storage, and no cut-off recording is waiting. A location permission that is denied (or a browser without geolocation) blocks recording even if the check passed earlier, and cannot be skipped. The sub-pages cannot be opened directly: a reload lands on home.
 
 ## GPS check
 
-Browsers cannot calibrate GPS hardware; the check only tests whether the readings are good enough to start. It runs after a tap (so the permission prompt is allowed on iOS), using `watchPosition` with high accuracy and `maximumAge: 0`.
+Browsers cannot calibrate GPS hardware; the check only tests whether the readings are good enough to start. It starts on the **Start Recording** tap, so that opening an assignment to look at it does not record a pass from somewhere else, using `watchPosition` with high accuracy and `maximumAge: 0`.
 
 Twice a second it looks at the fixes of the last **12 seconds** (`shared/preflight.ts`). It passes only when **all** hold:
 
@@ -42,12 +45,13 @@ Twice a second it looks at the fixes of the last **12 seconds** (`shared/preflig
 
 One good reading is never enough, and a bad fix keeps blocking until it leaves the window. The worker should stand still: walking breaks the "sit together" test.
 
-After **90 seconds** without a pass, a **Skip GPS check** button appears. The outcome (`passed` or `skipped`, duration, samples, best accuracy, last reason) is sent to the server and written to the audit log. A skipped check does not block recording, but the finished assignment goes to **review**.
+After **90 seconds** without a pass, a **Skip GPS check** button appears, as long as location is known to be allowed (a fix or a non-permission error has arrived). The outcome (`passed` or `skipped`, duration, samples, best accuracy, last reason) is sent to the server and written to the audit log. A skipped check does not block recording, but the finished assignment goes to **review**.
 
 ## Camera and storage check
 
+- The same **Start Recording** tap opens the camera (so the browser allows the permission prompt on iOS); its picture and the storage result appear once the GPS check is done. If it is refused, the step shows the error and **Try again**. The camera closes when the worker goes back to home or leaves the assignment, and when a recording ends.
 - `getUserMedia` asks for the rear camera (`facingMode: { ideal: "environment" }`), ideal 1920×1080, no audio. If the browser does not report the rear camera (normal on a laptop) the screen warns but allows it.
-- It reads `navigator.storage.estimate()` and asks for persistent storage (`navigator.storage.persist()`). Neither is a guarantee: a browser can still evict data under pressure. With less than **500 MB** free the step shows a red warning and **Start recording** stays off until there is room (close the camera and check again after freeing space). When both checks pass the step shows **✓ ready**, the Record step gets a green border and the page scrolls to it.
+- It reads `navigator.storage.estimate()` and asks for persistent storage (`navigator.storage.persist()`). Neither is a guarantee: a browser can still evict data under pressure. With less than **500 MB** free the step shows a red warning and **Start recording** stays off until there is room (**Check again** reads it once more after freeing space). When both checks pass, **Start recording** turns on.
 
 ## Recording
 

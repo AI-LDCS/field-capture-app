@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CONFIG } from "../shared/config.ts";
-import { evaluatePreflight, type PreflightSample } from "../shared/preflight.ts";
+import { evaluatePreflight, preflightProgress, type PreflightSample } from "../shared/preflight.ts";
 
 const NOW = 1_800_000_000_000;
 const M_PER_DEG = 111_320;
@@ -72,5 +72,25 @@ describe("GPS check", () => {
     assert.equal(evaluatePreflight(fixes(12, 5), NOW, strict).stable, false);
     const more = { ...CONFIG.preflight, minSamples: 20 };
     assert.equal(evaluatePreflight(fixes(12), NOW, more).stable, false);
+  });
+});
+
+describe("GPS check progress", () => {
+  it("is zero with no fixes or a single fix", () => {
+    assert.equal(preflightProgress([], NOW), 0);
+    assert.equal(preflightProgress(fixes(1), NOW), 0);
+  });
+  it("grows with the span of good fixes and is full whenever the check would pass", () => {
+    const half = preflightProgress(fixes(5), NOW);
+    assert.ok(half > 0 && half < 1);
+    assert.ok(preflightProgress(fixes(9), NOW) > half);
+    assert.equal(evaluatePreflight(fixes(12), NOW).stable, true);
+    assert.equal(preflightProgress(fixes(12), NOW), 1);
+  });
+  it("goes back to zero when the latest fix is inaccurate, and counts only the fixes after a bad one", () => {
+    const bad = CONFIG.preflight.targetAccuracyM + 1;
+    assert.equal(preflightProgress([...fixes(11, 5, 0, NOW - 1000), ...fixes(1, bad)], NOW), 0);
+    const recovering = [...fixes(6, bad, 0, NOW - 3000), ...fixes(3)];
+    assert.ok(preflightProgress(recovering, NOW) < preflightProgress(fixes(9), NOW));
   });
 });

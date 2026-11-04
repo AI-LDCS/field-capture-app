@@ -10,6 +10,7 @@ PostgreSQL 17 with PostGIS. Schema changes are plain SQL files in `db/migrations
 | `004_recordings.sql` | recordings, chunks, GPS points, segment evidence, assignment progress columns, more guard triggers |
 | `005_delete_workers.sql` | `users.deleted_at` (a deleted worker keeps their row) and a username index that ignores deleted users |
 | `006_delete_routes.sql` | `routes.deleted_at` (a deleted route keeps its versions) |
+| `007_rename_routes.sql` | lets a published or archived version's name change, so a route can be renamed everywhere |
 
 ## Entity overview
 
@@ -65,7 +66,7 @@ erDiagram
 
 ### Audit
 
-**`audit_log`**: `at`, `actor_id`, `action`, `target_type`, `target_id`, `details jsonb`, `ip`. Actions written: `admin_bootstrapped`, `login`, `login_failed`, `login_locked`, `logout`, `password_changed`, `password_set`, `user_created`, `user_updated`, `user_activated`, `user_deactivated`, `user_deleted`, `route_created`, `route_draft_saved`, `route_draft_deleted`, `route_deleted`, `route_version_created`, `route_published`, `route_archived`, `assignment_created`, `assignment_withdrawn`, `assignment_evaluated`, `assignment_reviewed`, `assignment_exported`, `preflight`, `segment_skipped`, `segment_unskipped`, `recording_registered`, `recording_verified`, `recording_verify_failed`, `recording_discarded`, `recording_assembled`, `recording_assembly_failed`, `recording_viewed`, `recording_downloaded`, `gps_downloaded`.
+**`audit_log`**: `at`, `actor_id`, `action`, `target_type`, `target_id`, `details jsonb`, `ip`. Actions written: `admin_bootstrapped`, `login`, `login_failed`, `login_locked`, `logout`, `password_changed`, `password_set`, `user_created`, `user_updated`, `user_activated`, `user_deactivated`, `user_deleted`, `route_created`, `route_draft_saved`, `route_draft_deleted`, `route_renamed`, `route_deleted`, `route_version_created`, `route_published`, `route_archived`, `assignment_created`, `assignment_withdrawn`, `assignment_evaluated`, `assignment_reviewed`, `assignment_exported`, `preflight`, `segment_skipped`, `segment_unskipped`, `recording_registered`, `recording_verified`, `recording_verify_failed`, `recording_discarded`, `recording_assembled`, `recording_assembly_failed`, `recording_viewed`, `recording_downloaded`, `gps_downloaded`.
 
 ## Rules the database enforces itself
 
@@ -73,7 +74,7 @@ These hold even for code that bypasses the API (the tests try raw SQL against ea
 
 | Trigger / constraint | Rule |
 | --- | --- |
-| `route_versions_guard` | A published or archived version's identity and name never change; archived never reopens; published never goes back to draft; only drafts can be deleted. |
+| `route_versions_guard` | A published or archived version's identity never changes (its name can); archived never reopens; published never goes back to draft; only drafts can be deleted. |
 | `route_segments_guard` | Segments of a published or archived version cannot be inserted, changed or deleted. |
 | `assignments_guard` | Only a published version can be assigned, only to a worker; an assignment keeps its version and worker. |
 | `skipped_only_if_optional` | A required segment can never be `skipped`. |

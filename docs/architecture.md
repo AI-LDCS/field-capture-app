@@ -73,7 +73,7 @@ The mount table in `server/app.ts` (`MOUNTS`) is the single list of routers and 
 | `admin.tsx` | Workers, routes and versions list, assignments. |
 | `RouteEditor.tsx`, `editor/` | The route editor: map, segment list, points table, edit model (pure functions with undo/redo). |
 | `Review.tsx` | Admin review of an assignment: map, video, evidence, downloads, approve/send back, audit. |
-| `worker.tsx`, `worker/RunPage.tsx` | A worker's list and the assignment page (GPS check, camera check, recording). |
+| `worker.tsx`, `worker/RunPage.tsx`, `worker/Onboard.tsx` | A worker's list, the assignment home page (map, segments, recordings, finish) and its onboard sub-page (GPS, then camera and storage). |
 | `worker/RecordingView.tsx` | The full-screen split view while recording: map on top, live camera below. |
 | `worker/recorder.ts`, `uploader.ts`, `localdb.ts`, `gps.ts`, `camera.ts`, `session.ts`, `settings.ts` | The phone-side machinery; see [field flow](field-flow.md). |
 

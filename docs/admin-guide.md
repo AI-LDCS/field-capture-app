@@ -35,9 +35,11 @@ Share the server address with the worker. For the camera and GPS the address mus
 **Routes** lists each route with its versions. A version is **draft**, **published** or **archived**.
 
 - A **draft** can be edited, published or deleted.
-- A **published** version can never change. You can **assign** it, **view** it, or **archive** it (no new assignments; existing ones carry on).
+- A **published** version's segments can never change. You can **assign** it, **view** it, or **archive** it (no new assignments; existing ones carry on).
 - To change a published route, press **+ New version**: it copies the latest version into a new draft. Existing assignments keep the version, and the segments, they were given.
 - Publishing a new version archives the previous one. A route needs at least one **required** segment, and every segment must be at least 5 m long.
+
+**Rename** (top right of a route's card) changes the route's name everywhere: all its versions, existing assignments, reviews and downloads. Nothing else changes, and the old and new names are written to the audit log.
 
 **Delete route** (top right of a route's card) removes the whole route from the list. You can no longer assign it, but its assignments, recordings and video are kept and show `(deleted)`, and workers can finish assignments they already have. A route that was never published is removed completely. Deleting cannot be undone; to only stop new assignments, archive the version instead.
 
@@ -74,7 +76,7 @@ Status words:
 | --- | --- |
 | assigned | not started |
 | in progress | recordings exist; required segments not all covered yet |
-| pending sync | the worker finished, but a recording has not finished uploading |
+| pending sync | the worker asked for the check, but the server is missing a finished upload |
 | needs review | everything was covered, but something needs your eye (see below) |
 | completed | all required segments covered and nothing flagged, or you approved it |
 

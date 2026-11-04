@@ -4,18 +4,18 @@ import { getSettings } from "./settings.ts";
 
 export type Fix = { t: number; lat: number; lng: number; acc: number };
 export type GpsSource = {
-  subscribe(cb: (f: Fix) => void, onError?: (msg: string) => void): () => void;
+  subscribe(cb: (f: Fix) => void, onError?: (msg: string, denied: boolean) => void): () => void;
 };
 
 export const realGps: GpsSource = {
   subscribe(cb, onError) {
     if (!navigator.geolocation) {
-      onError?.("Geolocation not supported");
+      onError?.("Geolocation not supported", true);
       return () => {};
     }
     const id = navigator.geolocation.watchPosition(
       (p) => cb({ t: p.timestamp, lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
-      (e) => onError?.(e.message || `error ${e.code}`),
+      (e) => onError?.(e.message || `error ${e.code}`, e.code === e.PERMISSION_DENIED),
       { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 },
     );
     return () => navigator.geolocation.clearWatch(id);

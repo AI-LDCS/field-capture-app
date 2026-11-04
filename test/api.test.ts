@@ -242,6 +242,7 @@ describe("authorization", () => {
     ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/password"],
     ["GET", "/api/admin/routes"], ["POST", "/api/admin/routes"],
     ["DELETE", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
+    ["PATCH", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
     ["GET", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
     ["PUT", "/api/admin/route-versions/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/route-versions/00000000-0000-4000-8000-000000000000/publish"],
@@ -352,6 +353,38 @@ describe("routes and versions", () => {
     assert.deepEqual(states, { 1: "archived", 2: "published" });
   });
 
+  it("renaming a route reaches every version and its assignments, and nothing else changes", async () => {
+    const admin = await adminClient();
+    const w = await makeWorker(admin, "renamer");
+    const v1 = await publishedRoute(admin, "Old name");
+    const a = await admin.post("/api/admin/assignments", { routeVersionId: v1.id, userId: w.id });
+    const nv = await admin.post(`/api/admin/routes/${v1.routeId}/new-version`);
+    assert.equal((await admin.post(`/api/admin/route-versions/${nv.body.id}/publish`)).status, 200); // v1 is now archived
+    const v3 = await admin.post(`/api/admin/routes/${v1.routeId}/new-version`); // an open draft
+    const before = await admin.get(`/api/admin/route-versions/${v1.id}`);
+
+    const r = await admin.patch(`/api/admin/routes/${v1.routeId}`, { name: "  New name " });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.name, "New name");
+
+    assert.equal((await w.client.get(`/api/me/assignments/${a.body.id}`)).body.route.name, "New name");
+    assert.equal((await admin.get("/api/admin/routes")).body.find((x: any) => x.id === v1.routeId).name, "New name");
+    for (const vid of [v1.id, nv.body.id, v3.body.id]) assert.equal((await admin.get(`/api/admin/route-versions/${vid}`)).body.routeName, "New name");
+    const after = await admin.get(`/api/admin/route-versions/${v1.id}`);
+    assert.equal(after.body.status, "archived");
+    assert.deepEqual(after.body.segments, before.body.segments);
+    const log = await t.pool.query("SELECT details FROM audit_log WHERE action = 'route_renamed' AND target_id = $1", [v1.routeId]);
+    assert.deepEqual(log.rows.map((x: any) => x.details), [{ from: "Old name", to: "New name" }]);
+
+    assert.equal((await admin.patch(`/api/admin/routes/${v1.routeId}`, { name: "   " })).status, 400);
+    assert.equal((await admin.patch("/api/admin/routes/00000000-0000-4000-8000-000000000000", { name: "x" })).status, 404);
+    // the name is the only thing freed: a published version's number and segments stay locked
+    await assert.rejects(t.pool.query("UPDATE route_versions SET version = 99 WHERE id = $1", [v1.id]), /immutable/);
+    await assert.rejects(t.pool.query("DELETE FROM route_segments WHERE route_version_id = $1", [v1.id]), /immutable/);
+    assert.equal((await admin.del(`/api/admin/routes/${v1.routeId}`)).status, 200);
+    assert.equal((await admin.patch(`/api/admin/routes/${v1.routeId}`, { name: "Too late" })).status, 404);
+  });
+
   it("editing a route after assignment leaves the assignment's segments unchanged", async () => {
     const admin = await adminClient();
     const w = await makeWorker(admin, "snapshot");
@@ -377,7 +410,6 @@ describe("routes and versions", () => {
     const list = await admin.get("/api/admin/routes");
     assert.equal(list.body.find((r: any) => r.id === v1.routeId).name, "Snap renamed");
     assert.equal((await admin.get(`/api/admin/route-versions/${v1.id}`)).body.routeName, "Snap");
-    await assert.rejects(t.pool.query("UPDATE route_versions SET name = 'sneaky' WHERE id = $1", [v1.id]), /name is immutable/);
     assert.equal(after.body.segments.length, 3);
     assert.deepEqual(after.body.segments.map((s: any) => s.coords), before.body.segments.map((s: any) => s.coords));
     assert.deepEqual(after.body.segments.map((s: any) => s.required), [true, false, true]);

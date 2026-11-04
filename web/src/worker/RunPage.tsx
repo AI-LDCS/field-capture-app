@@ -2,20 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { Circle, CircleMarker, MapContainer, Polyline, useMap } from "react-leaflet";
 import { CONFIG } from "@shared/config.ts";
 import { coverageMask, distToLineM } from "@shared/geo.ts";
-import { type PreflightEval, type PreflightSample, evaluatePreflight } from "@shared/preflight.ts";
 import type { AssignmentDetail, LngLat, PreflightOutcome } from "@shared/types.ts";
 import { api } from "../api.ts";
-import { Badge, Tiles, fmtBytes, ll, when } from "../ui.tsx";
-import { openCamera, storageCheck } from "./camera.ts";
+import { Badge, Tiles, fmtBytes, ll } from "../ui.tsx";
+import { Onboard, useCameraOpener, useStorage } from "./Onboard.tsx";
 import { type Fix, fakeGps, gpsSource } from "./gps.ts";
 import { getAssignment, gpsOf, putAssignment } from "./localdb.ts";
-import { DevPanel, LocalRecordings, Recovery, useLocalRecordings } from "./localui.tsx";
+import { DevPanel, RecordingList, Recovery, useLocalRecordings } from "./localui.tsx";
 import RecordingView, { type Mask } from "./RecordingView.tsx";
 import { startRecording } from "./recorder.ts";
-import { closeCamera, setSession, useSession } from "./session.ts";
+import { closeCamera, getSession, setSession, useSession } from "./session.ts";
 import { devToolsOn, getSettings, useSettings } from "./settings.ts";
-
-const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 
 function FitOnce({ run }: { run: AssignmentDetail }) {
   const map = useMap();
@@ -23,200 +20,16 @@ function FitOnce({ run }: { run: AssignmentDetail }) {
   useEffect(() => {
     if (done.current) return;
     const pts = run.segments.flatMap((s) => s.coords.map(ll));
-    if (pts.length) { map.fitBounds(pts, { padding: [30, 30] }); done.current = true; }
+    if (pts.length) { map.fitBounds(pts, { padding: [30, 30], animate: false }); done.current = true; }
   }, [map, run]);
   return null;
 }
 
-// ---------- step 1: GPS readiness ----------
-function Preflight({ assignmentId, onDone }: { assignmentId: string; onDone: (o: PreflightOutcome) => void }) {
-  const s = useSettings();
-  const [started, setStarted] = useState(false);
-  const [ev, setEv] = useState<PreflightEval | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [err, setErr] = useState("");
-  const samples = useRef<PreflightSample[]>([]);
-  const startAt = useRef(0);
-  const finished = useRef(false);
-
-  const finish = async (result: "passed" | "skipped", note?: string) => {
-    if (finished.current) return;
-    finished.current = true;
-    const accs = samples.current.map((x) => x.acc);
-    const outcome: PreflightOutcome = {
-      result, durationMs: Date.now() - startAt.current, samples: samples.current.length,
-      bestAccuracyM: accs.length ? Math.min(...accs) : null, note,
-    };
-    await api.myPreflight(assignmentId, outcome).catch(() => {});
-    onDone(outcome);
-  };
-  const finishRef = useRef(finish);
-  finishRef.current = finish;
-
-  useEffect(() => {
-    if (!started) return;
-    samples.current = [];
-    finished.current = false;
-    startAt.current = Date.now();
-    if (s.fake) fakeGps.coldStart();
-    const off = gpsSource().subscribe((f) => { samples.current = [...samples.current.slice(-59), f]; setErr(""); }, setErr);
-    const timer = setInterval(() => {
-      const now = Date.now();
-      const e = evaluatePreflight(samples.current, now);
-      setEv(e);
-      setElapsed(now - startAt.current);
-      if (e.stable) void finishRef.current("passed");
-    }, 500);
-    return () => { off(); clearInterval(timer); };
-  }, [started]);
-
-  const timeoutMs = s.preflightTimeoutS * 1000;
-  const latest = samples.current.at(-1);
-  if (!started) {
-    return (
-      <>
-        <p>Checks that GPS is accurate and steady before you start. Stand still outside with a clear view of the sky.</p>
-        <button onClick={() => setStarted(true)}>Start GPS check</button>
-      </>
-    );
-  }
-  return (
-    <>
-      <div className="meter"><div style={{ width: `${Math.min(100, (elapsed / timeoutMs) * 100)}%` }} /></div>
-      <p className="small muted">
-        {mmss(elapsed)} / {mmss(timeoutMs)} · latest accuracy: {latest ? `${latest.acc.toFixed(0)} m` : "waiting for a fix…"} · target ≤ {CONFIG.preflight.targetAccuracyM} m
-      </p>
-      <p>{ev?.reason ?? "collecting samples…"} {ev && <span className="muted small">({ev.samplesInWindow} samples in window)</span>}</p>
-      {err && <p className="err">{err}</p>}
-      {elapsed >= timeoutMs && (
-        <div className="warn-box">
-          <p>GPS has not settled after {s.preflightTimeoutS} s. You can skip the check. This is recorded and the assignment will be reviewed.</p>
-          <button className="danger" onClick={() => void finish("skipped", ev?.reason)}>Skip GPS check</button>
-        </div>
-      )}
-    </>
-  );
-}
-
-// ---------- step 2: camera + storage ----------
-type StorageInfo = Awaited<ReturnType<typeof storageCheck>>;
-
-/** Free space, read once the camera is open (that is the moment the worker asked for the check). */
-function useStorage(cameraOpen: boolean): StorageInfo | null {
-  const [st, setSt] = useState<StorageInfo | null>(null);
-  useEffect(() => {
-    if (!cameraOpen) { setSt(null); return; }
-    let dead = false;
-    void storageCheck().then((s) => { if (!dead) setSt(s); });
-    return () => { dead = true; };
-  }, [cameraOpen]);
-  return st;
-}
-
-function CameraCheck({ st, nextStep }: { st: StorageInfo | null; nextStep: string }) {
-  const { camera } = useSession();
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  const vid = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => { if (vid.current) vid.current.srcObject = camera?.stream ?? null; }, [camera]);
-
-  const open = async () => {
-    setBusy(true);
-    setErr("");
-    try { setSession({ camera: await openCamera() }); }
-    catch (e: any) { setErr(`${e.name ?? "Error"}: ${e.message}`); }
-    finally { setBusy(false); }
-  };
-
-  if (!camera) {
-    return (
-      <>
-        <p>Opens the camera (rear if available) and checks free storage.</p>
-        <button onClick={() => void open()} disabled={busy}>Check camera &amp; storage</button>
-        {err && <p className="err">{err}</p>}
-      </>
-    );
-  }
-  return (
-    <>
-      <video ref={vid} className="preview" autoPlay muted playsInline />
-      <p className="small">
-        {camera.label || "camera"} · {camera.width}×{camera.height} · facing: {camera.facing ?? "unknown"}
-        {!camera.fake && camera.facing !== "environment" && <span className="err"> — rear camera not confirmed (normal on a laptop)</span>}
-      </p>
-      {!st && <p className="small muted">Checking storage…</p>}
-      {st && (
-        <p className={`small ${st.ok ? "" : "err"}`}>
-          Storage: {fmtBytes(st.free)} free of {fmtBytes(st.quota)} · persistent: {st.persisted ? "yes" : "no (the browser may delete it)"}
-          {!st.ok && ` — need at least ${fmtBytes(CONFIG.recording.minFreeBytes)}. Free up space on the phone, then close the camera and check again.`}
-        </p>
-      )}
-      {st?.ok && <p className="ok">✓ Camera and storage are fine. {nextStep}</p>}
-      <button className="ghost" onClick={closeCamera}>Close camera</button>
-    </>
-  );
-}
-
-// ---------- step 3: record ----------
-function RecordPanel({ run, preflightDone, storage }: { run: AssignmentDetail; preflightDone: boolean; storage: StorageInfo | null }) {
-  const { camera, active, activeAssignmentId, lastStop } = useSession();
-  const s = useSettings();
-  const local = useLocalRecordings(run.id);
-  const [err, setErr] = useState("");
-  const interrupted = local.some((r) => r.status === "interrupted");
-  const mine = active && activeAssignmentId === run.id;
-
-  const start = async () => {
-    setErr("");
-    try {
-      setSession({ lastStop: null });
-      const ar = await startRecording({
-        assignmentId: run.id, simulated: getSettings().fake || !!camera?.fake, stream: camera!.stream, gps: gpsSource(),
-        onChange: () => {},
-        onStopped: (reason) => { setSession({ active: null, activeAssignmentId: null, lastStop: reason }); fakeGps.stopWalking(); },
-      });
-      setSession({ active: ar, activeAssignmentId: run.id });
-    } catch (e: any) { setErr(e.message); }
-  };
-
-  const why = !preflightDone ? "Finish the GPS check first"
-    : !camera ? "Check the camera first (step 2)"
-    : !storage ? "Checking storage…"
-    : !storage.ok ? `Not enough free storage (${fmtBytes(storage.free)} free, need ${fmtBytes(CONFIG.recording.minFreeBytes)})`
-    : interrupted ? "Finalize the cut-off recording first"
-    : run.status === "completed" ? "This assignment is completed" : "";
-  const walkable = run.segments.filter((x) => x.status !== "skipped");
-
-  // The last check just passed (not: the page was opened already ready): bring this step into view, so the worker does not have to find it.
-  const top = useRef<HTMLDivElement>(null);
-  const wasReady = useRef(!why);
-  useEffect(() => {
-    if (!why && !wasReady.current) top.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    wasReady.current = !why;
-  }, [why]);
-
-  return (
-    <div ref={top}>
-      {lastStop && <p className="warn-box">Last recording stopped: {lastStop}. Start a new recording to continue.</p>}
-      {!why && !mine && <p className="ok">✓ Ready. Tap Start recording when you are at the start of the route.</p>}
-      <button onClick={() => void start()} disabled={!!why || !!mine}>Start recording</button>
-      {why && <p className="muted small">{why}</p>}
-      {err && <p className="err">{err}</p>}
-      <p className="muted small">Keep the screen on and this page open. Recording stops if the page is hidden. Uploads happen in the background.</p>
-      {s.fake && (
-        <div className="row wrap">
-          <button className="ghost" onClick={() => fakeGps.walk(walkable.map((x) => x.coords))}>Fake: walk all segments</button>
-          <button className="ghost" onClick={() => fakeGps.walk(walkable.filter((x) => x.required).map((x) => x.coords))}>Fake: walk required only</button>
-          <button className="ghost" onClick={() => fakeGps.stopWalking()}>Fake: stop</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------- page ----------
-export default function WorkerRun({ id }: { id: string }) {
+/**
+ * An assignment has a home page, and behind its Start Recording button two sub-pages: onboard
+ * (the checks) and record. A recording can only begin from onboard, once the checks have passed.
+ */
+export default function WorkerRun({ id, step }: { id: string; step: "home" | "onboard" | "record" }) {
   const [run, setRun] = useState<AssignmentDetail | null>(null);
   const [offline, setOffline] = useState(false);
   const [fix, setFix] = useState<Fix | null>(null);
@@ -230,8 +43,15 @@ export default function WorkerRun({ id }: { id: string }) {
   const s = useSettings();
   const session = useSession();
   const local = useLocalRecordings(id);
-  const storage = useStorage(!!session.camera);
-  const readyToRecord = !!session.camera && !!storage?.ok;
+  const { storage, recheck } = useStorage(!!session.camera);
+  const [gpsDenied, setGpsDenied] = useState(false);
+  const [gpsNonce, setGpsNonce] = useState(0);
+  const [recErr, setRecErr] = useState("");
+  // Onboard opens only from the Start Recording tap: that is the moment the worker says they are on site, and
+  // the tap is what lets the browser show the camera prompt. A reload or the forward button lands on home instead.
+  const [onboarding, setOnboarding] = useState(false);
+  const wantCamera = useRef(false);
+  const cameraOpener = useCameraOpener(wantCamera);
 
   const load = async () => {
     try {
@@ -256,9 +76,20 @@ export default function WorkerRun({ id }: { id: string }) {
   }, [s.fake, run?.id]);
 
   useEffect(() => gpsSource().subscribe((f) => {
+    setGpsDenied(false);
     setFix(f);
     setTrail((t) => [...t.slice(-400), [f.lng, f.lat]]);
-  }), [s.fake]);
+  }, (_msg, denied) => { if (denied) setGpsDenied(true); }), [s.fake, gpsNonce]);
+
+  // Location switched off or on in the browser while the page is open: ask again, the answer tells which.
+  useEffect(() => {
+    let perm: PermissionStatus | null = null;
+    navigator.permissions?.query({ name: "geolocation" }).then((p) => {
+      perm = p;
+      p.onchange = () => setGpsNonce((n) => n + 1);
+    }).catch(() => {});
+    return () => { if (perm) perm.onchange = null; };
+  }, []);
 
   // coverage shown on the phone = what the server verified (its GPS, since the local copy is deleted) + what is still here
   const runRef = useRef<AssignmentDetail | null>(null);
@@ -289,17 +120,82 @@ export default function WorkerRun({ id }: { id: string }) {
     return () => { dead = true; clearInterval(t); };
   }, [run?.id, local.length]);
 
+  // Home needs no camera. It closes on the way back, and when a recording has ended.
+  useEffect(() => {
+    if (step !== "home" || session.active) return;
+    wantCamera.current = false;
+    setOnboarding(false);
+    closeCamera();
+  }, [step, !!session.active]);
+  useEffect(() => () => {
+    wantCamera.current = false;
+    if (!getSession().active) closeCamera();
+  }, []);
+
+  // The sub-pages cannot be opened directly.
+  const home = `#/assignment/${id}`;
+  useEffect(() => {
+    if (session.active) return;
+    if (step === "record" || (step === "onboard" && !onboarding)) location.replace(home);
+  }, [step, onboarding, !!session.active, home]);
+
   if (!run) return <p>Loading…</p>;
 
   const pre = run.preflight ?? preflightLocal;
   const preflightDone = !!pre && !redo;
   const cov = (i: number) => Math.max(run.segments[i].coverage, localCov[i] ?? 0);
+  const completed = run.status === "completed";
+  const interrupted = local.some((r) => r.status === "interrupted");
 
   if (session.active && session.activeAssignmentId === id) {
     return (
       <RecordingView run={run} cov={run.segments.map((_, i) => cov(i))} masks={masks} fix={fix} trail={trail}
         camera={session.camera} active={session.active}
         onSkip={async (segId) => { try { setRun(await api.mySkip(id, segId, "skipped while recording")); } catch { /* shown on the next refresh */ } }} />
+    );
+  }
+
+  // What stops a recording from starting. Empty means it may start; nothing else starts one.
+  const blockedAtHome = completed ? "This assignment is completed"
+    : interrupted ? "Finalize the cut-off recording first"
+    : session.active ? "Another recording is running"
+    : "";
+  const whyNot = gpsDenied ? "Location is blocked"
+    : !preflightDone ? "Waiting for the GPS check"
+    : !session.camera ? "Waiting for the camera"
+    : !storage ? "Checking storage…"
+    : !storage.ok ? "Not enough free storage"
+    : blockedAtHome;
+
+  const beginOnboarding = () => {
+    wantCamera.current = true;
+    setOnboarding(true);
+    if (!gpsDenied) void cameraOpener.open(); // inside the tap, so the permission prompt is allowed
+    location.hash = `${home}/onboard`;
+  };
+  const startNow = async () => {
+    if (whyNot) return;
+    setRecErr("");
+    try {
+      setSession({ lastStop: null });
+      const ar = await startRecording({
+        assignmentId: id, simulated: getSettings().fake || !!session.camera!.fake, stream: session.camera!.stream, gps: gpsSource(),
+        onChange: () => {},
+        onStopped: (reason) => { setSession({ active: null, activeAssignmentId: null, lastStop: reason }); fakeGps.stopWalking(); },
+      });
+      setSession({ active: ar, activeAssignmentId: id });
+      location.hash = `${home}/record`;
+    } catch (e: any) { setRecErr(e.message); }
+  };
+
+  if (step === "onboard" && onboarding) {
+    return (
+      <>
+        <Onboard run={run} pre={pre} preflightDone={preflightDone} gpsDenied={gpsDenied} storage={storage} recheck={recheck} camera={cameraOpener}
+          why={whyNot} onPreflight={(o) => { setPreflightLocal(o); setRedo(false); void load(); }} onRedo={() => setRedo(true)} onStart={() => void startNow()} />
+        {recErr && <p className="err">{recErr}</p>}
+        {devToolsOn() && <DevPanel />}
+      </>
     );
   }
 
@@ -315,6 +211,16 @@ export default function WorkerRun({ id }: { id: string }) {
   const requiredDone = run.segments.filter((x, i) => x.required && (x.status === "completed" || cov(i) >= x.minCoverageRatio)).length;
 
   const nothingRecorded = run.recordings.length === 0 && local.length === 0;
+  const notUploaded = local.filter((r) => r.status !== "server_verified" && !run.recordings.some((x) => x.id === r.id && x.status === "server_verified"));
+
+  // What stops the worker from asking for the check. The server still decides the result.
+  const whyNotFinish = nothingRecorded ? "Record at least once first"
+    : interrupted ? "Finalize the cut-off recording first"
+    : notUploaded.length ? "Waiting for your recordings to upload"
+    : requiredDone < requiredTotal ? "Cover all required segments first"
+    : offline ? "Needs a connection"
+    : run.status === "needs_review" ? "An administrator will review this"
+    : "";
 
   const act = async (fn: () => Promise<AssignmentDetail>) => {
     setMsg("");
@@ -329,9 +235,8 @@ export default function WorkerRun({ id }: { id: string }) {
           <Badge s={run.status} />
         </div>
         <p className="small muted">
-          {requiredDone}/{requiredTotal} required segments covered · {offline ? <span className="err">server unreachable, showing the saved copy</span> : "online"}
+          {requiredDone}/{requiredTotal} required segments covered{offline && <span className="err"> · server unreachable, showing the saved copy</span>}
         </p>
-        {run.reasons.length > 0 && <ul className="small">{run.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
       </section>
 
       <Recovery assignmentId={id} />
@@ -353,31 +258,13 @@ export default function WorkerRun({ id }: { id: string }) {
         </MapContainer>
       </div>
       <p className="small muted">
-        {fix ? `GPS ±${fix.acc.toFixed(0)} m` : "No GPS fix yet"}
+        {gpsDenied ? <span className="err">Location is blocked</span> : fix ? `GPS ±${fix.acc.toFixed(0)} m` : "No GPS fix yet"}
         {fix && nearestIdx >= 0 && ` · ${nearest.toFixed(0)} m from segment #${nearestIdx + 1}`}
       </p>
 
-      <section className="card">
-        <h3>1 · GPS check {preflightDone && <span className="ok">✓ {pre!.result}</span>}</h3>
-        {preflightDone ? (
-          <div className="row between">
-            <span className="small muted">{pre!.samples} samples · best ±{pre!.bestAccuracyM?.toFixed(0) ?? "?"} m · {mmss(pre!.durationMs)}</span>
-            {run.status !== "completed" && <button className="ghost" onClick={() => setRedo(true)}>Redo</button>}
-          </div>
-        ) : (
-          <Preflight assignmentId={id} onDone={(o) => { setPreflightLocal(o); setRedo(false); void load(); }} />
-        )}
-      </section>
-
-      <section className="card">
-        <h3>2 · Camera &amp; storage {readyToRecord && <span className="ok">✓ ready</span>}{session.camera && storage && !storage.ok && <span className="err">✗ not enough space</span>}</h3>
-        <CameraCheck st={storage} nextStep={preflightDone ? "Next: start recording below." : "Next: finish the GPS check (step 1)."} />
-      </section>
-
-      <section className={`card${readyToRecord && preflightDone ? " ready" : ""}`}>
-        <h3>3 · Record</h3>
-        <RecordPanel run={run} preflightDone={preflightDone} storage={storage} />
-      </section>
+      {session.lastStop && session.lastStop !== "stopped by worker" && <p className="warn-box">Last recording stopped: {session.lastStop}. Start a new one to continue.</p>}
+      {!completed && <button className="cta" disabled={!!blockedAtHome} onClick={beginOnboarding}>Start Recording</button>}
+      {!completed && blockedAtHome && <p className="muted small center">{blockedAtHome}</p>}
 
       <section className="card">
         <h3>Segments</h3>
@@ -388,7 +275,7 @@ export default function WorkerRun({ id }: { id: string }) {
             <div key={sg.id} className="seg">
               <div className="row between">
                 <span>#{i + 1} <Badge s={sg.required ? "required" : "optional"} /> <Badge s={done ? "completed" : sg.status} /></span>
-                {!sg.required && run.status !== "completed" && !done && (sg.status === "skipped"
+                {!sg.required && !completed && !done && (sg.status === "skipped"
                   ? <button className="ghost" onClick={() => void act(() => api.myUnskip(id, sg.id))}>Undo skip</button>
                   : <button className="ghost" onClick={() => void act(() => api.mySkip(id, sg.id, skipReason))}>Skip</button>)}
               </div>
@@ -398,37 +285,21 @@ export default function WorkerRun({ id }: { id: string }) {
           );
         })}
         {run.segments.some((x) => !x.required) && <input placeholder="Reason for skipping (optional)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} />}
-        {msg && <p className="err">{msg}</p>}
-      </section>
-
-      <LocalRecordings assignmentId={id} />
-
-      <section className="card">
-        <h3>Finish</h3>
-        <p className="small muted">The server checks the uploads, the GPS and the coverage, then decides. It is not marked done on this phone.</p>
-        <button onClick={() => void act(() => api.myFinish(id))} disabled={run.status === "completed" || nothingRecorded}>Finish &amp; check with the server</button>
-        {nothingRecorded && run.status !== "completed" && <p className="small muted">Record at least once before you finish.</p>}
       </section>
 
       <section className="card">
-        <h3>Saved on the server</h3>
-        {run.recordings.length === 0 && <p className="muted">Nothing has reached the server yet.</p>}
-        {run.recordings.map((r) => (
-          <div key={r.id} className="local-rec">
-            <div className="row between wrap">
-              <span><code>{r.id.slice(0, 8)}</code> <span className="small muted">{when(new Date(r.startedAtMs).toISOString())}</span></span>
-              <Badge s={r.status} />
-            </div>
-            {r.status === "server_verified" ? (
-              <div className="row wrap">
-                {r.assembly === "done"
-                  ? <a className="btn ghost small" href={`/api/me/recordings/${r.id}/download`}>Video{r.fileBytes !== null && ` (${fmtBytes(r.fileBytes)})`}</a>
-                  : <span className="small muted">{r.assembly === "failed" ? "video could not be prepared" : "preparing video…"}</span>}
-                <a className="btn ghost small" href={`/api/me/recordings/${r.id}/gps.json`}>GPS (.json)</a>
-              </div>
-            ) : <p className="small muted">Still uploading. Files can be downloaded once the server has verified them.</p>}
-          </div>
-        ))}
+        <h3>Recordings</h3>
+        <RecordingList assignmentId={id} server={run.recordings} />
+        <div className="finish">
+          {run.reasons.length > 0 && <ul className="small">{run.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+          {!completed && (
+            <>
+              <button className="cta" onClick={() => void act(() => api.myFinish(id))} disabled={!!whyNotFinish}>Check &amp; finish</button>
+              {whyNotFinish && <p className="small muted center">{whyNotFinish}</p>}
+            </>
+          )}
+          {msg && <p className="err">{msg}</p>}
+        </div>
       </section>
 
       {devToolsOn() && <DevPanel />}

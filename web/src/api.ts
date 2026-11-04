@@ -52,6 +52,7 @@ export const api = {
   createRoute: (name: string, segments: SegmentInput[]) => post<RouteVersion>("/api/admin/routes", { name, segments }),
   saveDraft: (vid: string, name: string, segments: SegmentInput[]) => put<RouteVersion>(`/api/admin/route-versions/${vid}`, { name, segments }),
   deleteDraft: (vid: string) => del(`/api/admin/route-versions/${vid}`),
+  renameRoute: (routeId: string, name: string) => patch<{ id: string; name: string }>(`/api/admin/routes/${routeId}`, { name }),
   deleteRoute: (routeId: string) => del<{ ok: true }>(`/api/admin/routes/${routeId}`),
   newVersion: (routeId: string) => post<RouteVersion>(`/api/admin/routes/${routeId}/new-version`),
   publish: (vid: string) => post<RouteVersion>(`/api/admin/route-versions/${vid}/publish`),
