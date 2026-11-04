@@ -45,7 +45,12 @@ export async function startTestServer() {
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   return {
-    base, pool, config, bootstrapAdmin, storage, kickAssembler,
+    base,
+    pool,
+    config,
+    bootstrapAdmin,
+    storage,
+    kickAssembler,
     async stop() {
       server.close();
       await storage.dropBucket().catch(() => {});
@@ -61,7 +66,10 @@ export type Res = { status: number; body: any; headers: Headers; bytes: Buffer }
 /** A tiny browser: keeps cookies, sends a trusted Origin and JSON. */
 export class Client {
   cookie = "";
-  constructor(private base: string, private origin = "http://localhost:3100") {}
+  constructor(
+    private base: string,
+    private origin = "http://localhost:3100",
+  ) {}
 
   async req(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<Res> {
     const h: Record<string, string> = { origin: this.origin, ...headers };
@@ -69,7 +77,9 @@ export class Client {
     const raw = Buffer.isBuffer(body);
     if (this.cookie) h.cookie = this.cookie;
     const r = await fetch(this.base + path, {
-      method, headers: h, redirect: "manual",
+      method,
+      headers: h,
+      redirect: "manual",
       body: body === undefined ? undefined : raw ? new Uint8Array(body as Buffer) : typeof body === "string" ? body : JSON.stringify(body),
     });
     const set = r.headers.getSetCookie?.() ?? [];
@@ -81,12 +91,17 @@ export class Client {
     }
     const buf = Buffer.from(await r.arrayBuffer());
     const text = buf.toString("utf8");
-    let json: any ;
-    try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
+    let json: any;
+    try {
+      json = text ? JSON.parse(text) : undefined;
+    } catch {
+      json = text;
+    }
     return { status: r.status, body: json, headers: r.headers, bytes: buf };
   }
   get = (p: string, headers?: Record<string, string>) => this.req("GET", p, undefined, headers);
-  putRaw = (p: string, data: Buffer, headers: Record<string, string>) => this.req("PUT", p, data, { "content-type": "application/octet-stream", ...headers });
+  putRaw = (p: string, data: Buffer, headers: Record<string, string>) =>
+    this.req("PUT", p, data, { "content-type": "application/octet-stream", ...headers });
   post = (p: string, b?: unknown) => this.req("POST", p, b ?? {});
   put = (p: string, b?: unknown) => this.req("PUT", p, b ?? {});
   patch = (p: string, b?: unknown) => this.req("PATCH", p, b ?? {});
@@ -95,7 +110,11 @@ export class Client {
 
 export const line = (lng0: number, lat: number, meters = 300): [number, number][] => {
   const d = meters / (111_320 * Math.cos((lat * Math.PI) / 180));
-  return [[lng0, lat], [lng0 + d / 2, lat + 0.0004], [lng0 + d, lat]];
+  return [
+    [lng0, lat],
+    [lng0 + d / 2, lat + 0.0004],
+    [lng0 + d, lat],
+  ];
 };
 
 export const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
@@ -118,10 +137,27 @@ export async function createWorker(base: string, admin: Client, username: string
   return { client, id: r.body.user.id as string };
 }
 export async function publishRoute(admin: Client, name: string) {
-  const r = await admin.post("/api/admin/routes", { name, segments: [
-    { required: true, smooth: true, coords: [[100.5, 13.75], [100.5012, 13.7515], [100.5024, 13.75]] },
-    { required: false, coords: [[100.503, 13.75], [100.5045, 13.75]] },
-  ] });
+  const r = await admin.post("/api/admin/routes", {
+    name,
+    segments: [
+      {
+        required: true,
+        smooth: true,
+        coords: [
+          [100.5, 13.75],
+          [100.5012, 13.7515],
+          [100.5024, 13.75],
+        ],
+      },
+      {
+        required: false,
+        coords: [
+          [100.503, 13.75],
+          [100.5045, 13.75],
+        ],
+      },
+    ],
+  });
   const p = await admin.post(`/api/admin/route-versions/${r.body.id}/publish`);
   if (p.status !== 200) throw new Error("publish failed " + JSON.stringify(p.body));
   return p.body as { id: string; routeId: string };

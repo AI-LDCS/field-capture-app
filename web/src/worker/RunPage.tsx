@@ -20,7 +20,10 @@ function FitOnce({ run }: { run: AssignmentDetail }) {
   useEffect(() => {
     if (done.current) return;
     const pts = run.segments.flatMap((s) => s.coords.map(ll));
-    if (pts.length) { map.fitBounds(pts, { padding: [30, 30], animate: false }); done.current = true; }
+    if (pts.length) {
+      map.fitBounds(pts, { padding: [30, 30], animate: false });
+      done.current = true;
+    }
   }, [map, run]);
   return null;
 }
@@ -75,20 +78,34 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
     if (s.fake && run?.segments[0]) fakeGps.setStart(run.segments[0].coords[0]);
   }, [s.fake, run?.id]);
 
-  useEffect(() => gpsSource().subscribe((f) => {
-    setGpsDenied(false);
-    setFix(f);
-    setTrail((t) => [...t.slice(-400), [f.lng, f.lat]]);
-  }, (_msg, denied) => { if (denied) setGpsDenied(true); }), [s.fake, gpsNonce]);
+  useEffect(
+    () =>
+      gpsSource().subscribe(
+        (f) => {
+          setGpsDenied(false);
+          setFix(f);
+          setTrail((t) => [...t.slice(-400), [f.lng, f.lat]]);
+        },
+        (_msg, denied) => {
+          if (denied) setGpsDenied(true);
+        },
+      ),
+    [s.fake, gpsNonce],
+  );
 
   // Location switched off or on in the browser while the page is open: ask again, the answer tells which.
   useEffect(() => {
     let perm: PermissionStatus | null = null;
-    navigator.permissions?.query({ name: "geolocation" }).then((p) => {
-      perm = p;
-      p.onchange = () => setGpsNonce((n) => n + 1);
-    }).catch(() => {});
-    return () => { if (perm) perm.onchange = null; };
+    navigator.permissions
+      ?.query({ name: "geolocation" })
+      .then((p) => {
+        perm = p;
+        p.onchange = () => setGpsNonce((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      if (perm) perm.onchange = null;
+    };
   }, []);
 
   // coverage shown on the phone = what the server verified (its GPS, since the local copy is deleted) + what is still here
@@ -104,7 +121,11 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
       const verified = cur.recordings.filter((r) => r.status === "server_verified");
       for (const r of verified) {
         if (!serverRows.current.has(r.id)) {
-          try { serverRows.current.set(r.id, await api.myRecordingGps(r.id)); } catch { /* retry next tick */ }
+          try {
+            serverRows.current.set(r.id, await api.myRecordingGps(r.id));
+          } catch {
+            /* retry next tick */
+          }
         }
       }
       const verifiedIds = new Set(verified.map((r) => r.id));
@@ -117,7 +138,10 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
     };
     void calc();
     const t = setInterval(calc, 1500);
-    return () => { dead = true; clearInterval(t); };
+    return () => {
+      dead = true;
+      clearInterval(t);
+    };
   }, [run?.id, local.length]);
 
   // Home needs no camera. It closes on the way back, and when a recording has ended.
@@ -127,10 +151,13 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
     setOnboarding(false);
     closeCamera();
   }, [step, !!session.active]);
-  useEffect(() => () => {
-    wantCamera.current = false;
-    if (!getSession().active) closeCamera();
-  }, []);
+  useEffect(
+    () => () => {
+      wantCamera.current = false;
+      if (!getSession().active) closeCamera();
+    },
+    [],
+  );
 
   // The sub-pages cannot be opened directly.
   const home = `#/assignment/${id}`;
@@ -149,23 +176,44 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
 
   if (session.active && session.activeAssignmentId === id) {
     return (
-      <RecordingView run={run} cov={run.segments.map((_, i) => cov(i))} masks={masks} fix={fix} trail={trail}
-        camera={session.camera} active={session.active}
-        onSkip={async (segId) => { try { setRun(await api.mySkip(id, segId, "skipped while recording")); } catch { /* shown on the next refresh */ } }} />
+      <RecordingView
+        run={run}
+        cov={run.segments.map((_, i) => cov(i))}
+        masks={masks}
+        fix={fix}
+        trail={trail}
+        camera={session.camera}
+        active={session.active}
+        onSkip={async (segId) => {
+          try {
+            setRun(await api.mySkip(id, segId, "skipped while recording"));
+          } catch {
+            /* shown on the next refresh */
+          }
+        }}
+      />
     );
   }
 
   // What stops a recording from starting. Empty means it may start; nothing else starts one.
-  const blockedAtHome = completed ? "This assignment is completed"
-    : interrupted ? "Finalize the cut-off recording first"
-    : session.active ? "Another recording is running"
-    : "";
-  const whyNot = gpsDenied ? "Location is blocked"
-    : !preflightDone ? "Waiting for the GPS check"
-    : !session.camera ? "Waiting for the camera"
-    : !storage ? "Checking storage…"
-    : !storage.ok ? "Not enough free storage"
-    : blockedAtHome;
+  const blockedAtHome = completed
+    ? "This assignment is completed"
+    : interrupted
+      ? "Finalize the cut-off recording first"
+      : session.active
+        ? "Another recording is running"
+        : "";
+  const whyNot = gpsDenied
+    ? "Location is blocked"
+    : !preflightDone
+      ? "Waiting for the GPS check"
+      : !session.camera
+        ? "Waiting for the camera"
+        : !storage
+          ? "Checking storage…"
+          : !storage.ok
+            ? "Not enough free storage"
+            : blockedAtHome;
 
   const beginOnboarding = () => {
     wantCamera.current = true;
@@ -179,20 +227,43 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
     try {
       setSession({ lastStop: null });
       const ar = await startRecording({
-        assignmentId: id, simulated: getSettings().fake || !!session.camera!.fake, stream: session.camera!.stream, gps: gpsSource(),
+        assignmentId: id,
+        simulated: getSettings().fake || !!session.camera!.fake,
+        stream: session.camera!.stream,
+        gps: gpsSource(),
         onChange: () => {},
-        onStopped: (reason) => { setSession({ active: null, activeAssignmentId: null, lastStop: reason }); fakeGps.stopWalking(); },
+        onStopped: (reason) => {
+          setSession({ active: null, activeAssignmentId: null, lastStop: reason });
+          fakeGps.stopWalking();
+        },
       });
       setSession({ active: ar, activeAssignmentId: id });
       location.hash = `${home}/record`;
-    } catch (e: any) { setRecErr(e.message); }
+    } catch (e: any) {
+      setRecErr(e.message);
+    }
   };
 
   if (step === "onboard" && onboarding) {
     return (
       <>
-        <Onboard run={run} pre={pre} preflightDone={preflightDone} gpsDenied={gpsDenied} storage={storage} recheck={recheck} camera={cameraOpener}
-          why={whyNot} onPreflight={(o) => { setPreflightLocal(o); setRedo(false); void load(); }} onRedo={() => setRedo(true)} onStart={() => void startNow()} />
+        <Onboard
+          run={run}
+          pre={pre}
+          preflightDone={preflightDone}
+          gpsDenied={gpsDenied}
+          storage={storage}
+          recheck={recheck}
+          camera={cameraOpener}
+          why={whyNot}
+          onPreflight={(o) => {
+            setPreflightLocal(o);
+            setRedo(false);
+            void load();
+          }}
+          onRedo={() => setRedo(true)}
+          onStart={() => void startNow()}
+        />
         {recErr && <p className="err">{recErr}</p>}
         {devToolsOn() && <DevPanel />}
       </>
@@ -204,27 +275,42 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
   if (fix) {
     run.segments.forEach((sg, i) => {
       const d = distToLineM([fix.lng, fix.lat], sg.coords);
-      if (d < nearest) { nearest = d; nearestIdx = i; }
+      if (d < nearest) {
+        nearest = d;
+        nearestIdx = i;
+      }
     });
   }
   const requiredTotal = run.segments.filter((x) => x.required).length;
   const requiredDone = run.segments.filter((x, i) => x.required && (x.status === "completed" || cov(i) >= x.minCoverageRatio)).length;
 
   const nothingRecorded = run.recordings.length === 0 && local.length === 0;
-  const notUploaded = local.filter((r) => r.status !== "server_verified" && !run.recordings.some((x) => x.id === r.id && x.status === "server_verified"));
+  const notUploaded = local.filter(
+    (r) => r.status !== "server_verified" && !run.recordings.some((x) => x.id === r.id && x.status === "server_verified"),
+  );
 
   // What stops the worker from asking for the check. The server still decides the result.
-  const whyNotFinish = nothingRecorded ? "Record at least once first"
-    : interrupted ? "Finalize the cut-off recording first"
-    : notUploaded.length ? "Waiting for your recordings to upload"
-    : requiredDone < requiredTotal ? "Cover all required segments first"
-    : offline ? "Needs a connection"
-    : run.status === "needs_review" ? "An administrator will review this"
-    : "";
+  const whyNotFinish = nothingRecorded
+    ? "Record at least once first"
+    : interrupted
+      ? "Finalize the cut-off recording first"
+      : notUploaded.length
+        ? "Waiting for your recordings to upload"
+        : requiredDone < requiredTotal
+          ? "Cover all required segments first"
+          : offline
+            ? "Needs a connection"
+            : run.status === "needs_review"
+              ? "An administrator will review this"
+              : "";
 
   const act = async (fn: () => Promise<AssignmentDetail>) => {
     setMsg("");
-    try { setRun(await fn()); } catch (e: any) { setMsg(e.message); }
+    try {
+      setRun(await fn());
+    } catch (e: any) {
+      setMsg(e.message);
+    }
   };
 
   return (
@@ -235,7 +321,8 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
           <Badge s={run.status} />
         </div>
         <p className="small muted">
-          {requiredDone}/{requiredTotal} required segments covered{offline && <span className="err"> · server unreachable, showing the saved copy</span>}
+          {requiredDone}/{requiredTotal} required segments covered
+          {offline && <span className="err"> · server unreachable, showing the saved copy</span>}
         </p>
       </section>
 
@@ -246,15 +333,26 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
           <Tiles />
           <FitOnce run={run} />
           {run.segments.map((sg, i) => (
-            <Polyline key={sg.id} positions={sg.coords.map(ll)}
+            <Polyline
+              key={sg.id}
+              positions={sg.coords.map(ll)}
               pathOptions={{
-                color: sg.status === "skipped" ? "#9ca3af" : cov(i) >= sg.minCoverageRatio ? "#16a34a" : sg.required ? "#1d4ed8" : "#ea580c",
-                weight: 6, dashArray: sg.required ? undefined : "8 8",
-              }} />
+                color:
+                  sg.status === "skipped" ? "#9ca3af" : cov(i) >= sg.minCoverageRatio ? "#16a34a" : sg.required ? "#1d4ed8" : "#ea580c",
+                weight: 6,
+                dashArray: sg.required ? undefined : "8 8",
+              }}
+            />
           ))}
           {trail.length > 1 && <Polyline positions={trail.map(ll)} pathOptions={{ color: "#111827", weight: 2 }} />}
           {fix && <Circle center={[fix.lat, fix.lng]} radius={fix.acc} pathOptions={{ color: "#2563eb", weight: 1, fillOpacity: 0.1 }} />}
-          {fix && <CircleMarker center={[fix.lat, fix.lng]} radius={7} pathOptions={{ color: "#fff", fillColor: "#2563eb", fillOpacity: 1, weight: 2 }} />}
+          {fix && (
+            <CircleMarker
+              center={[fix.lat, fix.lng]}
+              radius={7}
+              pathOptions={{ color: "#fff", fillColor: "#2563eb", fillOpacity: 1, weight: 2 }}
+            />
+          )}
         </MapContainer>
       </div>
       <p className="small muted">
@@ -262,8 +360,14 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
         {fix && nearestIdx >= 0 && ` · ${nearest.toFixed(0)} m from segment #${nearestIdx + 1}`}
       </p>
 
-      {session.lastStop && session.lastStop !== "stopped by worker" && <p className="warn-box">Last recording stopped: {session.lastStop}. Start a new one to continue.</p>}
-      {!completed && <button className="cta" disabled={!!blockedAtHome} onClick={beginOnboarding}>Start Recording</button>}
+      {session.lastStop && session.lastStop !== "stopped by worker" && (
+        <p className="warn-box">Last recording stopped: {session.lastStop}. Start a new one to continue.</p>
+      )}
+      {!completed && (
+        <button className="cta" disabled={!!blockedAtHome} onClick={beginOnboarding}>
+          Start Recording
+        </button>
+      )}
       {!completed && blockedAtHome && <p className="muted small center">{blockedAtHome}</p>}
 
       <section className="card">
@@ -274,27 +378,54 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
           return (
             <div key={sg.id} className="seg">
               <div className="row between">
-                <span>#{i + 1} <Badge s={sg.required ? "required" : "optional"} /> <Badge s={done ? "completed" : sg.status} /></span>
-                {!sg.required && !completed && !done && (sg.status === "skipped"
-                  ? <button className="ghost" onClick={() => void act(() => api.myUnskip(id, sg.id))}>Undo skip</button>
-                  : <button className="ghost" onClick={() => void act(() => api.mySkip(id, sg.id, skipReason))}>Skip</button>)}
+                <span>
+                  #{i + 1} <Badge s={sg.required ? "required" : "optional"} /> <Badge s={done ? "completed" : sg.status} />
+                </span>
+                {!sg.required &&
+                  !completed &&
+                  !done &&
+                  (sg.status === "skipped" ? (
+                    <button className="ghost" onClick={() => void act(() => api.myUnskip(id, sg.id))}>
+                      Undo skip
+                    </button>
+                  ) : (
+                    <button className="ghost" onClick={() => void act(() => api.mySkip(id, sg.id, skipReason))}>
+                      Skip
+                    </button>
+                  ))}
               </div>
-              <div className="meter"><div style={{ width: `${c * 100}%` }} /><i style={{ left: `${sg.minCoverageRatio * 100}%` }} /></div>
-              <div className="small muted">{(c * 100).toFixed(0)}% covered · need {(sg.minCoverageRatio * 100).toFixed(0)}%{sg.skipReason && ` · skipped: ${sg.skipReason}`}</div>
+              <div className="meter">
+                <div style={{ width: `${c * 100}%` }} />
+                <i style={{ left: `${sg.minCoverageRatio * 100}%` }} />
+              </div>
+              <div className="small muted">
+                {(c * 100).toFixed(0)}% covered · need {(sg.minCoverageRatio * 100).toFixed(0)}%
+                {sg.skipReason && ` · skipped: ${sg.skipReason}`}
+              </div>
             </div>
           );
         })}
-        {run.segments.some((x) => !x.required) && <input placeholder="Reason for skipping (optional)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} />}
+        {run.segments.some((x) => !x.required) && (
+          <input placeholder="Reason for skipping (optional)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} />
+        )}
       </section>
 
       <section className="card">
         <h3>Recordings</h3>
         <RecordingList assignmentId={id} server={run.recordings} />
         <div className="finish">
-          {run.reasons.length > 0 && <ul className="small">{run.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+          {run.reasons.length > 0 && (
+            <ul className="small">
+              {run.reasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          )}
           {!completed && (
             <>
-              <button className="cta" onClick={() => void act(() => api.myFinish(id))} disabled={!!whyNotFinish}>Check &amp; finish</button>
+              <button className="cta" onClick={() => void act(() => api.myFinish(id))} disabled={!!whyNotFinish}>
+                Check &amp; finish
+              </button>
               {whyNotFinish && <p className="small muted center">{whyNotFinish}</p>}
             </>
           )}

@@ -16,7 +16,8 @@ export async function bootstrapAdmin() {
     return;
   }
   if (!/^[a-z0-9._-]{3,32}$/.test(u.toLowerCase())) throw new Error("ADMIN_USERNAME must be 3-32 chars: a-z 0-9 . _ -");
-  if (p.length < config.password.adminMinLength) throw new Error(`ADMIN_PASSWORD must be at least ${config.password.adminMinLength} characters`);
+  if (p.length < config.password.adminMinLength)
+    throw new Error(`ADMIN_PASSWORD must be at least ${config.password.adminMinLength} characters`);
   const hash = await hashPassword(p);
   const [row] = await q(
     "INSERT INTO users (username, display_name, password_hash, role) VALUES ($1,'Administrator',$2,'admin') ON CONFLICT DO NOTHING RETURNING id",

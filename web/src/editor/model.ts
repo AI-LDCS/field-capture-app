@@ -9,7 +9,13 @@ export type Seg = { key: string; name: string; required: boolean; minCoverage: n
 let counter = 0;
 export const newKey = () => `s${Date.now().toString(36)}${(counter++).toString(36)}`;
 export const makeSeg = (coords: LngLat[] = [], over: Partial<Seg> = {}): Seg => ({
-  key: newKey(), name: "", required: true, minCoverage: 0.9, smooth: false, coords, ...over,
+  key: newKey(),
+  name: "",
+  required: true,
+  minCoverage: 0.9,
+  smooth: false,
+  coords,
+  ...over,
 });
 
 export const toInput = (segs: Seg[]): SegmentInput[] =>
@@ -103,7 +109,8 @@ export function pointAtFraction(coords: LngLat[], f: number): { point: LngLat; b
     const d = haversineM(coords[i - 1], coords[i]);
     if (want <= d || i === coords.length - 1) {
       const t = d === 0 ? 0 : Math.min(1, want / d);
-      const a = coords[i - 1], b = coords[i];
+      const a = coords[i - 1],
+        b = coords[i];
       return { point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], bearing: bearingDeg(a, b) };
     }
     want -= d;
@@ -119,7 +126,11 @@ export const validLng = (v: number) => Number.isFinite(v) && Math.abs(v) <= 180;
 
 /** "13.7563, 100.5018" (comma, space, tab or semicolon) -> [lng, lat], or an error text. */
 export function parseLatLng(text: string): { p: LngLat } | { error: string } {
-  const nums = text.trim().split(/[\s,;]+/).filter(Boolean).map(Number);
+  const nums = text
+    .trim()
+    .split(/[\s,;]+/)
+    .filter(Boolean)
+    .map(Number);
   if (nums.length !== 2 || nums.some((n) => !Number.isFinite(n))) return { error: 'expected "lat, lng"' };
   if (!validLat(nums[0])) return { error: `latitude ${nums[0]} is out of range (lat first, then lng)` };
   if (!validLng(nums[1])) return { error: `longitude ${nums[1]} is out of range` };
@@ -160,10 +171,10 @@ export function parsePoints(text: string): { segs: Seg[]; errors: string[] } {
 
 // ---------- undo / redo ----------
 export type History<T> = { past: T[]; present: T; future: T[] };
-export const hist = <T,>(present: T): History<T> => ({ past: [], present, future: [] });
-export const commit = <T,>(h: History<T>, next: T): History<T> =>
+export const hist = <T>(present: T): History<T> => ({ past: [], present, future: [] });
+export const commit = <T>(h: History<T>, next: T): History<T> =>
   next === h.present ? h : { past: [...h.past.slice(-99), h.present], present: next, future: [] };
-export const undo = <T,>(h: History<T>): History<T> =>
+export const undo = <T>(h: History<T>): History<T> =>
   h.past.length ? { past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present, ...h.future] } : h;
-export const redo = <T,>(h: History<T>): History<T> =>
+export const redo = <T>(h: History<T>): History<T> =>
   h.future.length ? { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) } : h;

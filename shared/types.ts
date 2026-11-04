@@ -18,30 +18,61 @@ export type WorkerRow = { id: string; username: string; displayName: string; act
  * lengthM is always the length of the stored (smoothed) line.
  */
 export type SegmentDef = {
-  id: string; order: number; name: string; required: boolean; smooth: boolean; coords: LngLat[]; minCoverageRatio: number; lengthM: number;
+  id: string;
+  order: number;
+  name: string;
+  required: boolean;
+  smooth: boolean;
+  coords: LngLat[];
+  minCoverageRatio: number;
+  lengthM: number;
 };
 export type SegmentInput = { name?: string; required: boolean; smooth?: boolean; coords: LngLat[]; minCoverageRatio?: number };
 
 export type RouteVersion = {
-  id: string; routeId: string; routeName: string; version: number; status: RouteVersionStatus;
-  createdAt: string; publishedAt: string | null; segments: SegmentDef[];
+  id: string;
+  routeId: string;
+  routeName: string;
+  version: number;
+  status: RouteVersionStatus;
+  createdAt: string;
+  publishedAt: string | null;
+  segments: SegmentDef[];
 };
 export type RouteSummary = {
-  id: string; name: string; createdAt: string;
+  id: string;
+  name: string;
+  createdAt: string;
   versions: {
-    id: string; version: number; name: string; status: RouteVersionStatus; publishedAt: string | null; createdAt: string;
-    segmentCount: number; lengthM: number; assignmentCount: number;
+    id: string;
+    version: number;
+    name: string;
+    status: RouteVersionStatus;
+    publishedAt: string | null;
+    createdAt: string;
+    segmentCount: number;
+    lengthM: number;
+    assignmentCount: number;
   }[];
 };
 
 export type AssignmentSummary = {
-  id: string; status: AssignmentStatus; createdAt: string; updatedAt: string;
+  id: string;
+  status: AssignmentStatus;
+  createdAt: string;
+  updatedAt: string;
   worker: { id: string; username: string; displayName: string; deleted: boolean };
   route: { id: string; name: string; versionId: string; version: number; deleted: boolean };
   progress: { segmentsDone: number; segmentsTotal: number; requiredDone: number; requiredTotal: number };
 };
 export type GpsQuality = { total: number; poorAccuracy: number; gaps: number; jumps: number; offRoute: number };
-export type PreflightOutcome = { result: "passed" | "skipped"; durationMs: number; samples: number; bestAccuracyM: number | null; note?: string };
+export type PreflightOutcome = {
+  result: "passed" | "skipped";
+  durationMs: number;
+  samples: number;
+  bestAccuracyM: number | null;
+  note?: string;
+};
 
 export type RecordingSummary = {
   id: string;
@@ -59,8 +90,15 @@ export type RecordingSummary = {
 
 /** One verified recording in the admin Downloads list. */
 export type DownloadRow = {
-  id: string; assignmentId: string; verifiedAt: string; startedAtMs: number; endedAtMs: number | null;
-  gpsCount: number; fileBytes: number | null; assembly: RecordingSummary["assembly"]; simulated: boolean;
+  id: string;
+  assignmentId: string;
+  verifiedAt: string;
+  startedAtMs: number;
+  endedAtMs: number | null;
+  gpsCount: number;
+  fileBytes: number | null;
+  assembly: RecordingSummary["assembly"];
+  simulated: boolean;
   worker: { id: string; username: string; displayName: string; deleted: boolean };
   route: { name: string; version: number; deleted: boolean };
 };
@@ -68,9 +106,19 @@ export type DownloadRow = {
 export type SegmentEvidence = { recordingId: string; coverage: number; firstTMs: number | null; lastTMs: number | null };
 
 export type AssignmentSegment = {
-  id: string; routeSegmentId: string; order: number; name: string; required: boolean; status: SegmentStatus;
-  skipReason: string | null; completedAt: string | null; coords: LngLat[]; minCoverageRatio: number; lengthM: number;
-  coverage: number; evidence: SegmentEvidence[];
+  id: string;
+  routeSegmentId: string;
+  order: number;
+  name: string;
+  required: boolean;
+  status: SegmentStatus;
+  skipReason: string | null;
+  completedAt: string | null;
+  coords: LngLat[];
+  minCoverageRatio: number;
+  lengthM: number;
+  coverage: number;
+  evidence: SegmentEvidence[];
 };
 export type AssignmentDetail = AssignmentSummary & {
   segments: AssignmentSegment[];

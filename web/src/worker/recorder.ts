@@ -35,15 +35,27 @@ export async function startRecording(opts: {
     videoBitsPerSecond: CONFIG.recording.videoBitsPerSecond,
   });
   const meta: LocalRecording = {
-    id, assignmentId: opts.assignmentId, mime: rec.mimeType || wanted || "video/webm", simulated: opts.simulated, status: "recording",
-    startedAt: Date.now(), endedAt: null, serverRegistered: false,
+    id,
+    assignmentId: opts.assignmentId,
+    mime: rec.mimeType || wanted || "video/webm",
+    simulated: opts.simulated,
+    status: "recording",
+    startedAt: Date.now(),
+    endedAt: null,
+    serverRegistered: false,
   };
   await putRecording(meta); // exists locally before the first byte, so recovery can find it
 
   // While this tab is recording it holds a lock. The start-up scan of another tab can then tell a live
   // recording from a dead one. The lock is released when we stop, or by the browser if the page dies.
   let releaseLock: (() => void) | null = null;
-  void navigator.locks?.request(`fc-rec-${id}`, () => new Promise<void>((res) => { releaseLock = res; }));
+  void navigator.locks?.request(
+    `fc-rec-${id}`,
+    () =>
+      new Promise<void>((res) => {
+        releaseLock = res;
+      }),
+  );
 
   const stats: RecStats = { chunks: 0, bytes: 0, gps: 0, error: null, startedAt: meta.startedAt, freeBytes: null };
   let chunkSeq = 0;
@@ -53,7 +65,7 @@ export async function startRecording(opts: {
   let stopping: Promise<void> | null = null;
 
   // A write that fails is tried again (on a fresh connection) before the recording is given up on.
-  const write = <T,>(fn: () => Promise<T>) => withRetry(fn, { onRetry: () => resetDb() });
+  const write = <T>(fn: () => Promise<T>) => withRetry(fn, { onRetry: () => resetDb() });
   // The stop reason goes to the server, which allows 100 characters; the full text stays on screen.
   const fail = (e: unknown) => {
     stats.error = `Could not save to this phone: ${describeError(e)}`;
@@ -95,9 +107,15 @@ export async function startRecording(opts: {
   });
 
   let wake: WakeLockSentinel | null = null;
-  try { wake = (await navigator.wakeLock?.request("screen")) ?? null; } catch { /* not allowed */ }
+  try {
+    wake = (await navigator.wakeLock?.request("screen")) ?? null;
+  } catch {
+    /* not allowed */
+  }
 
-  const onVis = () => { if (document.hidden) void stop("page hidden"); };
+  const onVis = () => {
+    if (document.hidden) void stop("page hidden");
+  };
   document.addEventListener("visibilitychange", onVis);
 
   // Free space is read right away and every 10 s: shown on the recording screen, and a recording stops
@@ -109,7 +127,9 @@ export async function startRecording(opts: {
       stats.freeBytes = est.quota - est.usage;
       opts.onChange();
       if (stats.freeBytes < CONFIG.recording.stopFreeBytes) void stop("low storage");
-    } catch { /* the browser cannot tell; the write retries and the stop reason still protect the data */ }
+    } catch {
+      /* the browser cannot tell; the write retries and the stop reason still protect the data */
+    }
   };
   const storageTimer = window.setInterval(checkStorage, 10_000);
   void checkStorage();
@@ -120,11 +140,18 @@ export async function startRecording(opts: {
       document.removeEventListener("visibilitychange", onVis);
       unsub();
       if (rec.state !== "inactive") {
-        await new Promise<void>((res) => { rec.onstop = () => res(); rec.stop(); });
+        await new Promise<void>((res) => {
+          rec.onstop = () => res();
+          rec.stop();
+        });
       }
       await chunkQ;
       await gpsQ;
-      try { await wake?.release(); } catch { /* ignore */ }
+      try {
+        await wake?.release();
+      } catch {
+        /* ignore */
+      }
       releaseLock?.();
       await putRecording({ ...meta, status: "pending_upload", endedAt: Date.now(), stopReason: reason });
       opts.onStopped(reason);

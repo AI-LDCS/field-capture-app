@@ -49,9 +49,14 @@ export function createApp(opts: { onHit?: (endpoint: string, status: number) => 
       Object.defineProperty(req, "route", {
         configurable: true,
         get: () => current,
-        set: (v) => { current = v; if (v) seen = { path: v.path, base: req.baseUrl }; },
+        set: (v) => {
+          current = v;
+          if (v) seen = { path: v.path, base: req.baseUrl };
+        },
       });
-      res.on("finish", () => { if (seen) opts.onHit!(`${req.method} ${seen.base}${seen.path}`, res.statusCode); });
+      res.on("finish", () => {
+        if (seen) opts.onHit!(`${req.method} ${seen.base}${seen.path}`, res.statusCode);
+      });
       next();
     });
   }
@@ -62,7 +67,14 @@ export function createApp(opts: { onHit?: (endpoint: string, status: number) => 
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"], // Leaflet positions with inline styles
-          imgSrc: ["'self'", "data:", "blob:", "https://tile.openstreetmap.org", "https://tile.opentopomap.org", "https://server.arcgisonline.com"],
+          imgSrc: [
+            "'self'",
+            "data:",
+            "blob:",
+            "https://tile.openstreetmap.org",
+            "https://tile.opentopomap.org",
+            "https://server.arcgisonline.com",
+          ],
           mediaSrc: ["'self'", "blob:"],
           connectSrc: ["'self'"],
           frameAncestors: ["'none'"],

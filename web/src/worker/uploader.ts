@@ -1,7 +1,15 @@
 import { CONFIG } from "@shared/config.ts";
 import {
-  type LocalRecording, allRecordings, chunksOf, deleteRecording, getRecording, gpsOf,
-  markUploaded, openDb, purgeRecordingData, putRecording,
+  type LocalRecording,
+  allRecordings,
+  chunksOf,
+  deleteRecording,
+  getRecording,
+  gpsOf,
+  markUploaded,
+  openDb,
+  purgeRecordingData,
+  putRecording,
 } from "./localdb.ts";
 import { getSettings } from "./settings.ts";
 
@@ -28,7 +36,11 @@ async function http(path: string, init?: RequestInit) {
   const body = await r.json().catch(() => ({}));
   return { status: r.status, ok: r.ok, body };
 }
-const json = (body: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const json = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body),
+});
 const API = "/api/me/recordings";
 
 async function setStatus(rec: LocalRecording, status: LocalRecording["status"], lastError?: string) {
@@ -44,7 +56,10 @@ async function processOne(r0: LocalRecording) {
 
   // 1. register on the server (idempotent)
   if (!rec.serverRegistered) {
-    const res = await http(API, json({ id: rec.id, assignmentId: rec.assignmentId, mime: rec.mime, startedAt: rec.startedAt, simulated: rec.simulated }));
+    const res = await http(
+      API,
+      json({ id: rec.id, assignmentId: rec.assignmentId, mime: rec.mime, startedAt: rec.startedAt, simulated: rec.simulated }),
+    );
     if (!res.ok) throw new Error(`register: ${res.body.message ?? res.status}`);
     rec = { ...((await getRecording(rec.id)) ?? rec), serverRegistered: true };
     await putRecording(rec);
@@ -91,7 +106,11 @@ async function processOne(r0: LocalRecording) {
     const batch = pending.slice(i, i + CONFIG.upload.gpsBatchSize);
     const res = await http(`${API}/${rec.id}/gps`, json({ points: batch.map(({ seq, t, lat, lng, acc }) => ({ seq, t, lat, lng, acc })) }));
     if (!res.ok) throw new Error(`gps: ${res.body.message ?? res.status}`);
-    await markUploaded("gps", rec.id, batch.map((g) => g.seq));
+    await markUploaded(
+      "gps",
+      rec.id,
+      batch.map((g) => g.seq),
+    );
   }
 
   // 6. finalize only when the recording is over and everything is confirmed
@@ -100,13 +119,16 @@ async function processOne(r0: LocalRecording) {
   const chunks = await chunksOf(rec.id);
   const gps = await gpsOf(rec.id);
   if (chunks.some((c) => !c.uploaded) || gps.some((g) => !g.uploaded)) return;
-  const res = await http(`${API}/${rec.id}/finalize`, json({
-    startedAt: cur.startedAt,
-    endedAt: cur.endedAt,
-    stopReason: cur.stopReason ?? null,
-    chunks: chunks.map((c) => ({ seq: c.seq, sha256: c.sha256 })),
-    gpsCount: gps.length,
-  }));
+  const res = await http(
+    `${API}/${rec.id}/finalize`,
+    json({
+      startedAt: cur.startedAt,
+      endedAt: cur.endedAt,
+      stopReason: cur.stopReason ?? null,
+      chunks: chunks.map((c) => ({ seq: c.seq, sha256: c.sha256 })),
+      gpsCount: gps.length,
+    }),
+  );
   if (res.ok) {
     await setStatus(cur, "server_verified");
     await purgeRecordingData(rec.id); // local copy goes only after the server verified it
@@ -134,7 +156,10 @@ async function resetFlags(id: string, chunkSeqs: number[], resetGps: boolean) {
       const cur = tx.objectStore("gps").index("recordingId").openCursor(id);
       cur.onsuccess = () => {
         const c = cur.result;
-        if (c) { c.update({ ...c.value, uploaded: false }); c.continue(); }
+        if (c) {
+          c.update({ ...c.value, uploaded: false });
+          c.continue();
+        }
       };
     }
     tx.oncomplete = () => res();
@@ -151,7 +176,11 @@ export async function uploadTick() {
       try {
         await processOne(rec);
       } catch (e) {
-        if (e instanceof AuthLost) { paused = true; note("signed out: uploads paused, nothing is lost"); return; }
+        if (e instanceof AuthLost) {
+          paused = true;
+          note("signed out: uploads paused, nothing is lost");
+          return;
+        }
         const msg = e instanceof Error ? e.message : String(e);
         const fresh = (await getRecording(rec.id)) ?? rec;
         if (ENDED.has(fresh.status)) await setStatus(fresh, "upload_interrupted", msg);

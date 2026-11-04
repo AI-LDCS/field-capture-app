@@ -32,8 +32,16 @@ function fakeCamera(): CameraInfo {
   const timer = window.setInterval(draw, 66);
   const stream = c.captureStream(15);
   return {
-    stream, label: "canvas (fake)", facing: "environment", width: c.width, height: c.height, fake: true,
-    stop: () => { clearInterval(timer); stream.getTracks().forEach((t) => t.stop()); },
+    stream,
+    label: "canvas (fake)",
+    facing: "environment",
+    width: c.width,
+    height: c.height,
+    fake: true,
+    stop: () => {
+      clearInterval(timer);
+      stream.getTracks().forEach((t) => t.stop());
+    },
   };
 }
 
@@ -51,7 +59,12 @@ export async function openCamera(): Promise<CameraInfo> {
   const track = stream.getVideoTracks()[0];
   const s = track.getSettings();
   return {
-    stream, label: track.label, facing: s.facingMode ?? null, width: s.width ?? 0, height: s.height ?? 0, fake: false,
+    stream,
+    label: track.label,
+    facing: s.facingMode ?? null,
+    width: s.width ?? 0,
+    height: s.height ?? 0,
+    fake: false,
     stop: () => stream.getTracks().forEach((t) => t.stop()),
   };
 }
@@ -61,9 +74,17 @@ export async function storageCheck() {
   const quota = est.quota ?? 0;
   const usage = est.usage ?? 0;
   let persisted = false;
-  try { persisted = (await navigator.storage?.persisted?.()) ?? false; } catch { /* ignore */ }
+  try {
+    persisted = (await navigator.storage?.persisted?.()) ?? false;
+  } catch {
+    /* ignore */
+  }
   if (!persisted) {
-    try { persisted = (await navigator.storage?.persist?.()) ?? false; } catch { /* ignore */ }
+    try {
+      persisted = (await navigator.storage?.persist?.()) ?? false;
+    } catch {
+      /* ignore */
+    }
   }
   const free = Math.max(0, quota - usage);
   return { quota, usage, free, persisted, ok: quota === 0 ? true : free >= CONFIG.recording.minFreeBytes };

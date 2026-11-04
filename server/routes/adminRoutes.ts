@@ -28,18 +28,26 @@ const SEG_SQL = `SELECT id, ord, name, required, control, ST_AsGeoJSON(geom)::js
                    FROM route_segments WHERE route_version_id = $1 ORDER BY ord`;
 
 export async function loadVersion(db: Db, versionId: string) {
-  const v = await q1(
-    `SELECT v.*, v.name AS route_name FROM route_versions v WHERE v.id = $1`,
-    [versionId], db,
-  );
+  const v = await q1(`SELECT v.*, v.name AS route_name FROM route_versions v WHERE v.id = $1`, [versionId], db);
   if (!v) return undefined;
   const segs = await q(SEG_SQL, [versionId], db);
   return {
-    id: v.id, routeId: v.route_id, routeName: v.route_name, version: v.version, status: v.status,
-    createdAt: v.created_at, publishedAt: v.published_at,
+    id: v.id,
+    routeId: v.route_id,
+    routeName: v.route_name,
+    version: v.version,
+    status: v.status,
+    createdAt: v.created_at,
+    publishedAt: v.published_at,
     segments: segs.map((s) => ({
-      id: s.id, order: s.ord, name: s.name, required: s.required, smooth: s.control != null, coords: s.control ?? s.g.coordinates,
-      minCoverageRatio: s.min_coverage_ratio, lengthM: Math.round(s.length_m * 10) / 10,
+      id: s.id,
+      order: s.ord,
+      name: s.name,
+      required: s.required,
+      smooth: s.control != null,
+      coords: s.control ?? s.g.coordinates,
+      minCoverageRatio: s.min_coverage_ratio,
+      lengthM: Math.round(s.length_m * 10) / 10,
     })),
   };
 }
@@ -50,11 +58,21 @@ async function writeSegments(c: PoolClient, versionId: string, segs: z.infer<typ
     const s = segs[i];
     // the server draws the curve, so the stored line never depends on what a client claims
     const line = s.smooth ? smoothLine(s.coords).line : s.coords;
-    if (line.length < 2 || line.length > MAX_POINTS) throw new HttpError(400, "bad_segment", `segment ${i + 1} has too many points once smoothed`);
+    if (line.length < 2 || line.length > MAX_POINTS)
+      throw new HttpError(400, "bad_segment", `segment ${i + 1} has too many points once smoothed`);
     await q(
       `INSERT INTO route_segments (route_version_id, ord, name, required, geom, control, min_coverage_ratio)
        VALUES ($1,$2,$3,$4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6, $7)`,
-      [versionId, i, s.name, s.required, JSON.stringify({ type: "LineString", coordinates: line }), s.smooth ? JSON.stringify(s.coords) : null, s.minCoverageRatio], c,
+      [
+        versionId,
+        i,
+        s.name,
+        s.required,
+        JSON.stringify({ type: "LineString", coordinates: line }),
+        s.smooth ? JSON.stringify(s.coords) : null,
+        s.minCoverageRatio,
+      ],
+      c,
     );
   }
 }
@@ -62,7 +80,8 @@ async function writeSegments(c: PoolClient, versionId: string, segs: z.infer<typ
 async function draftOrThrow(db: Db, versionId: string) {
   const v = await q1("SELECT * FROM route_versions WHERE id = $1", [versionId], db);
   if (!v) throw notFound("route version not found");
-  if (v.status !== "draft") throw new HttpError(409, "not_a_draft", `version ${v.version} is ${v.status} and cannot be changed; create a new version`);
+  if (v.status !== "draft")
+    throw new HttpError(409, "not_a_draft", `version ${v.version} is ${v.status} and cannot be changed; create a new version`);
   return v;
 }
 
@@ -76,13 +95,26 @@ adminRoutesRouter.get("/routes", async (_req, res) => {
        FROM route_versions v LEFT JOIN route_segments s ON s.route_version_id = v.id
       GROUP BY v.id ORDER BY v.version DESC`,
   );
-  res.json(routes.map((r) => ({
-    id: r.id, name: r.name, createdAt: r.created_at,
-    versions: versions.filter((v) => v.route_id === r.id).map((v) => ({
-      id: v.id, version: v.version, name: v.name, status: v.status, publishedAt: v.published_at, createdAt: v.created_at,
-      segmentCount: v.segment_count, lengthM: Math.round(v.length_m), assignmentCount: v.assignment_count,
+  res.json(
+    routes.map((r) => ({
+      id: r.id,
+      name: r.name,
+      createdAt: r.created_at,
+      versions: versions
+        .filter((v) => v.route_id === r.id)
+        .map((v) => ({
+          id: v.id,
+          version: v.version,
+          name: v.name,
+          status: v.status,
+          publishedAt: v.published_at,
+          createdAt: v.created_at,
+          segmentCount: v.segment_count,
+          lengthM: Math.round(v.length_m),
+          assignmentCount: v.assignment_count,
+        })),
     })),
-  })));
+  );
 });
 
 adminRoutesRouter.get("/routes/:id", async (req, res) => {
@@ -104,7 +136,11 @@ adminRoutesRouter.post("/routes", async (req, res) => {
   const body = DraftIn.extend({ name: z.string().trim().min(1).max(120) }).parse(req.body);
   const out = await tx(async (c) => {
     const [r] = await q("INSERT INTO routes (name, created_by) VALUES ($1,$2) RETURNING id", [body.name, req.user!.id], c);
-    const [v] = await q("INSERT INTO route_versions (route_id, version, name, status, created_by) VALUES ($1,1,$2,'draft',$3) RETURNING id", [r.id, body.name, req.user!.id], c);
+    const [v] = await q(
+      "INSERT INTO route_versions (route_id, version, name, status, created_by) VALUES ($1,1,$2,'draft',$3) RETURNING id",
+      [r.id, body.name, req.user!.id],
+      c,
+    );
     await writeSegments(c, v.id, body.segments);
     await audit(req.user!.id, "route_created", { type: "route", id: r.id }, { name: body.name }, req.ip, c);
     return loadVersion(c, v.id);
@@ -183,12 +219,14 @@ adminRoutesRouter.post("/routes/:id/new-version", async (req, res) => {
     const src = await q1("SELECT id, version, name FROM route_versions WHERE route_id = $1 ORDER BY version DESC LIMIT 1", [id], c);
     const [v] = await q(
       "INSERT INTO route_versions (route_id, version, name, status, created_by) VALUES ($1,$2,$3,'draft',$4) RETURNING id",
-      [id, src.version + 1, src.name, req.user!.id], c,
+      [id, src.version + 1, src.name, req.user!.id],
+      c,
     );
     await q(
       `INSERT INTO route_segments (route_version_id, ord, name, required, geom, control, min_coverage_ratio)
        SELECT $1, ord, name, required, geom, control, min_coverage_ratio FROM route_segments WHERE route_version_id = $2`,
-      [v.id, src.id], c,
+      [v.id, src.id],
+      c,
     );
     await audit(req.user!.id, "route_version_created", { type: "route_version", id: v.id }, { from: src.version }, req.ip, c);
     return loadVersion(c, v.id);
@@ -207,7 +245,9 @@ adminRoutesRouter.post("/route-versions/:vid/publish", async (req, res) => {
     const stats = await q1(
       `SELECT count(*)::int AS n, count(*) FILTER (WHERE required)::int AS required_n,
               count(*) FILTER (WHERE ST_Length(geom::geography) < 5 OR NOT ST_IsValid(geom))::int AS bad_n
-         FROM route_segments WHERE route_version_id = $1`, [vid], c,
+         FROM route_segments WHERE route_version_id = $1`,
+      [vid],
+      c,
     );
     if (stats.n === 0) throw new HttpError(400, "empty_route", "add at least one segment before publishing");
     if (stats.required_n === 0) throw new HttpError(400, "no_required_segment", "at least one segment must be required");

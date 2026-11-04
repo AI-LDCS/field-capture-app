@@ -1,9 +1,27 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  curveOf, midAfter, segLength,
-  commit, hist, incompleteSegments, insertPoint, joinWithNext, makeSeg, midpoint, moveSeg, parseLatLng, parsePoints,
-  pointAtFraction, redo, removePoint, reverseSeg, setPoint, splitAt, toInput, undo,
+  curveOf,
+  midAfter,
+  segLength,
+  commit,
+  hist,
+  incompleteSegments,
+  insertPoint,
+  joinWithNext,
+  makeSeg,
+  midpoint,
+  moveSeg,
+  parseLatLng,
+  parsePoints,
+  pointAtFraction,
+  redo,
+  removePoint,
+  reverseSeg,
+  setPoint,
+  splitAt,
+  toInput,
+  undo,
 } from "../web/src/editor/model.ts";
 import type { LngLat } from "../shared/types.ts";
 
@@ -22,7 +40,8 @@ describe("editor model", () => {
   });
 
   it("edits one point without touching other segments", () => {
-    const a = seg("A", P([0, 0], [1, 0], [2, 0])), b = seg("B", P([5, 5], [6, 6]));
+    const a = seg("A", P([0, 0], [1, 0], [2, 0])),
+      b = seg("B", P([5, 5], [6, 6]));
     const next = setPoint([a, b], a.key, 1, [1, 0.5]);
     assert.deepEqual(next[0].coords[1], [1, 0.5]);
     assert.equal(next[1], b);
@@ -33,17 +52,31 @@ describe("editor model", () => {
   it("inserts and removes points", () => {
     const a = seg("A", P([0, 0], [2, 0]));
     const ins = insertPoint([a], a.key, 1, midpoint([0, 0], [2, 0]));
-    assert.deepEqual(ins[0].coords, [[0, 0], [1, 0], [2, 0]]);
+    assert.deepEqual(ins[0].coords, [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]);
     assert.deepEqual(insertPoint([a], a.key, 99, [3, 0])[0].coords.at(-1), [3, 0]);
-    assert.deepEqual(removePoint(ins, a.key, 1)[0].coords, [[0, 0], [2, 0]]);
+    assert.deepEqual(removePoint(ins, a.key, 1)[0].coords, [
+      [0, 0],
+      [2, 0],
+    ]);
   });
 
   it("splits at an inner vertex into two usable segments, and refuses at the ends", () => {
     const a = seg("A", P([0, 0], [1, 0], [2, 0], [3, 0]), false);
     const r = splitAt([a], a.key, 2);
     assert.equal(r.segs.length, 2);
-    assert.deepEqual(r.segs[0].coords, [[0, 0], [1, 0], [2, 0]]);
-    assert.deepEqual(r.segs[1].coords, [[2, 0], [3, 0]]);
+    assert.deepEqual(r.segs[0].coords, [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]);
+    assert.deepEqual(r.segs[1].coords, [
+      [2, 0],
+      [3, 0],
+    ]);
     assert.equal(r.segs[1].required, false);
     assert.notEqual(r.segs[0].key, r.segs[1].key);
     assert.equal(splitAt([a], a.key, 0).segs.length, 1);
@@ -63,7 +96,11 @@ describe("editor model", () => {
 
   it("reverses direction", () => {
     const a = seg("A", P([0, 0], [1, 1], [2, 0]));
-    assert.deepEqual(reverseSeg([a], a.key)[0].coords, [[2, 0], [1, 1], [0, 0]]);
+    assert.deepEqual(reverseSeg([a], a.key)[0].coords, [
+      [2, 0],
+      [1, 1],
+      [0, 0],
+    ]);
   });
 
   it("flags segments with fewer than 2 points", () => {
@@ -72,7 +109,18 @@ describe("editor model", () => {
 
   it("maps to the API input", () => {
     const a = makeSeg(P([0, 0], [1, 0]), { name: "N", required: false, minCoverage: 0.8 });
-    assert.deepEqual(toInput([a]), [{ name: "N", required: false, smooth: false, coords: [[0, 0], [1, 0]], minCoverageRatio: 0.8 }]);
+    assert.deepEqual(toInput([a]), [
+      {
+        name: "N",
+        required: false,
+        smooth: false,
+        coords: [
+          [0, 0],
+          [1, 0],
+        ],
+        minCoverageRatio: 0.8,
+      },
+    ]);
   });
 
   it("finds the middle of a line and its heading", () => {
@@ -96,9 +144,13 @@ describe("curved segments in the editor", () => {
   it("a new point goes on the drawn curve, so adding it does not change the shape", () => {
     const curved = makeSeg(ctrl, { smooth: true });
     const m = midAfter(curved, 1);
-    assert.ok(curveOf(curved).line.some((p) => p[0] === m[0] && p[1] === m[1]), "the handle sits on the line");
+    assert.ok(
+      curveOf(curved).line.some((p) => p[0] === m[0] && p[1] === m[1]),
+      "the handle sits on the line",
+    );
     const with1 = insertPoint([curved], curved.key, 2, m)[0];
-    const before = segLength(curved), after = segLength(with1);
+    const before = segLength(curved),
+      after = segLength(with1);
     assert.ok(Math.abs(after - before) / before < 0.03, `${before} -> ${after}`);
   });
   it("split and join keep the curved setting", () => {
@@ -139,7 +191,8 @@ describe("typing coordinates", () => {
 describe("undo / redo", () => {
   it("steps back and forward, and a new edit clears redo", () => {
     let h = hist(1);
-    h = commit(h, 2); h = commit(h, 3);
+    h = commit(h, 2);
+    h = commit(h, 3);
     assert.equal(undo(h).present, 2);
     assert.equal(redo(undo(undo(h))).present, 2);
     const back = undo(h);

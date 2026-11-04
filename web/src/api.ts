@@ -1,15 +1,29 @@
 import type {
-  AssignmentDetail, AssignmentSummary, DownloadRow, PreflightOutcome, RouteSummary, RouteVersion, SegmentInput, User, WorkerRow,
+  AssignmentDetail,
+  AssignmentSummary,
+  DownloadRow,
+  PreflightOutcome,
+  RouteSummary,
+  RouteVersion,
+  SegmentInput,
+  User,
+  WorkerRow,
 } from "@shared/types.ts";
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+  ) {
     super(message);
   }
 }
 
 let onUnauthenticated: (() => void) | null = null;
-export const setUnauthenticatedHandler = (f: () => void) => { onUnauthenticated = f; };
+export const setUnauthenticatedHandler = (f: () => void) => {
+  onUnauthenticated = f;
+};
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
@@ -50,7 +64,8 @@ export const api = {
   routes: () => get<RouteSummary[]>("/api/admin/routes"),
   version: (vid: string) => get<RouteVersion>(`/api/admin/route-versions/${vid}`),
   createRoute: (name: string, segments: SegmentInput[]) => post<RouteVersion>("/api/admin/routes", { name, segments }),
-  saveDraft: (vid: string, name: string, segments: SegmentInput[]) => put<RouteVersion>(`/api/admin/route-versions/${vid}`, { name, segments }),
+  saveDraft: (vid: string, name: string, segments: SegmentInput[]) =>
+    put<RouteVersion>(`/api/admin/route-versions/${vid}`, { name, segments }),
   deleteDraft: (vid: string) => del(`/api/admin/route-versions/${vid}`),
   renameRoute: (routeId: string, name: string) => patch<{ id: string; name: string }>(`/api/admin/routes/${routeId}`, { name }),
   deleteRoute: (routeId: string) => del<{ ok: true }>(`/api/admin/routes/${routeId}`),
@@ -70,14 +85,19 @@ export const api = {
   myAssignments: () => get<AssignmentSummary[]>("/api/me/assignments"),
   myAssignment: (id: string) => get<AssignmentDetail>(`/api/me/assignments/${id}`),
   myPreflight: (id: string, outcome: PreflightOutcome) => post(`/api/me/assignments/${id}/preflight`, outcome),
-  mySkip: (id: string, segId: string, reason: string) => post<AssignmentDetail>(`/api/me/assignments/${id}/segments/${segId}/skip`, { reason }),
+  mySkip: (id: string, segId: string, reason: string) =>
+    post<AssignmentDetail>(`/api/me/assignments/${id}/segments/${segId}/skip`, { reason }),
   myUnskip: (id: string, segId: string) => post<AssignmentDetail>(`/api/me/assignments/${id}/segments/${segId}/unskip`),
   myFinish: (id: string) => post<AssignmentDetail>(`/api/me/assignments/${id}/finish`),
   /** raw GPS of one recording, for the admin review map */
-  myRecordingGps: (rid: string) => get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/me/recordings/${rid}/gps`),
-  recordingGps: (rid: string) => get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/admin/recordings/${rid}/gps`),
-  reviewAssignment: (id: string, decision: "approve" | "reject") => post<AssignmentDetail>(`/api/admin/assignments/${id}/review`, { decision }),
-  assignmentAudit: (id: string) => get<{ id: number; at: string; action: string; details: unknown; actor: string | null }[]>(`/api/admin/assignments/${id}/audit`),
+  myRecordingGps: (rid: string) =>
+    get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/me/recordings/${rid}/gps`),
+  recordingGps: (rid: string) =>
+    get<{ seq: number; t: number; lat: number; lng: number; acc: number }[]>(`/api/admin/recordings/${rid}/gps`),
+  reviewAssignment: (id: string, decision: "approve" | "reject") =>
+    post<AssignmentDetail>(`/api/admin/assignments/${id}/review`, { decision }),
+  assignmentAudit: (id: string) =>
+    get<{ id: number; at: string; action: string; details: unknown; actor: string | null }[]>(`/api/admin/assignments/${id}/audit`),
   reEvaluate: (id: string) => post<AssignmentDetail>(`/api/admin/assignments/${id}/re-evaluate`),
   downloads: () => get<DownloadRow[]>("/api/admin/recordings"),
   reassemble: (rid: string) => post(`/api/admin/recordings/${rid}/reassemble`),

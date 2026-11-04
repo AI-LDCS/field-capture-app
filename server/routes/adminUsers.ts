@@ -20,7 +20,11 @@ adminUsersRouter.get("/", async (_req, res) => {
 });
 
 const createSchema = z.object({
-  username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,32}$/, "3-32 chars: letters, digits . _ -"),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9._-]{3,32}$/, "3-32 chars: letters, digits . _ -"),
   displayName: z.string().trim().max(80).default(""),
   password: workerPassword.optional(), // left out = the server generates one
 });
@@ -33,7 +37,8 @@ adminUsersRouter.post("/", async (req, res) => {
   const user = await tx(async (c) => {
     const [u] = await q(
       "INSERT INTO users (username, display_name, password_hash, role) VALUES ($1,$2,$3,'worker') RETURNING *",
-      [body.username, body.displayName, hash], c,
+      [body.username, body.displayName, hash],
+      c,
     );
     await audit(req.user!.id, "user_created", { type: "user", id: u.id }, { username: u.username }, req.ip, c);
     return u;

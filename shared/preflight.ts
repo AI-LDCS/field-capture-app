@@ -19,11 +19,7 @@ export type PreflightEval = {
  * every one within the target accuracy, and little positional spread.
  * One good reading is never enough.
  */
-export function evaluatePreflight(
-  samples: PreflightSample[],
-  now: number,
-  cfg: PreflightConfig = CONFIG.preflight,
-): PreflightEval {
+export function evaluatePreflight(samples: PreflightSample[], now: number, cfg: PreflightConfig = CONFIG.preflight): PreflightEval {
   const recent = samples.filter((s) => now - s.t <= cfg.windowMs);
   const distinct = [...new Map(recent.map((s) => [s.t, s])).values()].sort((a, b) => a.t - b.t);
   const base = { samplesInWindow: distinct.length, spanMs: 0, worstAccuracyM: null, spreadM: null };

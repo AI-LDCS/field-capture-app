@@ -16,10 +16,17 @@ export function useStorage(cameraOpen: boolean): { storage: StorageInfo | null; 
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const [nonce, setNonce] = useState(0);
   useEffect(() => {
-    if (!cameraOpen) { setStorage(null); return; }
+    if (!cameraOpen) {
+      setStorage(null);
+      return;
+    }
     let dead = false;
-    void storageCheck().then((s) => { if (!dead) setStorage(s); });
-    return () => { dead = true; };
+    void storageCheck().then((s) => {
+      if (!dead) setStorage(s);
+    });
+    return () => {
+      dead = true;
+    };
   }, [cameraOpen, nonce]);
   return { storage, recheck: () => setNonce((n) => n + 1) };
 }
@@ -74,8 +81,11 @@ function GpsCheck({ assignmentId, onDone }: { assignmentId: string; onDone: (o: 
     finished.current = true;
     const accs = samples.current.map((x) => x.acc);
     const outcome: PreflightOutcome = {
-      result, durationMs: Date.now() - startAt.current, samples: samples.current.length,
-      bestAccuracyM: accs.length ? Math.min(...accs) : null, note,
+      result,
+      durationMs: Date.now() - startAt.current,
+      samples: samples.current.length,
+      bestAccuracyM: accs.length ? Math.min(...accs) : null,
+      note,
     };
     await api.myPreflight(assignmentId, outcome).catch(() => {});
     onDone(outcome);
@@ -89,8 +99,15 @@ function GpsCheck({ assignmentId, onDone }: { assignmentId: string; onDone: (o: 
     startAt.current = Date.now();
     if (s.fake) fakeGps.coldStart();
     const off = gpsSource().subscribe(
-      (f) => { samples.current = [...samples.current.slice(-59), f]; setErr(""); setAllowed(true); },
-      (msg, denied) => { setErr(msg); if (!denied) setAllowed(true); },
+      (f) => {
+        samples.current = [...samples.current.slice(-59), f];
+        setErr("");
+        setAllowed(true);
+      },
+      (msg, denied) => {
+        setErr(msg);
+        if (!denied) setAllowed(true);
+      },
     );
     const timer = setInterval(() => {
       const now = Date.now();
@@ -100,7 +117,10 @@ function GpsCheck({ assignmentId, onDone }: { assignmentId: string; onDone: (o: 
       setElapsed(now - startAt.current);
       if (e.stable) void finishRef.current("passed");
     }, 500);
-    return () => { off(); clearInterval(timer); };
+    return () => {
+      off();
+      clearInterval(timer);
+    };
   }, [s.fake]);
 
   const latest = samples.current.at(-1);
@@ -109,26 +129,46 @@ function GpsCheck({ assignmentId, onDone }: { assignmentId: string; onDone: (o: 
     <>
       <div className="row between gps-top">
         <div className="gps-big">{latest ? `±${latest.acc.toFixed(0)} m` : "–"}</div>
-        {leftS > 0 && <span className="small muted gps-time">Time left {Math.floor(leftS / 60)}:{String(leftS % 60).padStart(2, "0")}</span>}
+        {leftS > 0 && (
+          <span className="small muted gps-time">
+            Time left {Math.floor(leftS / 60)}:{String(leftS % 60).padStart(2, "0")}
+          </span>
+        )}
       </div>
-      <div className="meter"><div style={{ width: `${progress * 100}%` }} /></div>
+      <div className="meter">
+        <div style={{ width: `${progress * 100}%` }} />
+      </div>
       {err ? <p className="err">{err}</p> : <p>{gpsHint(latest?.acc, ev)}</p>}
       {allowed && elapsed >= s.preflightTimeoutS * 1000 && (
         <div className="warn-box">
           <p>GPS has not settled. If you skip, an administrator will review this assignment.</p>
-          <button className="danger" onClick={() => void finish("skipped", ev?.reason)}>Skip GPS check</button>
+          <button className="danger" onClick={() => void finish("skipped", ev?.reason)}>
+            Skip GPS check
+          </button>
         </div>
       )}
     </>
   );
 }
 
-function CameraCheck({ storage, recheck, open, err, busy }: {
-  storage: StorageInfo | null; recheck: () => void; open: () => Promise<void>; err: string; busy: boolean;
+function CameraCheck({
+  storage,
+  recheck,
+  open,
+  err,
+  busy,
+}: {
+  storage: StorageInfo | null;
+  recheck: () => void;
+  open: () => Promise<void>;
+  err: string;
+  busy: boolean;
 }) {
   const { camera } = useSession();
   const vid = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (vid.current) vid.current.srcObject = camera?.stream ?? null; }, [camera]);
+  useEffect(() => {
+    if (vid.current) vid.current.srcObject = camera?.stream ?? null;
+  }, [camera]);
 
   if (!camera) {
     if (busy) return <p className="muted">Opening camera…</p>;
@@ -147,7 +187,9 @@ function CameraCheck({ storage, recheck, open, err, busy }: {
       {storage?.ok && <p className="ok small">✓ {storage.quota ? `${fmtBytes(storage.free)} free` : "Storage ok"}</p>}
       {storage && !storage.ok && (
         <>
-          <p className="err">Only {fmtBytes(storage.free)} free, need {fmtBytes(CONFIG.recording.minFreeBytes)}. Free up space on the phone.</p>
+          <p className="err">
+            Only {fmtBytes(storage.free)} free, need {fmtBytes(CONFIG.recording.minFreeBytes)}. Free up space on the phone.
+          </p>
           <button onClick={recheck}>Check again</button>
         </>
       )}
@@ -157,9 +199,17 @@ function CameraCheck({ storage, recheck, open, err, busy }: {
 
 /** The sub-page behind Start Recording. The Start recording button here is the only way to begin a recording. */
 export function Onboard(props: {
-  run: AssignmentDetail; pre: PreflightOutcome | null; preflightDone: boolean; gpsDenied: boolean;
-  storage: StorageInfo | null; recheck: () => void; camera: { open: () => Promise<void>; err: string; busy: boolean };
-  why: string; onPreflight: (o: PreflightOutcome) => void; onRedo: () => void; onStart: () => void;
+  run: AssignmentDetail;
+  pre: PreflightOutcome | null;
+  preflightDone: boolean;
+  gpsDenied: boolean;
+  storage: StorageInfo | null;
+  recheck: () => void;
+  camera: { open: () => Promise<void>; err: string; busy: boolean };
+  why: string;
+  onPreflight: (o: PreflightOutcome) => void;
+  onRedo: () => void;
+  onStart: () => void;
 }) {
   const { run, pre, preflightDone, gpsDenied, storage, recheck, camera: cam, why, onPreflight, onRedo, onStart } = props;
   const { camera, active } = useSession();
@@ -167,48 +217,75 @@ export function Onboard(props: {
   const cameraOk = preflightDone && !gpsDenied && !!camera && !!storage?.ok; // the camera opens early, but this step comes second
   const walkable = run.segments.filter((x) => x.status !== "skipped");
 
-  useEffect(() => { // dev tools: fake mode was switched
-    if (camera && camera.fake !== s.fake && !active) { closeCamera(); void cam.open(); }
+  useEffect(() => {
+    // dev tools: fake mode was switched
+    if (camera && camera.fake !== s.fake && !active) {
+      closeCamera();
+      void cam.open();
+    }
   }, [s.fake]);
 
   return (
     <>
-      <a className="back small" href={`#/assignment/${run.id}`}>‹ {run.route.name}</a>
+      <a className="back small" href={`#/assignment/${run.id}`}>
+        ‹ {run.route.name}
+      </a>
 
       <section className="card">
         {gpsDenied ? (
           <>
-            <h3><span className="step-dot bad">!</span> GPS</h3>
+            <h3>
+              <span className="step-dot bad">!</span> GPS
+            </h3>
             <p className="err">Location is blocked, so you cannot record. Allow it for this site in your browser settings.</p>
             <button onClick={() => location.reload()}>Try again</button>
           </>
         ) : preflightDone ? (
           <div className="row between check-head">
-            <h3><span className="step-dot done">✓</span> GPS {pre!.result === "skipped" ? "skipped" : `±${pre!.bestAccuracyM?.toFixed(0) ?? "?"} m`}</h3>
-            <button className="ghost small" onClick={onRedo}>Redo</button>
+            <h3>
+              <span className="step-dot done">✓</span> GPS{" "}
+              {pre!.result === "skipped" ? "skipped" : `±${pre!.bestAccuracyM?.toFixed(0) ?? "?"} m`}
+            </h3>
+            <button className="ghost small" onClick={onRedo}>
+              Redo
+            </button>
           </div>
         ) : (
           <>
-            <h3><span className="step-dot">1</span> GPS</h3>
+            <h3>
+              <span className="step-dot">1</span> GPS
+            </h3>
             <GpsCheck assignmentId={run.id} onDone={onPreflight} />
           </>
         )}
       </section>
 
       <section className={`card${preflightDone && !gpsDenied ? "" : " todo"}`}>
-        <h3><span className={`step-dot${cameraOk ? " done" : ""}`}>{cameraOk ? "✓" : "2"}</span> Camera &amp; storage</h3>
+        <h3>
+          <span className={`step-dot${cameraOk ? " done" : ""}`}>{cameraOk ? "✓" : "2"}</span> Camera &amp; storage
+        </h3>
         {preflightDone && !gpsDenied && <CameraCheck storage={storage} recheck={recheck} open={cam.open} err={cam.err} busy={cam.busy} />}
       </section>
 
-      <button className="cta" disabled={!!why} onClick={onStart}>Start recording</button>
-      {why
-        ? <p className="muted small center">{why}</p>
-        : <p className="muted small center">Keep this page open and the screen on. Recording stops if you leave.</p>}
+      <button className="cta" disabled={!!why} onClick={onStart}>
+        Start recording
+      </button>
+      {why ? (
+        <p className="muted small center">{why}</p>
+      ) : (
+        <p className="muted small center">Keep this page open and the screen on. Recording stops if you leave.</p>
+      )}
       {s.fake && (
         <div className="row wrap">
-          <button className="ghost" onClick={() => fakeGps.walk(walkable.map((x) => x.coords))}>Fake: walk all segments</button>
-          <button className="ghost" onClick={() => fakeGps.walk(walkable.filter((x) => x.required).map((x) => x.coords))}>Fake: walk required only</button>
-          <button className="ghost" onClick={() => fakeGps.stopWalking()}>Fake: stop</button>
+          <button className="ghost" onClick={() => fakeGps.walk(walkable.map((x) => x.coords))}>
+            Fake: walk all segments
+          </button>
+          <button className="ghost" onClick={() => fakeGps.walk(walkable.filter((x) => x.required).map((x) => x.coords))}>
+            Fake: walk required only
+          </button>
+          <button className="ghost" onClick={() => fakeGps.stopWalking()}>
+            Fake: stop
+          </button>
         </div>
       )}
     </>

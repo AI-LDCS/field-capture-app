@@ -38,11 +38,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (checking) return;
       checking = true;
       fetch("/api/auth/me", { credentials: "same-origin" })
-        .then((r) => { if (r.status === 401) { if (isRecording()) setAuthLost(true); else setUserState(null); } })
+        .then((r) => {
+          if (r.status === 401) {
+            if (isRecording()) setAuthLost(true);
+            else setUserState(null);
+          }
+        })
         .catch(() => {})
-        .finally(() => { checking = false; });
+        .finally(() => {
+          checking = false;
+        });
     });
-    api.me().then((r) => signedIn(r.user, r.devTools)).catch(() => setUserState(null)).finally(() => setLoading(false));
+    api
+      .me()
+      .then((r) => signedIn(r.user, r.devTools))
+      .catch(() => setUserState(null))
+      .finally(() => setLoading(false));
   }, []);
 
   // what is stored on the phone belongs to the signed-in user, and only their uploader runs
@@ -50,27 +61,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.role === "worker") {
       setLocalUser(user.id);
       // anything still marked "recording" was cut off (refresh, crash, closed tab): mark it before the uploader runs
-      void scanInterrupted().catch(() => {}).finally(startUploader);
-    } else { stopUploader(); setLocalUser(null); }
+      void scanInterrupted()
+        .catch(() => {})
+        .finally(startUploader);
+    } else {
+      stopUploader();
+      setLocalUser(null);
+    }
   }, [user?.id, user?.role]);
 
   // the recording ended: now the lost session can show the login screen
   useEffect(() => {
-    if (authLost && !active) { setAuthLost(false); setUserState(null); }
+    if (authLost && !active) {
+      setAuthLost(false);
+      setUserState(null);
+    }
   }, [authLost, active]);
 
   const logout = async () => {
-    if (isRecording()) { alert("Stop the recording first."); return; }
+    if (isRecording()) {
+      alert("Stop the recording first.");
+      return;
+    }
     if (user?.role === "worker") {
       const u = await unsentSummary().catch(() => ({ recordings: 0, chunks: 0 }));
-      if (u.recordings > 0 && !confirm(`${u.recordings} recording(s) have not finished uploading. They stay on this phone and upload when you sign in again. Sign out anyway?`)) return;
+      if (
+        u.recordings > 0 &&
+        !confirm(
+          `${u.recordings} recording(s) have not finished uploading. They stay on this phone and upload when you sign in again. Sign out anyway?`,
+        )
+      )
+        return;
     }
-    try { await api.logout(); } catch { /* the cookie is cleared server side either way */ }
+    try {
+      await api.logout();
+    } catch {
+      /* the cookie is cleared server side either way */
+    }
     setUserState(null);
     location.hash = "#/";
   };
 
-  const relogged = () => { setAuthLost(false); resumeUploader(); };
+  const relogged = () => {
+    setAuthLost(false);
+    resumeUploader();
+  };
   return <Ctx.Provider value={{ user, loading, authLost, logout, signedIn, relogged }}>{children}</Ctx.Provider>;
 }
 
@@ -84,10 +119,15 @@ export function SessionBanner() {
     setErr("");
     try {
       const r = await api.login(user!.username, pw);
-      if (r.user.id !== user!.id) { await api.logout(); throw new Error("wrong user"); }
+      if (r.user.id !== user!.id) {
+        await api.logout();
+        throw new Error("wrong user");
+      }
       setPw("");
       relogged();
-    } catch (x: any) { setErr(x.message); }
+    } catch (x: any) {
+      setErr(x.message);
+    }
   };
   return (
     <form className="banner" onSubmit={go}>
@@ -112,7 +152,14 @@ export function Login() {
     e.preventDefault();
     setBusy(true);
     setErr("");
-    try { const r = await api.login(username, password); signedIn(r.user, r.devTools); } catch (x: any) { setErr(x.message); } finally { setBusy(false); }
+    try {
+      const r = await api.login(username, password);
+      signedIn(r.user, r.devTools);
+    } catch (x: any) {
+      setErr(x.message);
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <div className="login">
@@ -123,8 +170,14 @@ export function Login() {
       </div>
       <form className="card narrow" onSubmit={submit}>
         <h2>Sign in</h2>
-        <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus /></label>
-        <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+        <label>
+          Username
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus />
+        </label>
+        <label>
+          Password
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        </label>
         {err && <p className="err">{err}</p>}
         <button disabled={busy || !username || !password}>Sign in</button>
       </form>
@@ -148,15 +201,28 @@ export function ChangePassword() {
     try {
       await api.changePassword(cur, next);
       setDone(true);
-      setCur(""); setNext(""); setAgain("");
-    } catch (x: any) { setErr(x.message); }
+      setCur("");
+      setNext("");
+      setAgain("");
+    } catch (x: any) {
+      setErr(x.message);
+    }
   };
   return (
     <form className="card narrow" onSubmit={submit}>
       <h2>Change my password</h2>
-      <label>Current password<input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" /></label>
-      <label>New password (12+ characters)<input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" /></label>
-      <label>New password again<input type="password" value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" /></label>
+      <label>
+        Current password
+        <input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" />
+      </label>
+      <label>
+        New password (12+ characters)
+        <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+      </label>
+      <label>
+        New password again
+        <input type="password" value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" />
+      </label>
       {err && <p className="err">{err}</p>}
       {done && <p className="ok">Password changed. Your other devices were signed out.</p>}
       <button disabled={!cur || !next || !again}>Change password</button>

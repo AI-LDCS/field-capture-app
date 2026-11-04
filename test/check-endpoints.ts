@@ -22,8 +22,11 @@ const never = all.filter((e) => !hits.has(e));
 const noSuccess = all.filter((e) => hits.has(e) && ![...hits.get(e)!].some((s) => s >= 200 && s < 300));
 const noRefusal = all.filter((e) => hits.has(e) && ![...hits.get(e)!].some((s) => s >= 400));
 
-console.log(`\nendpoints: ${all.length} | answered with 2xx in tests: ${all.length - never.length - noSuccess.length} | refused (4xx) at least once: ${all.length - never.length - noRefusal.length}`);
-if (noRefusal.length) console.log(`note: never refused in a test (fine for read-only or always-allowed routes):\n  ${noRefusal.join("\n  ")}`);
+console.log(
+  `\nendpoints: ${all.length} | answered with 2xx in tests: ${all.length - never.length - noSuccess.length} | refused (4xx) at least once: ${all.length - never.length - noRefusal.length}`,
+);
+if (noRefusal.length)
+  console.log(`note: never refused in a test (fine for read-only or always-allowed routes):\n  ${noRefusal.join("\n  ")}`);
 if (never.length || noSuccess.length) {
   if (never.length) console.error(`\nFAIL: no test hits these endpoints:\n  ${never.join("\n  ")}`);
   if (noSuccess.length) console.error(`\nFAIL: only ever tested with failures (no 2xx):\n  ${noSuccess.join("\n  ")}`);

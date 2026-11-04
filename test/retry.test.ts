@@ -7,17 +7,29 @@ const noWait = async () => {};
 describe("withRetry", () => {
   it("returns the result of a write that works first time, without retrying", async () => {
     let calls = 0;
-    assert.equal(await withRetry(async () => { calls++; return "ok"; }, { sleep: noWait }), "ok");
+    assert.equal(
+      await withRetry(
+        async () => {
+          calls++;
+          return "ok";
+        },
+        { sleep: noWait },
+      ),
+      "ok",
+    );
     assert.equal(calls, 1);
   });
 
   it("tries again after a failure and reports each retry, so the caller can reopen the database", async () => {
     let calls = 0;
     const retries: number[] = [];
-    const out = await withRetry(async () => {
-      if (++calls < 3) throw new Error("connection lost");
-      return "saved";
-    }, { sleep: noWait, onRetry: (_e, attempt) => retries.push(attempt) });
+    const out = await withRetry(
+      async () => {
+        if (++calls < 3) throw new Error("connection lost");
+        return "saved";
+      },
+      { sleep: noWait, onRetry: (_e, attempt) => retries.push(attempt) },
+    );
     assert.equal(out, "saved");
     assert.equal(calls, 3);
     assert.deepEqual(retries, [1, 2]);
@@ -27,7 +39,13 @@ describe("withRetry", () => {
     let calls = 0;
     const waited: number[] = [];
     await assert.rejects(
-      withRetry(async () => { calls++; throw new Error(`failure ${calls}`); }, { delaysMs: [10, 20], sleep: async (ms) => void waited.push(ms) }),
+      withRetry(
+        async () => {
+          calls++;
+          throw new Error(`failure ${calls}`);
+        },
+        { delaysMs: [10, 20], sleep: async (ms) => void waited.push(ms) },
+      ),
       /failure 3/,
     );
     assert.equal(calls, 3, "one try plus one per pause");

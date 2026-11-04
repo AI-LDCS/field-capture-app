@@ -1,7 +1,17 @@
 import type { Readable } from "node:stream";
 import {
-  AbortMultipartUploadCommand, DeleteBucketCommand, CompleteMultipartUploadCommand, CreateBucketCommand, CreateMultipartUploadCommand,
-  DeleteObjectsCommand, GetObjectCommand, HeadBucketCommand, ListObjectsV2Command, PutObjectCommand, S3Client, UploadPartCommand,
+  AbortMultipartUploadCommand,
+  DeleteBucketCommand,
+  CompleteMultipartUploadCommand,
+  CreateBucketCommand,
+  CreateMultipartUploadCommand,
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+  UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { config } from "./config.ts";
 
@@ -24,7 +34,9 @@ export async function ensureBucket() {
       console.log(`created bucket "${Bucket()}"`);
     } catch (e) {
       // another instance may have created it a moment ago
-      await s3.send(new HeadBucketCommand({ Bucket: Bucket() })).catch(() => { throw e; });
+      await s3.send(new HeadBucketCommand({ Bucket: Bucket() })).catch(() => {
+        throw e;
+      });
     }
   }
 }
@@ -37,7 +49,12 @@ export type ObjectRead = { body: Readable; status: number; length: number; conte
 /** Streams an object, or a byte range of it. The caller must consume or destroy `body`. */
 export async function getObject(Key: string, range?: string): Promise<ObjectRead> {
   const r = await s3.send(new GetObjectCommand({ Bucket: Bucket(), Key, Range: range }));
-  return { body: r.Body as Readable, status: r.$metadata.httpStatusCode ?? 200, length: r.ContentLength ?? 0, contentRange: r.ContentRange };
+  return {
+    body: r.Body as Readable,
+    status: r.$metadata.httpStatusCode ?? 200,
+    length: r.ContentLength ?? 0,
+    contentRange: r.ContentRange,
+  };
 }
 
 export async function readObject(Key: string): Promise<Buffer> {
@@ -49,7 +66,9 @@ export async function readObject(Key: string): Promise<Buffer> {
 
 export async function deleteObjects(keys: string[]) {
   for (let i = 0; i < keys.length; i += 1000) {
-    await s3.send(new DeleteObjectsCommand({ Bucket: Bucket(), Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true } }));
+    await s3.send(
+      new DeleteObjectsCommand({ Bucket: Bucket(), Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true } }),
+    );
   }
 }
 

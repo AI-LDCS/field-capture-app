@@ -30,7 +30,11 @@ export function smoothLine(control: LngLat[], stepM = 2): { line: LngLat[]; at: 
   const back = (v: V): LngLat => [lng0 + v.x / kx, lat0 + v.y / ky];
 
   const n = P.length;
-  const ext: V[] = [{ x: 2 * P[0].x - P[1].x, y: 2 * P[0].y - P[1].y }, ...P, { x: 2 * P[n - 1].x - P[n - 2].x, y: 2 * P[n - 1].y - P[n - 2].y }];
+  const ext: V[] = [
+    { x: 2 * P[0].x - P[1].x, y: 2 * P[0].y - P[1].y },
+    ...P,
+    { x: 2 * P[n - 1].x - P[n - 2].x, y: 2 * P[n - 1].y - P[n - 2].y },
+  ];
   const dist = (a: V, b: V) => Math.hypot(b.x - a.x, b.y - a.y);
   const lerp = (a: V, b: V, ta: number, tb: number, t: number): V => {
     const d = tb - ta;
@@ -42,7 +46,10 @@ export function smoothLine(control: LngLat[], stepM = 2): { line: LngLat[]; at: 
   const line: LngLat[] = [pts[0]];
   const at: number[] = [0];
   for (let i = 0; i < n - 1; i++) {
-    const p0 = ext[i], p1 = ext[i + 1], p2 = ext[i + 2], p3 = ext[i + 3];
+    const p0 = ext[i],
+      p1 = ext[i + 1],
+      p2 = ext[i + 2],
+      p3 = ext[i + 3];
     const t0 = 0;
     const t1 = t0 + Math.sqrt(dist(p0, p1));
     const t2 = t1 + Math.sqrt(dist(p1, p2));
@@ -50,8 +57,11 @@ export function smoothLine(control: LngLat[], stepM = 2): { line: LngLat[]; at: 
     const steps = Math.max(2, Math.ceil(dist(p1, p2) / stepM));
     for (let j = 1; j < steps; j++) {
       const t = t1 + ((t2 - t1) * j) / steps;
-      const A1 = lerp(p0, p1, t0, t1, t), A2 = lerp(p1, p2, t1, t2, t), A3 = lerp(p2, p3, t2, t3, t);
-      const B1 = lerp(A1, A2, t0, t2, t), B2 = lerp(A2, A3, t1, t3, t);
+      const A1 = lerp(p0, p1, t0, t1, t),
+        A2 = lerp(p1, p2, t1, t2, t),
+        A3 = lerp(p2, p3, t2, t3, t);
+      const B1 = lerp(A1, A2, t0, t2, t),
+        B2 = lerp(A2, A3, t1, t3, t);
       line.push(back(lerp(B1, B2, t1, t2, t)));
     }
     line.push(pts[i + 1]); // the control point itself, exactly

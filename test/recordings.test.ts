@@ -11,8 +11,12 @@ let t: Awaited<ReturnType<typeof startTestServer>>;
 const ADMIN = { username: "testadmin", password: "initial-admin-password-1" };
 const UA = "worker-password-1";
 
-before(async () => { t = await startTestServer(); });
-after(async () => { await t.stop(); });
+before(async () => {
+  t = await startTestServer();
+});
+after(async () => {
+  await t.stop();
+});
 
 async function adminClient() {
   const c = new Client(t.base);
@@ -28,14 +32,24 @@ async function makeWorker(admin: Client, username: string) {
 }
 
 // one curved required segment (a big arc), one straight optional segment
-const ARC = [[100.5, 13.75], [100.5012, 13.7515], [100.5024, 13.75]];
-const OPT = [[100.503, 13.75], [100.5045, 13.75]];
+const ARC = [
+  [100.5, 13.75],
+  [100.5012, 13.7515],
+  [100.5024, 13.75],
+];
+const OPT = [
+  [100.503, 13.75],
+  [100.5045, 13.75],
+];
 
 async function publish(admin: Client, name: string, segs?: any[]) {
-  const r = await admin.post("/api/admin/routes", { name, segments: segs ?? [
-    { required: true, smooth: true, coords: ARC },
-    { required: false, coords: OPT },
-  ] });
+  const r = await admin.post("/api/admin/routes", {
+    name,
+    segments: segs ?? [
+      { required: true, smooth: true, coords: ARC },
+      { required: false, coords: OPT },
+    ],
+  });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const p = await admin.post(`/api/admin/route-versions/${r.body.id}/publish`);
   assert.equal(p.status, 200, JSON.stringify(p.body));
@@ -60,12 +74,22 @@ function walk(coords: number[][], from = Date.now() - 600_000, acc = 6): P[] {
 const chunksOf = (n: number, size = 3000) => Array.from({ length: n }, (_, i) => crypto.randomBytes(size + i));
 
 async function register(c: Client, assignmentId: string, id = crypto.randomUUID(), extra: object = {}) {
-  const r = await c.post("/api/me/recordings", { id, assignmentId, mime: "video/webm;codecs=vp9", startedAt: Date.now() - 600_000, ...extra });
+  const r = await c.post("/api/me/recordings", {
+    id,
+    assignmentId,
+    mime: "video/webm;codecs=vp9",
+    startedAt: Date.now() - 600_000,
+    ...extra,
+  });
   return { id, res: r };
 }
 const putChunk = (c: Client, id: string, seq: number, b: Buffer, hash = sha256(b)) =>
   c.putRaw(`/api/me/recordings/${id}/chunks/${seq}`, b, { "x-sha256": hash });
-const manifest = (chunks: Buffer[], gps: P[]) => ({ endedAt: Date.now(), chunks: chunks.map((b, seq) => ({ seq, sha256: sha256(b) })), gpsCount: gps.length });
+const manifest = (chunks: Buffer[], gps: P[]) => ({
+  endedAt: Date.now(),
+  chunks: chunks.map((b, seq) => ({ seq, sha256: sha256(b) })),
+  gpsCount: gps.length,
+});
 
 /** register + chunks + gps + finalize */
 async function upload(c: Client, assignmentId: string, chunks: Buffer[], gps: P[], extra: object = {}) {
@@ -94,7 +118,8 @@ async function curveOf(c: Client, assignmentId: string): Promise<number[][]> {
 describe("ownership", () => {
   it("worker B cannot register on, upload to, read, finalize or delete worker A's recording; a reused id is a plain 404", async () => {
     const admin = await adminClient();
-    const a = await makeWorker(admin, "own-a"), b = await makeWorker(admin, "own-b");
+    const a = await makeWorker(admin, "own-a"),
+      b = await makeWorker(admin, "own-b");
     const v = await publish(admin, "Own");
     const asgA = await assign(admin, v.id, a.id);
     const { id, res } = await register(a.client, asgA.id);
@@ -124,7 +149,11 @@ describe("ownership", () => {
     assert.equal((await register(w.client, asg.id, id)).res.body.existing, true);
     assert.equal((await register(w.client, asg.id, crypto.randomUUID(), { simulated: true })).res.status, 400);
     t.config.devTools = true;
-    try { assert.equal((await register(w.client, asg.id, crypto.randomUUID(), { simulated: true })).res.status, 201); } finally { t.config.devTools = false; }
+    try {
+      assert.equal((await register(w.client, asg.id, crypto.randomUUID(), { simulated: true })).res.status, 201);
+    } finally {
+      t.config.devTools = false;
+    }
     assert.equal((await w.client.get(`/api/me/assignments/${asg.id}`)).body.status, "in_progress");
 
     await t.pool.query("UPDATE assignments SET status='completed' WHERE id=$1", [asg.id]);
@@ -149,11 +178,18 @@ describe("chunk upload", () => {
     assert.equal((await putChunk(w.client, id, -1, b)).status, 415, "a malformed path is not the chunk route");
 
     // raw bytes are allowed on this one route only, and only as octet-stream
-    const txt = await w.client.req("PUT", `/api/me/recordings/${id}/chunks/1`, "plain text", { "content-type": "text/plain", "x-sha256": sha256(Buffer.from("plain text")) });
+    const txt = await w.client.req("PUT", `/api/me/recordings/${id}/chunks/1`, "plain text", {
+      "content-type": "text/plain",
+      "x-sha256": sha256(Buffer.from("plain text")),
+    });
     assert.equal(txt.status, 415);
-    const form = await w.client.req("PUT", `/api/me/recordings/${id}/chunks/1`, "a=b", { "content-type": "application/x-www-form-urlencoded" });
+    const form = await w.client.req("PUT", `/api/me/recordings/${id}/chunks/1`, "a=b", {
+      "content-type": "application/x-www-form-urlencoded",
+    });
     assert.equal(form.status, 415);
-    const elsewhere = await new Client(t.base).req("POST", "/api/auth/login", Buffer.from("{}"), { "content-type": "application/octet-stream" });
+    const elsewhere = await new Client(t.base).req("POST", "/api/auth/login", Buffer.from("{}"), {
+      "content-type": "application/octet-stream",
+    });
     assert.equal(elsewhere.status, 415, "octet-stream must not be accepted on other routes");
     const evil = await new Client(t.base, "https://evil.example").putRaw(`/api/me/recordings/${id}/chunks/1`, b, { "x-sha256": sha256(b) });
     assert.equal(evil.status, 403);
@@ -177,7 +213,8 @@ describe("chunk upload", () => {
 describe("finalize and assembly", () => {
   it("lists missing chunks, rejects a wrong GPS count, succeeds, and is safe to repeat; a verified recording is frozen", async () => {
     const admin = await adminClient();
-    const w = await makeWorker(admin, "finalizer"), x = await makeWorker(admin, "finalizer-x");
+    const w = await makeWorker(admin, "finalizer"),
+      x = await makeWorker(admin, "finalizer-x");
     const asg = await assign(admin, (await publish(admin, "Fin")).id, w.id);
     const chunks = chunksOf(3);
     const gps = walk(await curveOf(w.client, asg.id));
@@ -193,17 +230,30 @@ describe("finalize and assembly", () => {
     const wrongGps = await w.client.post(`/api/me/recordings/${id}/finalize`, { ...manifest(chunks, gps), gpsCount: gps.length + 5 });
     assert.equal(wrongGps.status, 409);
     assert.equal(wrongGps.body.gpsOk, false);
-    const wrongHash = await w.client.post(`/api/me/recordings/${id}/finalize`, { ...manifest(chunks, gps), chunks: chunks.map((_, seq) => ({ seq, sha256: sha256(Buffer.from("x" + seq)) })) });
+    const wrongHash = await w.client.post(`/api/me/recordings/${id}/finalize`, {
+      ...manifest(chunks, gps),
+      chunks: chunks.map((_, seq) => ({ seq, sha256: sha256(Buffer.from("x" + seq)) })),
+    });
     assert.equal(wrongHash.status, 409);
 
     assert.equal((await x.client.post(`/api/me/recordings/${id}/finalize`, manifest(chunks, gps))).status, 404);
     assert.equal((await w.client.post(`/api/me/recordings/${id}/finalize`, manifest(chunks, gps))).status, 200);
-    assert.equal((await w.client.post(`/api/me/recordings/${id}/finalize`, manifest(chunks, gps))).status, 200, "a retried finalize is safe");
+    assert.equal(
+      (await w.client.post(`/api/me/recordings/${id}/finalize`, manifest(chunks, gps))).status,
+      200,
+      "a retried finalize is safe",
+    );
 
     assert.equal((await putChunk(w.client, id, 3, crypto.randomBytes(100))).status, 409, "no new data after verification");
     await assert.rejects(t.pool.query("UPDATE recordings SET chunk_count = 99 WHERE id = $1", [id]), /immutable/);
-    await assert.rejects(t.pool.query("INSERT INTO gps_points (recording_id, seq, t_ms, lat, lng, acc) VALUES ($1, 9999, 1, 1, 1, 1)", [id]), /immutable/);
-    await assert.rejects(t.pool.query("UPDATE recordings SET user_id = (SELECT id FROM users WHERE username='testadmin') WHERE id = $1", [id]), /owner/);
+    await assert.rejects(
+      t.pool.query("INSERT INTO gps_points (recording_id, seq, t_ms, lat, lng, acc) VALUES ($1, 9999, 1, 1, 1, 1)", [id]),
+      /immutable/,
+    );
+    await assert.rejects(
+      t.pool.query("UPDATE recordings SET user_id = (SELECT id FROM users WHERE username='testadmin') WHERE id = $1", [id]),
+      /owner/,
+    );
   });
 
   it("assembles one playable file, serves it with real range responses to admins only, and frees the chunk copies", async () => {
@@ -246,7 +296,15 @@ describe("finalize and assembly", () => {
     const gj = await admin.get(`/api/admin/recordings/${id}/gps.json`);
     assert.ok(gj.body.points[0].videoTimeS !== undefined);
     const audit = (await t.pool.query("SELECT DISTINCT action FROM audit_log WHERE target_id = $1", [id])).rows.map((r) => r.action);
-    for (const a of ["recording_registered", "recording_verified", "recording_assembled", "recording_viewed", "recording_downloaded", "gps_downloaded"]) assert.ok(audit.includes(a), a);
+    for (const a of [
+      "recording_registered",
+      "recording_verified",
+      "recording_assembled",
+      "recording_viewed",
+      "recording_downloaded",
+      "gps_downloaded",
+    ])
+      assert.ok(audit.includes(a), a);
   });
 
   it("a crash during assembly is picked up again on restart", async () => {
@@ -256,7 +314,10 @@ describe("finalize and assembly", () => {
     const id = await upload(w.client, asg.id, chunksOf(2, 4000), walk(await curveOf(w.client, asg.id)));
     await assembled(id);
     // pretend the process died halfway: the file is not built yet and the job says "running"
-    await t.pool.query("UPDATE recordings SET assembly_state='running', file_key=NULL, file_bytes=NULL, file_sha256=NULL, chunks_purged=false WHERE id=$1", [id]);
+    await t.pool.query(
+      "UPDATE recordings SET assembly_state='running', file_key=NULL, file_bytes=NULL, file_sha256=NULL, chunks_purged=false WHERE id=$1",
+      [id],
+    );
     // the chunk objects were deleted by the first run; put the recording back to a state that can fail cleanly
     const { startAssembler, stopAssembler } = await import("../server/assemble.ts");
     startAssembler();
@@ -273,11 +334,28 @@ describe("finalize and assembly", () => {
     assert.ok(s.assembly_error);
   });
 
-  it("with ffmpeg, the assembled video gets a real duration and can be seeked (real WebM, split at arbitrary points)", { skip: !hasFfmpeg() }, async () => {
+  it("with ffmpeg, the assembled video gets a real duration and can be seeked (real WebM, split at arbitrary points)", {
+    skip: !hasFfmpeg(),
+  }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fc-test-"));
     try {
       const src = path.join(dir, "src.webm");
-      execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=duration=2:size=320x240:rate=15", "-c:v", "libvpx", "-b:v", "300k", "-f", "webm", src]);
+      execFileSync("ffmpeg", [
+        "-v",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=duration=2:size=320x240:rate=15",
+        "-c:v",
+        "libvpx",
+        "-b:v",
+        "300k",
+        "-f",
+        "webm",
+        src,
+      ]);
       const bytes = fs.readFileSync(src);
       const cuts = [0, Math.floor(bytes.length / 3), Math.floor((2 * bytes.length) / 3), bytes.length];
       const chunks = cuts.slice(1).map((c, i) => bytes.subarray(cuts[i], c));
@@ -290,17 +368,28 @@ describe("finalize and assembly", () => {
       try {
         id = await upload(w.client, asg.id, chunks, walk(await curveOf(w.client, asg.id)));
         await assembled(id);
-      } finally { t.config.assembly.remux = false; }
+      } finally {
+        t.config.assembly.remux = false;
+      }
       const out = path.join(dir, "out.webm");
       fs.writeFileSync(out, (await admin.get(`/api/admin/recordings/${id}/video`)).bytes);
-      const dur = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", out]).toString().trim();
+      const dur = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", out])
+        .toString()
+        .trim();
       assert.ok(Number(dur) > 1.5 && Number(dur) < 2.6, `duration ${dur}`);
-    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
 function hasFfmpeg() {
-  try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return true; } catch { return false; }
+  try {
+    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 describe("who decides completion", () => {
@@ -340,11 +429,18 @@ describe("who decides completion", () => {
     assert.equal(f.body.status, "completed", JSON.stringify(f.body.reasons));
     assert.ok(f.body.segments[0].coverage >= 0.9);
     assert.equal(f.body.segments[1].status, "pending", "the optional segment was never walked and need not be");
-    assert.ok(f.body.segments[0].evidence.length >= 1 && f.body.segments[0].evidence[0].firstTMs, "evidence records when the segment was covered");
+    assert.ok(
+      f.body.segments[0].evidence.length >= 1 && f.body.segments[0].evidence[0].firstTMs,
+      "evidence records when the segment was covered",
+    );
 
     // done is done
     assert.equal((await register(w.client, asg.id)).res.status, 409);
-    assert.equal((await w.client.post(`/api/me/assignments/${asg.id}/preflight`, { result: "passed", durationMs: 1, samples: 1, bestAccuracyM: 1 })).status, 409);
+    assert.equal(
+      (await w.client.post(`/api/me/assignments/${asg.id}/preflight`, { result: "passed", durationMs: 1, samples: 1, bestAccuracyM: 1 }))
+        .status,
+      409,
+    );
   });
 
   it("a skipped GPS check, poor accuracy or simulated data sends it to review; an admin approves or sends it back", async () => {
@@ -353,7 +449,13 @@ describe("who decides completion", () => {
     const v = await publish(admin, "Review");
     const asg = await assign(admin, v.id, w.id);
     const curve = await curveOf(w.client, asg.id);
-    await w.client.post(`/api/me/assignments/${asg.id}/preflight`, { result: "skipped", durationMs: 90000, samples: 3, bestAccuracyM: 40, note: "accuracy 40 m > 15 m" });
+    await w.client.post(`/api/me/assignments/${asg.id}/preflight`, {
+      result: "skipped",
+      durationMs: 90000,
+      samples: 3,
+      bestAccuracyM: 40,
+      note: "accuracy 40 m > 15 m",
+    });
     await upload(w.client, asg.id, chunksOf(2), walk(curve));
     const f = await w.client.post(`/api/me/assignments/${asg.id}/finish`);
     assert.equal(f.body.status, "needs_review");
@@ -362,7 +464,11 @@ describe("who decides completion", () => {
     assert.equal((await w.client.post(`/api/admin/assignments/${asg.id}/review`, { decision: "approve" })).status, 403);
     const back = await admin.post(`/api/admin/assignments/${asg.id}/review`, { decision: "reject" });
     assert.equal(back.body.status, "in_progress");
-    assert.equal((await admin.post(`/api/admin/assignments/${asg.id}/review`, { decision: "approve" })).status, 409, "no longer waiting for review");
+    assert.equal(
+      (await admin.post(`/api/admin/assignments/${asg.id}/review`, { decision: "approve" })).status,
+      409,
+      "no longer waiting for review",
+    );
     const again = await admin.post(`/api/admin/assignments/${asg.id}/re-evaluate`);
     assert.equal(again.body.status, "needs_review");
     const ok = await admin.post(`/api/admin/assignments/${asg.id}/review`, { decision: "approve" });
@@ -373,7 +479,11 @@ describe("who decides completion", () => {
     const asgX = await assign(admin, v.id, x.id);
     await x.client.post(`/api/me/assignments/${asgX.id}/preflight`, { result: "passed", durationMs: 9000, samples: 9, bestAccuracyM: 5 });
     t.config.devTools = true;
-    try { await upload(x.client, asgX.id, chunksOf(2), walk(await curveOf(x.client, asgX.id)), { simulated: true }); } finally { t.config.devTools = false; }
+    try {
+      await upload(x.client, asgX.id, chunksOf(2), walk(await curveOf(x.client, asgX.id)), { simulated: true });
+    } finally {
+      t.config.devTools = false;
+    }
     const fx = await x.client.post(`/api/me/assignments/${asgX.id}/finish`);
     assert.equal(fx.body.status, "needs_review");
     assert.ok(fx.body.reasons.some((r: string) => /simulated/.test(r)));
@@ -422,7 +532,8 @@ describe("export", () => {
     assert.match(zip.headers.get("content-disposition") ?? "", /\.zip/);
     assert.equal(zip.bytes.subarray(0, 2).toString(), "PK");
     const text = zip.bytes.toString("latin1");
-    for (const name of ["assignment.json", `gps-1-${id.slice(0, 8)}.json`, `recording-1-${id.slice(0, 8)}.webm`]) assert.ok(text.includes(name), name);
+    for (const name of ["assignment.json", `gps-1-${id.slice(0, 8)}.json`, `recording-1-${id.slice(0, 8)}.webm`])
+      assert.ok(text.includes(name), name);
     assert.ok(zip.bytes.includes(Buffer.concat(chunks).subarray(0, 4000)), "the video bytes are inside (stored, not compressed)");
 
     const js = await admin.get(`/api/admin/assignments/${asg.id}/export.json`);
@@ -482,7 +593,12 @@ describe("worker downloads", () => {
     await t.pool.query("UPDATE recordings SET assembly_state = 'done' WHERE id = $1", [id]);
 
     // audited, and marked as done by the worker
-    const rows = (await t.pool.query("SELECT action, details FROM audit_log WHERE target_id = $1 AND action IN ('recording_downloaded','gps_downloaded')", [id])).rows;
+    const rows = (
+      await t.pool.query(
+        "SELECT action, details FROM audit_log WHERE target_id = $1 AND action IN ('recording_downloaded','gps_downloaded')",
+        [id],
+      )
+    ).rows;
     assert.ok(rows.some((r) => r.action === "recording_downloaded" && r.details?.by === "worker"));
     assert.ok(rows.some((r) => r.action === "gps_downloaded" && r.details?.by === "worker"));
   });

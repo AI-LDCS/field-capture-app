@@ -27,12 +27,17 @@ function nextTarget(run: AssignmentDetail, masks: Mask[], cov: number[], fix: Fi
     let bd = Infinity;
     for (const p of pool) {
       const d = haversineM([fix.lng, fix.lat], p);
-      if (d < bd) { bd = d; best = p; }
+      if (d < bd) {
+        bd = d;
+        best = p;
+      }
     }
   }
   const from: LngLat | null = fix ? [fix.lng, fix.lat] : null;
   return {
-    idx, point: best, required: run.segments[idx].required,
+    idx,
+    point: best,
+    required: run.segments[idx].required,
     dist: from ? haversineM(from, best) : null,
     bearing: from ? bearingDeg(from, best) : null,
     // share of the segment still open, times its real length (the stored curve has a point every ~2 m, not every stepM)
@@ -53,13 +58,20 @@ function AutoResize() {
 
 function Camera({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = stream;
+  }, [stream]);
   return <video ref={ref} className="rv-video" autoPlay muted playsInline />;
 }
 
 function MapPane(props: {
-  run: AssignmentDetail; cov: number[]; fix: Fix | null; trail: LngLat[];
-  target: ReturnType<typeof nextTarget>; follow: boolean; setFollow: (b: boolean) => void;
+  run: AssignmentDetail;
+  cov: number[];
+  fix: Fix | null;
+  trail: LngLat[];
+  target: ReturnType<typeof nextTarget>;
+  follow: boolean;
+  setFollow: (b: boolean) => void;
 }) {
   const { run, cov, fix, trail, target, follow, setFollow } = props;
   return (
@@ -68,30 +80,62 @@ function MapPane(props: {
       <AutoResize />
       <MapBehaviour fix={fix} follow={follow} setFollow={setFollow} run={run} />
       {run.segments.map((sg, i) => (
-        <Polyline key={sg.id} positions={sg.coords.map(ll)}
+        <Polyline
+          key={sg.id}
+          positions={sg.coords.map(ll)}
           pathOptions={{
             color: sg.status === "skipped" ? "#9ca3af" : cov[i] >= sg.minCoverageRatio ? "#16a34a" : sg.required ? "#1d4ed8" : "#ea580c",
-            weight: 7, opacity: 0.8, dashArray: sg.required ? undefined : "8 8",
-          }} />
+            weight: 7,
+            opacity: 0.8,
+            dashArray: sg.required ? undefined : "8 8",
+          }}
+        />
       ))}
       {trail.length > 1 && <Polyline positions={trail.map(ll)} pathOptions={{ color: "#111827", weight: 3 }} />}
-      {fix && target && <Polyline positions={[[fix.lat, fix.lng], ll(target.point)]} pathOptions={{ color: "#dc2626", weight: 3, dashArray: "4 8" }} />}
-      {target && <CircleMarker center={ll(target.point)} radius={9} pathOptions={{ color: "#dc2626", weight: 3, fillColor: "#fff", fillOpacity: 1 }} />}
+      {fix && target && (
+        <Polyline positions={[[fix.lat, fix.lng], ll(target.point)]} pathOptions={{ color: "#dc2626", weight: 3, dashArray: "4 8" }} />
+      )}
+      {target && (
+        <CircleMarker
+          center={ll(target.point)}
+          radius={9}
+          pathOptions={{ color: "#dc2626", weight: 3, fillColor: "#fff", fillOpacity: 1 }}
+        />
+      )}
       {fix && <Circle center={[fix.lat, fix.lng]} radius={fix.acc} pathOptions={{ color: "#2563eb", weight: 1, fillOpacity: 0.1 }} />}
-      {fix && <CircleMarker center={[fix.lat, fix.lng]} radius={8} pathOptions={{ color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 }} />}
+      {fix && (
+        <CircleMarker
+          center={[fix.lat, fix.lng]}
+          radius={8}
+          pathOptions={{ color: "#fff", weight: 3, fillColor: "#2563eb", fillOpacity: 1 }}
+        />
+      )}
     </MapContainer>
   );
 }
 
 /** Fit the route once, then follow the worker until they drag the map. */
-function MapBehaviour({ fix, follow, setFollow, run }: { fix: Fix | null; follow: boolean; setFollow: (b: boolean) => void; run: AssignmentDetail }) {
+function MapBehaviour({
+  fix,
+  follow,
+  setFollow,
+  run,
+}: {
+  fix: Fix | null;
+  follow: boolean;
+  setFollow: (b: boolean) => void;
+  run: AssignmentDetail;
+}) {
   const map = useMap();
   const fitted = useRef(false);
   useMapEvents({ dragstart: () => setFollow(false) });
   useEffect(() => {
     if (fitted.current) return;
     const pts = run.segments.flatMap((s) => s.coords.map(ll));
-    if (pts.length) { map.fitBounds(pts, { padding: [30, 30], animate: false }); fitted.current = true; }
+    if (pts.length) {
+      map.fitBounds(pts, { padding: [30, 30], animate: false });
+      fitted.current = true;
+    }
   }, [map, run]);
   useEffect(() => {
     if (follow && fix) map.panTo([fix.lat, fix.lng], { animate: true, duration: 0.5 });
@@ -100,14 +144,24 @@ function MapBehaviour({ fix, follow, setFollow, run }: { fix: Fix | null; follow
 }
 
 export default function RecordingView(props: {
-  run: AssignmentDetail; cov: number[]; masks: Mask[]; fix: Fix | null; trail: LngLat[];
-  camera: CameraInfo | null; active: ActiveRecording; onSkip: (segmentId: string) => Promise<void>;
+  run: AssignmentDetail;
+  cov: number[];
+  masks: Mask[];
+  fix: Fix | null;
+  trail: LngLat[];
+  camera: CameraInfo | null;
+  active: ActiveRecording;
+  onSkip: (segmentId: string) => Promise<void>;
 }) {
   const { run, cov, masks, fix, trail, camera, active, onSkip } = props;
   const s = useSettings();
   const [, tick] = useState(0);
   const [split, setSplit] = useState(() => {
-    try { return Math.min(0.85, Math.max(0.15, Number(localStorage.getItem(SPLIT_KEY)) || 0.55)); } catch { return 0.55; }
+    try {
+      return Math.min(0.85, Math.max(0.15, Number(localStorage.getItem(SPLIT_KEY)) || 0.55));
+    } catch {
+      return 0.55;
+    }
   });
   const [swap, setSwap] = useState(false);
   const [follow, setFollow] = useState(true);
@@ -133,7 +187,11 @@ export default function RecordingView(props: {
   const end = (e: React.PointerEvent) => {
     dragging.current = false;
     (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-    try { localStorage.setItem(SPLIT_KEY, String(split)); } catch { /* ignore */ }
+    try {
+      localStorage.setItem(SPLIT_KEY, String(split));
+    } catch {
+      /* ignore */
+    }
   };
 
   const st = active.stats();
@@ -141,9 +199,7 @@ export default function RecordingView(props: {
   const offRoute = fix ? Math.min(...run.segments.map((sg) => distToLineM([fix.lng, fix.lat], sg.coords))) : null;
   const walkable = run.segments.filter((x) => x.status !== "skipped");
 
-  const mapPane = (
-    <MapPane run={run} cov={cov} fix={fix} trail={trail} target={target} follow={follow} setFollow={setFollow} />
-  );
+  const mapPane = <MapPane run={run} cov={cov} fix={fix} trail={trail} target={target} follow={follow} setFollow={setFollow} />;
   const videoPane = camera ? <Camera stream={camera.stream} /> : <div className="rv-video" />;
   const first: ReactNode = swap ? videoPane : mapPane;
   const second: ReactNode = swap ? mapPane : videoPane;
@@ -152,18 +208,29 @@ export default function RecordingView(props: {
     <div className="rv">
       <div className="rv-bar">
         <span className="rec">● {mmss(Date.now() - st.startedAt)}</span>
-        <span className="small muted">{st.chunks} chunks · {fmtBytes(st.bytes)} · {st.gps} gps</span>
-        {st.freeBytes !== null && <span className={`small ${st.freeBytes < CONFIG.recording.minFreeBytes ? "err" : "muted"}`}>{fmtBytes(st.freeBytes)} free</span>}
+        <span className="small muted">
+          {st.chunks} chunks · {fmtBytes(st.bytes)} · {st.gps} gps
+        </span>
+        {st.freeBytes !== null && (
+          <span className={`small ${st.freeBytes < CONFIG.recording.minFreeBytes ? "err" : "muted"}`}>{fmtBytes(st.freeBytes)} free</span>
+        )}
         <span className="grow" />
-        <button className="ghost" onClick={() => setSwap(!swap)} title="Swap panes">⇅</button>
-        <button className={confirmStop ? "danger" : "ghost danger-text"}
-          onClick={() => (confirmStop ? void active.stop("stopped by worker") : setConfirmStop(true))}>
+        <button className="ghost" onClick={() => setSwap(!swap)} title="Swap panes">
+          ⇅
+        </button>
+        <button
+          className={confirmStop ? "danger" : "ghost danger-text"}
+          onClick={() => (confirmStop ? void active.stop("stopped by worker") : setConfirmStop(true))}
+        >
           {confirmStop ? "Tap again to stop" : "Stop"}
         </button>
       </div>
       {st.error && <div className="rv-hint err">{st.error}</div>}
       {!st.error && st.freeBytes !== null && st.freeBytes < CONFIG.recording.minFreeBytes && (
-        <div className="rv-hint err">Phone storage is low ({fmtBytes(st.freeBytes)} free). Recording stops by itself at {fmtBytes(CONFIG.recording.stopFreeBytes)} so nothing is lost. Free up space or finish soon.</div>
+        <div className="rv-hint err">
+          Phone storage is low ({fmtBytes(st.freeBytes)} free). Recording stops by itself at {fmtBytes(CONFIG.recording.stopFreeBytes)} so
+          nothing is lost. Free up space or finish soon.
+        </div>
       )}
 
       <div className="rv-hint">
@@ -171,31 +238,56 @@ export default function RecordingView(props: {
           <strong>All segments covered. Stop recording when you are ready.</strong>
         ) : (
           <>
-            <span className="arrow" style={{ transform: `rotate(${target.bearing ?? 0}deg)`, opacity: target.bearing === null ? 0.3 : 1 }}>↑</span>
+            <span className="arrow" style={{ transform: `rotate(${target.bearing ?? 0}deg)`, opacity: target.bearing === null ? 0.3 : 1 }}>
+              ↑
+            </span>
             <span>
-              <strong>{target.dist === null ? "Waiting for GPS…" : `${target.dist.toFixed(0)} m ${compass(target.bearing!)}`}</strong>{" "}
-              to segment #{target.idx + 1}{!target.required && " (optional)"}
+              <strong>{target.dist === null ? "Waiting for GPS…" : `${target.dist.toFixed(0)} m ${compass(target.bearing!)}`}</strong> to
+              segment #{target.idx + 1}
+              {!target.required && " (optional)"}
               <span className="muted small"> · {target.leftM.toFixed(0)} m left on it</span>
             </span>
             {!target.required && (
-              <button className="ghost skip" onClick={() => void onSkip(run.segments[target.idx].id)}>Skip it</button>
+              <button className="ghost skip" onClick={() => void onSkip(run.segments[target.idx].id)}>
+                Skip it
+              </button>
             )}
           </>
         )}
-        {offRoute !== null && offRoute > CONFIG.quality.offRouteM && <span className="err small"> · off route {offRoute.toFixed(0)} m</span>}
+        {offRoute !== null && offRoute > CONFIG.quality.offRouteM && (
+          <span className="err small"> · off route {offRoute.toFixed(0)} m</span>
+        )}
         {fix && fix.acc > CONFIG.coverage.maxAccuracyM && <span className="err small"> · GPS weak ±{fix.acc.toFixed(0)} m</span>}
       </div>
 
       <div className="rv-area" ref={area}>
         <div className="rv-pane" style={{ flexBasis: `${split * 100}%` }}>
           {first}
-          {!swap && !follow && <button className="rv-locate" onClick={() => setFollow(true)}>⌖ Follow me</button>}
+          {!swap && !follow && (
+            <button className="rv-locate" onClick={() => setFollow(true)}>
+              ⌖ Follow me
+            </button>
+          )}
         </div>
-        <div className="rv-handle" onPointerDown={(e) => { dragging.current = true; e.currentTarget.setPointerCapture(e.pointerId); }}
-          onPointerMove={move} onPointerUp={end} onPointerCancel={end}><i /></div>
+        <div
+          className="rv-handle"
+          onPointerDown={(e) => {
+            dragging.current = true;
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={move}
+          onPointerUp={end}
+          onPointerCancel={end}
+        >
+          <i />
+        </div>
         <div className="rv-pane grow">
           {second}
-          {swap && !follow && <button className="rv-locate" onClick={() => setFollow(true)}>⌖ Follow me</button>}
+          {swap && !follow && (
+            <button className="rv-locate" onClick={() => setFollow(true)}>
+              ⌖ Follow me
+            </button>
+          )}
         </div>
       </div>
 
@@ -204,15 +296,22 @@ export default function RecordingView(props: {
           const done = sg.status === "skipped" ? "skip" : cov[i] >= sg.minCoverageRatio ? "done" : "";
           return (
             <span key={sg.id} className={`chip ${done} ${target?.idx === i ? "now" : ""}`}>
-              #{i + 1}{!sg.required && "·opt"} {sg.status === "skipped" ? "skipped" : `${(cov[i] * 100).toFixed(0)}%`}
+              #{i + 1}
+              {!sg.required && "·opt"} {sg.status === "skipped" ? "skipped" : `${(cov[i] * 100).toFixed(0)}%`}
             </span>
           );
         })}
         {s.fake && (
           <>
-            <button className="ghost" onClick={() => fakeGps.walk(walkable.map((x) => x.coords))}>Fake: walk all</button>
-            <button className="ghost" onClick={() => fakeGps.walk(walkable.filter((x) => x.required).map((x) => x.coords))}>Fake: required only</button>
-            <button className="ghost" onClick={() => fakeGps.stopWalking()}>Fake: stop</button>
+            <button className="ghost" onClick={() => fakeGps.walk(walkable.map((x) => x.coords))}>
+              Fake: walk all
+            </button>
+            <button className="ghost" onClick={() => fakeGps.walk(walkable.filter((x) => x.required).map((x) => x.coords))}>
+              Fake: required only
+            </button>
+            <button className="ghost" onClick={() => fakeGps.stopWalking()}>
+              Fake: stop
+            </button>
           </>
         )}
       </div>

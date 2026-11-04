@@ -6,8 +6,12 @@ let t: Awaited<ReturnType<typeof startTestServer>>;
 const ADMIN = { username: "testadmin", password: "initial-admin-password-1" };
 const as = (u: string) => new Client(t.base).post("/api/auth/login", { username: u, password: "" });
 
-before(async () => { t = await startTestServer(); });
-after(async () => { await t.stop(); });
+before(async () => {
+  t = await startTestServer();
+});
+after(async () => {
+  await t.stop();
+});
 
 async function adminClient() {
   const c = new Client(t.base);
@@ -50,7 +54,8 @@ describe("authentication", () => {
     const admin = await adminClient();
     const w = await makeWorker(admin, "locky");
     const c = new Client(t.base);
-    for (let i = 0; i < 5; i++) assert.equal((await c.post("/api/auth/login", { username: "locky", password: "wrong-wrong-1" })).status, 401);
+    for (let i = 0; i < 5; i++)
+      assert.equal((await c.post("/api/auth/login", { username: "locky", password: "wrong-wrong-1" })).status, 401);
     const locked = await c.post("/api/auth/login", { username: "locky", password: w.password });
     assert.equal(locked.status, 429);
     assert.ok(locked.headers.get("retry-after"));
@@ -66,15 +71,23 @@ describe("authentication", () => {
     const c = new Client(t.base);
     const plain = await c.post("/api/auth/login", ADMIN);
     const sc1 = plain.headers.getSetCookie()[0];
-    assert.match(sc1, /^sid=/); assert.match(sc1, /HttpOnly/i); assert.match(sc1, /SameSite=Lax/i);
+    assert.match(sc1, /^sid=/);
+    assert.match(sc1, /HttpOnly/i);
+    assert.match(sc1, /SameSite=Lax/i);
 
     t.config.cookieSecure = true;
     try {
       const r = await new Client(t.base).post("/api/auth/login", ADMIN);
       const sc = r.headers.getSetCookie()[0];
-      assert.match(sc, /^__Host-sid=/); assert.match(sc, /; Secure/i); assert.match(sc, /HttpOnly/i);
-      assert.match(sc, /SameSite=Lax/i); assert.match(sc, /Path=\//); assert.doesNotMatch(sc, /Domain=/i);
-    } finally { t.config.cookieSecure = false; }
+      assert.match(sc, /^__Host-sid=/);
+      assert.match(sc, /; Secure/i);
+      assert.match(sc, /HttpOnly/i);
+      assert.match(sc, /SameSite=Lax/i);
+      assert.match(sc, /Path=\//);
+      assert.doesNotMatch(sc, /Domain=/i);
+    } finally {
+      t.config.cookieSecure = false;
+    }
   });
 
   it("a new login does not reuse the old session token", async () => {
@@ -117,7 +130,13 @@ describe("account lifecycle", () => {
 
     // gone from the list and from every management action
     assert.ok(!(await admin.get("/api/admin/users")).body.some((u: any) => u.id === w.id));
-    for (const [m, p] of [["patch", ""], ["post", "/activate"], ["post", "/deactivate"], ["post", "/password"], ["del", ""]] as const) {
+    for (const [m, p] of [
+      ["patch", ""],
+      ["post", "/activate"],
+      ["post", "/deactivate"],
+      ["post", "/password"],
+      ["del", ""],
+    ] as const) {
       assert.equal((await (admin as any)[m](`/api/admin/users/${w.id}${p}`, {})).status, 404, `${m} ${p}`);
     }
     assert.equal((await admin.post("/api/admin/assignments", { routeVersionId: v.id, userId: w.id })).status, 409);
@@ -137,7 +156,11 @@ describe("account lifecycle", () => {
     assert.equal((await again.client.get("/api/me/assignments")).status, 200);
     const names = (await admin.get("/api/admin/users")).body.filter((u: any) => u.username === "gone-soon");
     assert.equal(names.length, 1);
-    assert.equal((await admin.post("/api/admin/users", { username: "gone-soon", password: "worker-password-1" })).status, 409, "a live name is still unique");
+    assert.equal(
+      (await admin.post("/api/admin/users", { username: "gone-soon", password: "worker-password-1" })).status,
+      409,
+      "a live name is still unique",
+    );
   });
 
   it("deactivating a worker kills their existing session and blocks login", async () => {
@@ -194,7 +217,9 @@ describe("account lifecycle", () => {
     assert.equal((await admin.post("/api/admin/users", { username: "weakling", password: "short" })).status, 400);
     const made = await admin.post("/api/admin/users", { username: "plainguy", displayName: "Plain Guy", password: "long-enough-1" });
     assert.deepEqual(Object.keys(made.body.user).sort(), ["active", "createdAt", "displayName", "id", "username"]);
-    const cols = (await t.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'")).rows.map((r) => r.column_name);
+    const cols = (await t.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'")).rows.map(
+      (r) => r.column_name,
+    );
     assert.ok(!cols.includes("must_change_password"));
   });
 
@@ -235,12 +260,14 @@ describe("account lifecycle", () => {
 
 describe("authorization", () => {
   const ADMIN_ENDPOINTS: [string, string][] = [
-    ["GET", "/api/admin/users"], ["POST", "/api/admin/users"],
+    ["GET", "/api/admin/users"],
+    ["POST", "/api/admin/users"],
     ["PATCH", "/api/admin/users/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/deactivate"],
     ["DELETE", "/api/admin/users/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/users/00000000-0000-4000-8000-000000000000/password"],
-    ["GET", "/api/admin/routes"], ["POST", "/api/admin/routes"],
+    ["GET", "/api/admin/routes"],
+    ["POST", "/api/admin/routes"],
     ["DELETE", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
     ["PATCH", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
     ["GET", "/api/admin/routes/00000000-0000-4000-8000-000000000000"],
@@ -249,7 +276,8 @@ describe("authorization", () => {
     ["POST", "/api/admin/route-versions/00000000-0000-4000-8000-000000000000/archive"],
     ["DELETE", "/api/admin/route-versions/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/admin/routes/00000000-0000-4000-8000-000000000000/new-version"],
-    ["GET", "/api/admin/assignments"], ["POST", "/api/admin/assignments"],
+    ["GET", "/api/admin/assignments"],
+    ["POST", "/api/admin/assignments"],
     ["GET", "/api/admin/assignments/00000000-0000-4000-8000-000000000000"],
     ["DELETE", "/api/admin/assignments/00000000-0000-4000-8000-000000000000"],
   ];
@@ -278,13 +306,17 @@ describe("authorization", () => {
     const v = await publishedRoute(admin, "Shared");
     const forA = await admin.post("/api/admin/assignments", { routeVersionId: v.id, userId: a.id });
     const forB = await admin.post("/api/admin/assignments", { routeVersionId: v.id, userId: b.id });
-    assert.equal(forA.status, 201); assert.equal(forB.status, 201);
+    assert.equal(forA.status, 201);
+    assert.equal(forB.status, 201);
 
     assert.equal((await a.client.get(`/api/me/assignments/${forA.body.id}`)).status, 200);
     assert.equal((await a.client.get(`/api/me/assignments/${forB.body.id}`)).status, 404);
     assert.equal((await b.client.get(`/api/me/assignments/${forA.body.id}`)).status, 404);
     const listA = await a.client.get("/api/me/assignments");
-    assert.deepEqual(listA.body.map((x: any) => x.id), [forA.body.id]);
+    assert.deepEqual(
+      listA.body.map((x: any) => x.id),
+      [forA.body.id],
+    );
   });
 });
 
@@ -310,7 +342,9 @@ describe("request safety", () => {
   });
   it("rejects a form-style content type", async () => {
     const c = new Client(t.base);
-    const r = await c.req("POST", "/api/auth/login", "username=testadmin&password=x", { "content-type": "application/x-www-form-urlencoded" });
+    const r = await c.req("POST", "/api/auth/login", "username=testadmin&password=x", {
+      "content-type": "application/x-www-form-urlencoded",
+    });
     assert.equal(r.status, 415);
   });
   it("answers bad input with 400, not a crash", async () => {
@@ -330,9 +364,18 @@ describe("routes and versions", () => {
     assert.equal((await admin.del(`/api/admin/route-versions/${v.id}`)).status, 409);
 
     // straight SQL, bypassing the API: the triggers still refuse
-    await assert.rejects(t.pool.query("UPDATE route_segments SET required = NOT required WHERE route_version_id = $1", [v.id]), /immutable/);
+    await assert.rejects(
+      t.pool.query("UPDATE route_segments SET required = NOT required WHERE route_version_id = $1", [v.id]),
+      /immutable/,
+    );
     await assert.rejects(t.pool.query("DELETE FROM route_segments WHERE route_version_id = $1", [v.id]), /immutable/);
-    await assert.rejects(t.pool.query("INSERT INTO route_segments (route_version_id, ord, required, geom) VALUES ($1, 99, true, ST_GeomFromText('LINESTRING(100 13, 100.1 13)', 4326))", [v.id]), /immutable/);
+    await assert.rejects(
+      t.pool.query(
+        "INSERT INTO route_segments (route_version_id, ord, required, geom) VALUES ($1, 99, true, ST_GeomFromText('LINESTRING(100 13, 100.1 13)', 4326))",
+        [v.id],
+      ),
+      /immutable/,
+    );
     await assert.rejects(t.pool.query("UPDATE route_versions SET status = 'draft' WHERE id = $1", [v.id]), /cannot go back/);
     await assert.rejects(t.pool.query("DELETE FROM route_versions WHERE id = $1", [v.id]), /only draft/);
   });
@@ -369,12 +412,16 @@ describe("routes and versions", () => {
 
     assert.equal((await w.client.get(`/api/me/assignments/${a.body.id}`)).body.route.name, "New name");
     assert.equal((await admin.get("/api/admin/routes")).body.find((x: any) => x.id === v1.routeId).name, "New name");
-    for (const vid of [v1.id, nv.body.id, v3.body.id]) assert.equal((await admin.get(`/api/admin/route-versions/${vid}`)).body.routeName, "New name");
+    for (const vid of [v1.id, nv.body.id, v3.body.id])
+      assert.equal((await admin.get(`/api/admin/route-versions/${vid}`)).body.routeName, "New name");
     const after = await admin.get(`/api/admin/route-versions/${v1.id}`);
     assert.equal(after.body.status, "archived");
     assert.deepEqual(after.body.segments, before.body.segments);
     const log = await t.pool.query("SELECT details FROM audit_log WHERE action = 'route_renamed' AND target_id = $1", [v1.routeId]);
-    assert.deepEqual(log.rows.map((x: any) => x.details), [{ from: "Old name", to: "New name" }]);
+    assert.deepEqual(
+      log.rows.map((x: any) => x.details),
+      [{ from: "Old name", to: "New name" }],
+    );
 
     assert.equal((await admin.patch(`/api/admin/routes/${v1.routeId}`, { name: "   " })).status, 400);
     assert.equal((await admin.patch("/api/admin/routes/00000000-0000-4000-8000-000000000000", { name: "x" })).status, 404);
@@ -411,8 +458,14 @@ describe("routes and versions", () => {
     assert.equal(list.body.find((r: any) => r.id === v1.routeId).name, "Snap renamed");
     assert.equal((await admin.get(`/api/admin/route-versions/${v1.id}`)).body.routeName, "Snap");
     assert.equal(after.body.segments.length, 3);
-    assert.deepEqual(after.body.segments.map((s: any) => s.coords), before.body.segments.map((s: any) => s.coords));
-    assert.deepEqual(after.body.segments.map((s: any) => s.required), [true, false, true]);
+    assert.deepEqual(
+      after.body.segments.map((s: any) => s.coords),
+      before.body.segments.map((s: any) => s.coords),
+    );
+    assert.deepEqual(
+      after.body.segments.map((s: any) => s.required),
+      [true, false, true],
+    );
   });
 
   it("only published versions can be assigned, and only to active workers", async () => {
@@ -436,12 +489,37 @@ describe("routes and versions", () => {
     const admin = await adminClient();
     const empty = await admin.post("/api/admin/routes", { name: "Empty", segments: [] });
     assert.equal((await admin.post(`/api/admin/route-versions/${empty.body.id}/publish`)).body.error, "empty_route");
-    const optionalOnly = await admin.post("/api/admin/routes", { name: "Opt", segments: [{ required: false, coords: line(100.5, 13.75) }] });
+    const optionalOnly = await admin.post("/api/admin/routes", {
+      name: "Opt",
+      segments: [{ required: false, coords: line(100.5, 13.75) }],
+    });
     assert.equal((await admin.post(`/api/admin/route-versions/${optionalOnly.body.id}/publish`)).body.error, "no_required_segment");
-    const tiny = await admin.post("/api/admin/routes", { name: "Tiny", segments: [{ required: true, coords: [[100.5, 13.75], [100.50001, 13.75]] }] });
+    const tiny = await admin.post("/api/admin/routes", {
+      name: "Tiny",
+      segments: [
+        {
+          required: true,
+          coords: [
+            [100.5, 13.75],
+            [100.50001, 13.75],
+          ],
+        },
+      ],
+    });
     assert.equal((await admin.post(`/api/admin/route-versions/${tiny.body.id}/publish`)).body.error, "bad_segment");
     // coordinates must be real lng/lat
-    const swapped = await admin.post("/api/admin/routes", { name: "Swapped", segments: [{ required: true, coords: [[13.75, 100.5], [13.76, 100.6]] }] });
+    const swapped = await admin.post("/api/admin/routes", {
+      name: "Swapped",
+      segments: [
+        {
+          required: true,
+          coords: [
+            [13.75, 100.5],
+            [13.76, 100.6],
+          ],
+        },
+      ],
+    });
     assert.equal(swapped.status, 400);
   });
 
@@ -504,11 +582,19 @@ describe("routes and versions", () => {
 
   it("a curved segment is stored as the smooth line, and its control points come back for editing", async () => {
     const admin = await adminClient();
-    const ctrl = [[100.5, 13.75], [100.5006, 13.7506], [100.5012, 13.7504], [100.5018, 13.751]];
-    const made = await admin.post("/api/admin/routes", { name: "Curvy", segments: [
-      { required: true, smooth: true, coords: ctrl },
-      { required: false, coords: ctrl.map(([x, y]) => [x + 0.01, y]) },
-    ] });
+    const ctrl = [
+      [100.5, 13.75],
+      [100.5006, 13.7506],
+      [100.5012, 13.7504],
+      [100.5018, 13.751],
+    ];
+    const made = await admin.post("/api/admin/routes", {
+      name: "Curvy",
+      segments: [
+        { required: true, smooth: true, coords: ctrl },
+        { required: false, coords: ctrl.map(([x, y]) => [x + 0.01, y]) },
+      ],
+    });
     assert.equal(made.status, 201, JSON.stringify(made.body));
     const [curved, straight] = made.body.segments;
     assert.equal(curved.smooth, true);
@@ -518,11 +604,17 @@ describe("routes and versions", () => {
 
     // the database holds the dense curve, through every control point
     const { rows } = await t.pool.query(
-      "SELECT ST_NPoints(geom) AS n, control, ST_AsGeoJSON(geom)::json AS g FROM route_segments WHERE route_version_id = $1 ORDER BY ord", [made.body.id]);
+      "SELECT ST_NPoints(geom) AS n, control, ST_AsGeoJSON(geom)::json AS g FROM route_segments WHERE route_version_id = $1 ORDER BY ord",
+      [made.body.id],
+    );
     assert.ok(rows[0].n > 40, `curve has ${rows[0].n} points`);
     assert.equal(rows[1].n, 4);
     assert.equal(rows[1].control, null);
-    for (const c of ctrl) assert.ok(rows[0].g.coordinates.some((p: number[]) => p[0] === c[0] && p[1] === c[1]), "control point on the curve");
+    for (const c of ctrl)
+      assert.ok(
+        rows[0].g.coordinates.some((p: number[]) => p[0] === c[0] && p[1] === c[1]),
+        "control point on the curve",
+      );
 
     // new version keeps both the curve and its control points; publish, then a worker sees the curve
     const p = await admin.post(`/api/admin/route-versions/${made.body.id}/publish`);
@@ -537,8 +629,32 @@ describe("routes and versions", () => {
 
   it("a curved segment can still be edited as a draft, but not once published", async () => {
     const admin = await adminClient();
-    const v = await admin.post("/api/admin/routes", { name: "Edit curve", segments: [{ required: true, smooth: true, coords: [[100.5, 13.75], [100.5006, 13.7506], [100.5012, 13.7504]] }] });
-    const moved = await admin.put(`/api/admin/route-versions/${v.body.id}`, { segments: [{ required: true, smooth: false, coords: [[100.5, 13.75], [100.502, 13.752]] }] });
+    const v = await admin.post("/api/admin/routes", {
+      name: "Edit curve",
+      segments: [
+        {
+          required: true,
+          smooth: true,
+          coords: [
+            [100.5, 13.75],
+            [100.5006, 13.7506],
+            [100.5012, 13.7504],
+          ],
+        },
+      ],
+    });
+    const moved = await admin.put(`/api/admin/route-versions/${v.body.id}`, {
+      segments: [
+        {
+          required: true,
+          smooth: false,
+          coords: [
+            [100.5, 13.75],
+            [100.502, 13.752],
+          ],
+        },
+      ],
+    });
     assert.equal(moved.status, 200);
     assert.equal(moved.body.segments[0].smooth, false);
     assert.equal((await t.pool.query("SELECT control FROM route_segments WHERE route_version_id = $1", [v.body.id])).rows[0].control, null);
@@ -547,7 +663,19 @@ describe("routes and versions", () => {
   it("writes an audit trail for sensitive actions", async () => {
     const { rows } = await t.pool.query("SELECT DISTINCT action FROM audit_log");
     const actions = rows.map((r) => r.action);
-    for (const a of ["admin_bootstrapped", "login", "login_failed", "user_created", "user_deactivated", "user_deleted", "route_deleted", "password_set", "password_changed", "route_published", "assignment_created"]) {
+    for (const a of [
+      "admin_bootstrapped",
+      "login",
+      "login_failed",
+      "user_created",
+      "user_deactivated",
+      "user_deleted",
+      "route_deleted",
+      "password_set",
+      "password_changed",
+      "route_published",
+      "assignment_created",
+    ]) {
       assert.ok(actions.includes(a), `missing audit action ${a}`);
     }
   });

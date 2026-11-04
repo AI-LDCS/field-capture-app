@@ -11,11 +11,20 @@ import { HttpError, requireAuth } from "../http.ts";
 export const authRouter = Router();
 
 const loginSchema = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(config.password.maxLength) });
-export const workerPassword = z.string().min(config.password.workerMinLength, `at least ${config.password.workerMinLength} characters`).max(config.password.maxLength);
-const adminPassword = z.string().min(config.password.adminMinLength, `at least ${config.password.adminMinLength} characters`).max(config.password.maxLength);
+export const workerPassword = z
+  .string()
+  .min(config.password.workerMinLength, `at least ${config.password.workerMinLength} characters`)
+  .max(config.password.maxLength);
+const adminPassword = z
+  .string()
+  .min(config.password.adminMinLength, `at least ${config.password.adminMinLength} characters`)
+  .max(config.password.maxLength);
 
 const publicUser = (u: { id: string; username: string; displayName: string; role: string }) => ({
-  id: u.id, username: u.username, displayName: u.displayName, role: u.role,
+  id: u.id,
+  username: u.username,
+  displayName: u.displayName,
+  role: u.role,
 });
 
 authRouter.post("/login", async (req, res) => {
@@ -52,7 +61,10 @@ authRouter.post("/login", async (req, res) => {
   await q("DELETE FROM login_attempts WHERE username = $1", [uname]);
   await createSession(user.id, req, res);
   await audit(user.id, "login", { type: "user", id: user.id }, undefined, ip);
-  res.json({ user: publicUser({ id: user.id, username: user.username, displayName: user.display_name, role: user.role }), devTools: config.devTools });
+  res.json({
+    user: publicUser({ id: user.id, username: user.username, displayName: user.display_name, role: user.role }),
+    devTools: config.devTools,
+  });
 });
 
 authRouter.post("/logout", async (req, res) => {

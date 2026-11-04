@@ -14,15 +14,23 @@ export function useLocalRecordings(assignmentId?: string): LocalRow[] {
     let dead = false;
     const load = async () => {
       try {
-        const recs = (await allRecordings()).filter((r) => !assignmentId || r.assignmentId === assignmentId).sort((a, b) => a.startedAt - b.startedAt);
+        const recs = (await allRecordings())
+          .filter((r) => !assignmentId || r.assignmentId === assignmentId)
+          .sort((a, b) => a.startedAt - b.startedAt);
         const out = await Promise.all(recs.map(async (r) => ({ ...r, ...(await localSummary(r.id)) })));
         if (!dead) setRows(out);
-      } catch { /* not signed in yet */ }
+      } catch {
+        /* not signed in yet */
+      }
     };
     void load();
     const t = setInterval(load, 1500);
     const off = onUploaderChange(load);
-    return () => { dead = true; clearInterval(t); off(); };
+    return () => {
+      dead = true;
+      clearInterval(t);
+      off();
+    };
   }, [assignmentId]);
   return rows;
 }
@@ -53,19 +61,40 @@ export function RecordingList({ assignmentId, server }: { assignmentId: string; 
       {rows.map(({ key, at, simulated, phone, saved }) => (
         <div key={key} className="local-rec">
           <div className="row between wrap">
-            <span className="small">{when(new Date(at).toISOString())}{simulated && <> <Badge s="simulated" /></>}</span>
-            {saved?.status === "server_verified" ? <span className="ok small">✓ Saved</span>
-              : phone && WAITING.includes(phone.status) ? <span className="small muted">Waiting to upload</span>
-              : phone?.status === "recording" ? <span className="small muted">Recording</span>
-              : <span className="small muted">Uploading{phone && phone.chunks > 0 && ` ${Math.round(((phone.chunks - phone.chunksPending) / phone.chunks) * 100)}%`}</span>}
+            <span className="small">
+              {when(new Date(at).toISOString())}
+              {simulated && (
+                <>
+                  {" "}
+                  <Badge s="simulated" />
+                </>
+              )}
+            </span>
+            {saved?.status === "server_verified" ? (
+              <span className="ok small">✓ Saved</span>
+            ) : phone && WAITING.includes(phone.status) ? (
+              <span className="small muted">Waiting to upload</span>
+            ) : phone?.status === "recording" ? (
+              <span className="small muted">Recording</span>
+            ) : (
+              <span className="small muted">
+                Uploading{phone && phone.chunks > 0 && ` ${Math.round(((phone.chunks - phone.chunksPending) / phone.chunks) * 100)}%`}
+              </span>
+            )}
           </div>
           {phone?.lastError && <div className="err small">{phone.lastError}</div>}
           {saved?.status === "server_verified" && (
             <div className="row wrap">
-              {saved.assembly === "done"
-                ? <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/download`}>Video{saved.fileBytes !== null && ` (${fmtBytes(saved.fileBytes)})`}</a>
-                : <span className="small muted">{saved.assembly === "failed" ? "Video could not be prepared" : "Preparing video…"}</span>}
-              <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/gps.json`}>GPS (.json)</a>
+              {saved.assembly === "done" ? (
+                <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/download`}>
+                  Video{saved.fileBytes !== null && ` (${fmtBytes(saved.fileBytes)})`}
+                </a>
+              ) : (
+                <span className="small muted">{saved.assembly === "failed" ? "Video could not be prepared" : "Preparing video…"}</span>
+              )}
+              <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/gps.json`}>
+                GPS (.json)
+              </a>
             </div>
           )}
         </div>
@@ -73,7 +102,9 @@ export function RecordingList({ assignmentId, server }: { assignmentId: string; 
       {onPhone.length > 0 && (
         <div className="row between wrap">
           <span className="small muted">Keep this browser until uploads finish.</span>
-          <button className="ghost small" disabled={uploaderPaused()} onClick={() => void uploadTick()}>Upload now</button>
+          <button className="ghost small" disabled={uploaderPaused()} onClick={() => void uploadTick()}>
+            Upload now
+          </button>
         </div>
       )}
       {devToolsOn() && onPhone.length > 0 && uploaderLog().length > 0 && <pre className="log">{uploaderLog().slice(0, 6).join("\n")}</pre>}
@@ -91,8 +122,12 @@ export function Recovery({ assignmentId }: { assignmentId?: string }) {
       <p>A recording was cut off. What was saved is kept. Finalize it to upload, then you can record again.</p>
       {rows.map((r) => (
         <div key={r.id} className="row between">
-          <span>{r.id.slice(0, 8)} · {r.chunks} chunks · {fmtBytes(r.bytes)} · {r.gps} gps</span>
-          <button onClick={() => void putRecording({ ...r, status: "pending_upload" }).then(() => uploadTick())}>Finalize &amp; upload</button>
+          <span>
+            {r.id.slice(0, 8)} · {r.chunks} chunks · {fmtBytes(r.bytes)} · {r.gps} gps
+          </span>
+          <button onClick={() => void putRecording({ ...r, status: "pending_upload" }).then(() => uploadTick())}>
+            Finalize &amp; upload
+          </button>
         </div>
       ))}
     </section>
@@ -107,12 +142,27 @@ export function DevPanel() {
     <section className="card">
       <h3>Dev tools</h3>
       <p className="muted small">Recordings made with fake mode are marked simulated and always go to review.</p>
-      <label className="check"><input type="checkbox" checked={s.fake} onChange={(e) => setSettings({ fake: e.target.checked })} /> Fake mode (simulated GPS + canvas camera)</label>
-      <label className="check"><input type="checkbox" checked={s.simOffline} onChange={(e) => setSettings({ simOffline: e.target.checked })} /> Simulate offline (uploads fail)</label>
+      <label className="check">
+        <input type="checkbox" checked={s.fake} onChange={(e) => setSettings({ fake: e.target.checked })} /> Fake mode (simulated GPS +
+        canvas camera)
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={s.simOffline} onChange={(e) => setSettings({ simOffline: e.target.checked })} /> Simulate offline
+        (uploads fail)
+      </label>
       <div className="grid2">
-        <label>Fake speed (m/s)<input type="number" min={1} max={40} value={s.fakeSpeed} onChange={(e) => setSettings({ fakeSpeed: +e.target.value })} /></label>
-        <label>Fake GPS warm-up (s, 999 = never)<input type="number" min={0} value={s.coldStartS} onChange={(e) => setSettings({ coldStartS: +e.target.value })} /></label>
-        <label>Preflight timeout (s)<input type="number" min={5} value={s.preflightTimeoutS} onChange={(e) => setSettings({ preflightTimeoutS: +e.target.value })} /></label>
+        <label>
+          Fake speed (m/s)
+          <input type="number" min={1} max={40} value={s.fakeSpeed} onChange={(e) => setSettings({ fakeSpeed: +e.target.value })} />
+        </label>
+        <label>
+          Fake GPS warm-up (s, 999 = never)
+          <input type="number" min={0} value={s.coldStartS} onChange={(e) => setSettings({ coldStartS: +e.target.value })} />
+        </label>
+        <label>
+          Preflight timeout (s)
+          <input type="number" min={5} value={s.preflightTimeoutS} onChange={(e) => setSettings({ preflightTimeoutS: +e.target.value })} />
+        </label>
       </div>
     </section>
   );

@@ -6,9 +6,7 @@ const rad = (d: number) => (d * Math.PI) / 180;
 export function haversineM(a: LngLat, b: LngLat): number {
   const dLat = rad(b[1] - a[1]);
   const dLng = rad(b[0] - a[0]);
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(dLng / 2) ** 2;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
@@ -39,8 +37,10 @@ export function densify(coords: LngLat[], stepM: number): LngLat[] {
 function distToSegM(p: LngLat, a: LngLat, b: LngLat): number {
   const k = Math.cos(rad(p[1])) * rad(1) * R;
   const m = rad(1) * R;
-  const px = (p[0] - a[0]) * k, py = (p[1] - a[1]) * m;
-  const bx = (b[0] - a[0]) * k, by = (b[1] - a[1]) * m;
+  const px = (p[0] - a[0]) * k,
+    py = (p[1] - a[1]) * m;
+  const bx = (b[0] - a[0]) * k,
+    by = (b[1] - a[1]) * m;
   const len2 = bx * bx + by * by;
   const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, (px * bx + py * by) / len2));
   return Math.hypot(px - bx * t, py - by * t);
@@ -100,11 +100,7 @@ export function coverageMask(
  * Coverage = share of the segment's length that lies within bufferM of at least
  * one usable GPS point. The end point being reached is not enough on its own.
  */
-export function segmentCoverage(
-  coords: LngLat[],
-  points: Pick<GpsPoint, "lat" | "lng" | "acc">[],
-  opts: CoverageOpts,
-): number {
+export function segmentCoverage(coords: LngLat[], points: Pick<GpsPoint, "lat" | "lng" | "acc">[], opts: CoverageOpts): number {
   const { samples, covered } = coverageMask(coords, points, opts);
   return samples.length === 0 ? 0 : covered.filter(Boolean).length / samples.length;
 }

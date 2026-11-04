@@ -31,8 +31,12 @@ class FakeGps implements GpsSource {
   private bornAt = Date.now();
   walking = false;
 
-  setStart(p: LngLat) { if (this.path.length === 0 && !this.walking) this.pos = p; }
-  coldStart() { this.bornAt = Date.now(); }
+  setStart(p: LngLat) {
+    if (this.path.length === 0 && !this.walking) this.pos = p;
+  }
+  coldStart() {
+    this.bornAt = Date.now();
+  }
 
   /** Walk straight from the current spot onto each segment in turn. Skipped parts become a connector line. */
   walk(segments: LngLat[][]) {
@@ -45,7 +49,10 @@ class FakeGps implements GpsSource {
     this.path = pts;
     this.walking = true;
   }
-  stopWalking() { this.path = []; this.walking = false; }
+  stopWalking() {
+    this.path = [];
+    this.walking = false;
+  }
 
   private tick = () => {
     const speed = getSettings().fakeSpeed;
@@ -54,8 +61,11 @@ class FakeGps implements GpsSource {
       while (budget > 0 && this.path.length) {
         const next = this.path[0];
         const d = haversineM(this.pos, next);
-        if (d <= budget) { this.pos = next; this.path.shift(); budget -= d; }
-        else {
+        if (d <= budget) {
+          this.pos = next;
+          this.path.shift();
+          budget -= d;
+        } else {
           const f = budget / d;
           this.pos = [this.pos[0] + (next[0] - this.pos[0]) * f, this.pos[1] + (next[1] - this.pos[1]) * f];
           budget = 0;
@@ -77,7 +87,10 @@ class FakeGps implements GpsSource {
     this.timer ??= window.setInterval(this.tick, 1000);
     return () => {
       this.subs.delete(cb);
-      if (!this.subs.size && this.timer !== null) { clearInterval(this.timer); this.timer = null; }
+      if (!this.subs.size && this.timer !== null) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
     };
   }
 }

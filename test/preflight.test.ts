@@ -9,7 +9,10 @@ const M_PER_DEG = 111_320;
 /** n fixes, one per second, ending at `NOW`, at 13.75 N with the given accuracy and a little sideways wobble in metres */
 const fixes = (n: number, acc = 5, wobbleM = 0, endAt = NOW): PreflightSample[] =>
   Array.from({ length: n }, (_, i) => ({
-    t: endAt - (n - 1 - i) * 1000, lat: 13.75, lng: 100.5 + ((i % 2 ? 1 : -1) * wobbleM) / (M_PER_DEG * Math.cos((13.75 * Math.PI) / 180)), acc,
+    t: endAt - (n - 1 - i) * 1000,
+    lat: 13.75,
+    lng: 100.5 + ((i % 2 ? 1 : -1) * wobbleM) / (M_PER_DEG * Math.cos((13.75 * Math.PI) / 180)),
+    acc,
   }));
 
 describe("GPS check", () => {
@@ -62,7 +65,10 @@ describe("GPS check", () => {
 
   it("counts each timestamp once (a repeated fix is not a new sample)", () => {
     const one = { t: NOW, lat: 13.75, lng: 100.5, acc: 4 };
-    const e = evaluatePreflight(Array.from({ length: 8 }, () => ({ ...one })), NOW);
+    const e = evaluatePreflight(
+      Array.from({ length: 8 }, () => ({ ...one })),
+      NOW,
+    );
     assert.equal(e.samplesInWindow, 1);
     assert.equal(e.stable, false);
   });

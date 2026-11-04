@@ -12,26 +12,50 @@ export const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(
 export const ll = (c: LngLat): [number, number] => [c[1], c[0]];
 
 const LAYER_KEY = "fc-map-layer";
-const saved = () => { try { return localStorage.getItem(LAYER_KEY) ?? "Satellite"; } catch { return "Satellite"; } };
+const saved = () => {
+  try {
+    return localStorage.getItem(LAYER_KEY) ?? "Satellite";
+  } catch {
+    return "Satellite";
+  }
+};
 
 /** Street, terrain or satellite base map; satellite by default; the choice is remembered. */
 export function Tiles() {
-  useMapEvents({ baselayerchange: (e) => { try { localStorage.setItem(LAYER_KEY, e.name); } catch { /* ignore */ } } });
+  useMapEvents({
+    baselayerchange: (e) => {
+      try {
+        localStorage.setItem(LAYER_KEY, e.name);
+      } catch {
+        /* ignore */
+      }
+    },
+  });
   const cur = saved();
   return (
     <LayersControl position="topright">
       <LayersControl.BaseLayer name="Street" checked={cur === "Street"}>
-        <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={19}
+        />
       </LayersControl.BaseLayer>
       <LayersControl.BaseLayer name="Terrain" checked={cur === "Terrain"}>
         <TileLayer
           attribution='Map data &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>, SRTM | Style &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'
-          url="https://tile.opentopomap.org/{z}/{x}/{y}.png" maxNativeZoom={17} maxZoom={19} />
+          url="https://tile.opentopomap.org/{z}/{x}/{y}.png"
+          maxNativeZoom={17}
+          maxZoom={19}
+        />
       </LayersControl.BaseLayer>
       <LayersControl.BaseLayer name="Satellite" checked={cur !== "Street" && cur !== "Terrain"}>
         <TileLayer
           attribution="Imagery &copy; Esri, Maxar, Earthstar Geographics"
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxNativeZoom={18} maxZoom={19} />
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          maxNativeZoom={18}
+          maxZoom={19}
+        />
       </LayersControl.BaseLayer>
     </LayersControl>
   );
@@ -52,15 +76,31 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let dead = false;
-    fn().then((d) => { if (!dead) { setData(d); setErr(""); } }).catch((e) => { if (!dead) setErr(e.message ?? String(e)); });
-    return () => { dead = true; };
+    fn()
+      .then((d) => {
+        if (!dead) {
+          setData(d);
+          setErr("");
+        }
+      })
+      .catch((e) => {
+        if (!dead) setErr(e.message ?? String(e));
+      });
+    return () => {
+      dead = true;
+    };
   }, [...deps, tick]);
   return { data, err, reload: () => setTick((n) => n + 1) };
 }
 
 export const Card = ({ title, children, right }: { title?: string; children: ReactNode; right?: ReactNode }) => (
   <section className="card">
-    {(title || right) && <div className="row between"><h3>{title}</h3>{right}</div>}
+    {(title || right) && (
+      <div className="row between">
+        <h3>{title}</h3>
+        {right}
+      </div>
+    )}
     {children}
   </section>
 );
@@ -72,8 +112,12 @@ export function SecretBox({ label, value, onClose }: { label: string; value: str
       <div className="small">{label}</div>
       <code className="big">{value}</code>
       <div className="row">
-        <button className="ghost" onClick={() => void navigator.clipboard?.writeText(value)}>Copy</button>
-        <button className="ghost" onClick={onClose}>I saved it, hide</button>
+        <button className="ghost" onClick={() => void navigator.clipboard?.writeText(value)}>
+          Copy
+        </button>
+        <button className="ghost" onClick={onClose}>
+          I saved it, hide
+        </button>
       </div>
       <div className="small muted">Shown once. Give it to the worker; they cannot change it. You can set a new one any time.</div>
     </div>

@@ -9,8 +9,12 @@ export async function audit(
   ip?: string,
   db: Db = pool,
 ) {
-  await db.query(
-    "INSERT INTO audit_log (actor_id, action, target_type, target_id, details, ip) VALUES ($1,$2,$3,$4,$5,$6)",
-    [actorId, action, target?.type ?? null, target?.id ?? null, details === undefined ? null : JSON.stringify(details), ip ?? null],
-  );
+  await db.query("INSERT INTO audit_log (actor_id, action, target_type, target_id, details, ip) VALUES ($1,$2,$3,$4,$5,$6)", [
+    actorId,
+    action,
+    target?.type ?? null,
+    target?.id ?? null,
+    details === undefined ? null : JSON.stringify(details),
+    ip ?? null,
+  ]);
 }

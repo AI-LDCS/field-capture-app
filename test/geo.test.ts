@@ -9,7 +9,10 @@ const LAT = 13.75;
 const mLng = (m: number) => m / (111_320 * Math.cos((LAT * Math.PI) / 180)); // metres east -> degrees of longitude
 const mLat = (m: number) => m / 110_574;
 /** a straight line `len` metres east from the origin */
-const east = (len: number): LngLat[] => [[100.5, LAT], [100.5 + mLng(len), LAT]];
+const east = (len: number): LngLat[] => [
+  [100.5, LAT],
+  [100.5 + mLng(len), LAT],
+];
 const opts = CONFIG.coverage;
 const pt = (lng: number, lat: number, acc = 5, extra: Partial<GpsPoint> = {}): GpsPoint => ({ seq: 0, t: 0, lat, lng, acc, ...extra });
 /** fixes every `every` metres along the east line */
@@ -22,7 +25,11 @@ describe("distances", () => {
     assert.equal(haversineM([100.5, 13.75], [100.5, 13.75]), 0);
   });
   it("line length adds the pieces", () => {
-    const l: LngLat[] = [[100.5, LAT], [100.5 + mLng(100), LAT], [100.5 + mLng(100), LAT + mLat(50)]];
+    const l: LngLat[] = [
+      [100.5, LAT],
+      [100.5 + mLng(100), LAT],
+      [100.5 + mLng(100), LAT + mLat(50)],
+    ];
     assert.ok(Math.abs(lineLengthM(l) - 150) < 0.5);
     assert.equal(lineLengthM([[1, 1]]), 0);
   });
@@ -71,10 +78,14 @@ describe("coverage", () => {
     assert.equal(m.covered[0], true);
     assert.equal(m.covered[m.covered.length - 1], false);
     const firstOpen = m.covered.indexOf(false);
-    assert.ok(m.covered.slice(firstOpen).every((c) => !c), "covered first, open after");
+    assert.ok(
+      m.covered.slice(firstOpen).every((c) => !c),
+      "covered first, open after",
+    );
   });
   it("coverageFor combines several recordings", () => {
-    const first = along(150, 10), second = along(300, 10).filter((p) => p.seq >= 15);
+    const first = along(150, 10),
+      second = along(300, 10).filter((p) => p.seq >= 15);
     const both = coverageFor([east(300)], [first, second])[0];
     assert.ok(both > 0.99, `together ${both}`);
     assert.ok(coverageFor([east(300)], [first])[0] < 0.7);

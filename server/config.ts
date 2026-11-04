@@ -8,7 +8,10 @@ export const config = {
   port: int(env.PORT, 3100),
   host: env.HOST ?? "0.0.0.0",
   /** Browser origins allowed to make state-changing requests (CSRF check). */
-  publicOrigins: (env.PUBLIC_ORIGINS ?? "").split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean),
+  publicOrigins: (env.PUBLIC_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim().replace(/\/$/, ""))
+    .filter(Boolean),
   cookieSecure: bool(env.COOKIE_SECURE, true),
   trustProxy: int(env.TRUST_PROXY, 1),
   s3: {

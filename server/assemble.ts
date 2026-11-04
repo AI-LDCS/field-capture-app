@@ -32,7 +32,10 @@ export function stopAssembler() {
 
 /** Run the queue now (also called right after a recording is verified). */
 export async function kickAssembler() {
-  if (busy) { again = true; return; }
+  if (busy) {
+    again = true;
+    return;
+  }
   busy = true;
   try {
     do {
@@ -74,7 +77,8 @@ async function assemble(id: string) {
   try {
     // 1. chunks -> one file, checking every chunk against the hash the phone sent
     const chunks = await q("SELECT seq, sha256, object_key FROM recording_chunks WHERE recording_id = $1 ORDER BY seq", [id]);
-    if (chunks.length !== rec.chunk_count || chunks.some((c, i) => c.seq !== i)) throw new Error("chunk list does not match the verified manifest");
+    if (chunks.length !== rec.chunk_count || chunks.some((c, i) => c.seq !== i))
+      throw new Error("chunk list does not match the verified manifest");
     const fd = fs.openSync(raw, "w");
     try {
       for (const c of chunks) {

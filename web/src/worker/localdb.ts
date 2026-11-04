@@ -91,10 +91,8 @@ export async function getRecording(id: string) {
 export const getAssignment = async (id: string) =>
   p((await openDb()).transaction("assignments").objectStore("assignments").get(id) as IDBRequest<LocalAssignment | undefined>);
 export const allRecordings = () => readAll<LocalRecording>("recordings");
-export const chunksOf = async (id: string) =>
-  (await readAll<LocalChunk>("chunks", "recordingId", id)).sort((a, b) => a.seq - b.seq);
-export const gpsOf = async (id: string) =>
-  (await readAll<LocalGps>("gps", "recordingId", id)).sort((a, b) => a.seq - b.seq);
+export const chunksOf = async (id: string) => (await readAll<LocalChunk>("chunks", "recordingId", id)).sort((a, b) => a.seq - b.seq);
+export const gpsOf = async (id: string) => (await readAll<LocalGps>("gps", "recordingId", id)).sort((a, b) => a.seq - b.seq);
 
 export async function markUploaded(kind: "chunks" | "gps", recordingId: string, seqs: number[]) {
   const db = await openDb();

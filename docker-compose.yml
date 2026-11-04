@@ -53,7 +53,6 @@ services:
       rustfs:
         condition: service_started
     # no published ports: only the proxy below can reach it
-
   # --- pick ONE edge proxy with a profile ---
   # tailnet: HTTPS with the cert files from `tailscale cert`, reachable on your tailnet
   caddy-tailnet:

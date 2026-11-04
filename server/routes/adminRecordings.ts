@@ -14,7 +14,11 @@ import { detail } from "./assignments.ts";
  */
 export const adminRecordingsRouter = Router();
 
-const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "route";
+const slug = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "route";
 
 async function recording(req: Request) {
   const rec = await q1("SELECT * FROM recordings WHERE id = $1", [uuidParam(req, "id")]);
@@ -37,19 +41,34 @@ adminRecordingsRouter.get("/", async (_req, res) => {
       WHERE r.status = 'server_verified'
       ORDER BY r.verified_at DESC LIMIT ${LIST_LIMIT}`,
   );
-  res.json(rows.map((r) => ({
-    id: r.id, assignmentId: r.assignment_id, verifiedAt: r.verified_at,
-    startedAtMs: Number(r.started_at_ms), endedAtMs: r.ended_at_ms === null ? null : Number(r.ended_at_ms),
-    gpsCount: r.gps_count ?? 0, fileBytes: r.file_bytes === null ? null : Number(r.file_bytes), assembly: r.assembly_state, simulated: r.simulated,
-    worker: { id: r.user_id, username: r.username, displayName: r.display_name, deleted: r.user_deleted },
-    route: { name: r.route_name, version: r.version, deleted: r.route_deleted },
-  })));
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      assignmentId: r.assignment_id,
+      verifiedAt: r.verified_at,
+      startedAtMs: Number(r.started_at_ms),
+      endedAtMs: r.ended_at_ms === null ? null : Number(r.ended_at_ms),
+      gpsCount: r.gps_count ?? 0,
+      fileBytes: r.file_bytes === null ? null : Number(r.file_bytes),
+      assembly: r.assembly_state,
+      simulated: r.simulated,
+      worker: { id: r.user_id, username: r.username, displayName: r.display_name, deleted: r.user_deleted },
+      route: { name: r.route_name, version: r.version, deleted: r.route_deleted },
+    })),
+  );
 });
 
 adminRecordingsRouter.get("/:id/gps", async (req, res) => {
   const rec = await recording(req);
-  res.json((await q("SELECT seq, t_ms, lat, lng, acc FROM gps_points WHERE recording_id = $1 ORDER BY seq", [rec.id]))
-    .map((p) => ({ seq: p.seq, t: Number(p.t_ms), lat: p.lat, lng: p.lng, acc: p.acc })));
+  res.json(
+    (await q("SELECT seq, t_ms, lat, lng, acc FROM gps_points WHERE recording_id = $1 ORDER BY seq", [rec.id])).map((p) => ({
+      seq: p.seq,
+      t: Number(p.t_ms),
+      lat: p.lat,
+      lng: p.lng,
+      acc: p.acc,
+    })),
+  );
 });
 
 /** Range-aware proxy: browsers (iOS Safari especially) will not play video without real 206 responses. */
@@ -67,9 +86,13 @@ adminRecordingsRouter.get("/:id/video", async (req: Request, res: Response) => {
     }
     throw e;
   }
-  if (!range || /^bytes=0-/.test(range)) await audit(req.user!.id, "recording_viewed", { type: "recording", id: rec.id }, undefined, req.ip);
+  if (!range || /^bytes=0-/.test(range))
+    await audit(req.user!.id, "recording_viewed", { type: "recording", id: rec.id }, undefined, req.ip);
   res.status(obj.status).set({
-    "Content-Type": rec.file_mime, "Accept-Ranges": "bytes", "Content-Length": String(obj.length), "Cache-Control": "private, no-store",
+    "Content-Type": rec.file_mime,
+    "Accept-Ranges": "bytes",
+    "Content-Length": String(obj.length),
+    "Cache-Control": "private, no-store",
   });
   if (obj.contentRange) res.set("Content-Range", obj.contentRange);
   res.on("close", () => obj.body.destroy());
@@ -99,24 +122,52 @@ export const adminExportRouter = Router();
 async function runExport(assignmentId: string) {
   const d = await detail(assignmentId);
   if (!d) throw notFound("assignment not found");
-  const recs = (await q("SELECT * FROM recordings WHERE assignment_id = $1 AND status = 'server_verified' ORDER BY started_at_ms", [assignmentId]));
+  const recs = await q("SELECT * FROM recordings WHERE assignment_id = $1 AND status = 'server_verified' ORDER BY started_at_ms", [
+    assignmentId,
+  ]);
   const exp = {
     exportedAt: new Date().toISOString(),
-    assignment: { id: d.id, status: d.status, reasons: d.reasons, createdAt: d.createdAt, completedAt: d.completedAt, preflight: d.preflight, gpsQuality: d.quality },
+    assignment: {
+      id: d.id,
+      status: d.status,
+      reasons: d.reasons,
+      createdAt: d.createdAt,
+      completedAt: d.completedAt,
+      preflight: d.preflight,
+      gpsQuality: d.quality,
+    },
     worker: d.worker,
     route: d.route,
     routeGeoJSON: {
       type: "FeatureCollection",
       features: d.segments.map((s) => ({
-        type: "Feature", geometry: { type: "LineString", coordinates: s.coords },
-        properties: { order: s.order, name: s.name, required: s.required, status: s.status, skipReason: s.skipReason, coverage: s.coverage, minCoverageRatio: s.minCoverageRatio },
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: s.coords },
+        properties: {
+          order: s.order,
+          name: s.name,
+          required: s.required,
+          status: s.status,
+          skipReason: s.skipReason,
+          coverage: s.coverage,
+          minCoverageRatio: s.minCoverageRatio,
+        },
       })),
     },
-    recordings: await Promise.all(recs.map(async (r, i) => ({
-      index: i + 1, id: r.id, bytes: r.file_bytes === null ? null : Number(r.file_bytes), sha256: r.file_sha256,
-      file: r.assembly_state === "done" ? `recording-${i + 1}-${r.id.slice(0, 8)}.${extOf(r.mime)}` : null, ...(await gpsExport(r)),
-    }))),
-    audit: (await q("SELECT at, action, target_type, target_id, details FROM audit_log WHERE target_id = $1 OR target_id = ANY($2::text[]) ORDER BY id", [assignmentId, recs.map((r) => r.id)])),
+    recordings: await Promise.all(
+      recs.map(async (r, i) => ({
+        index: i + 1,
+        id: r.id,
+        bytes: r.file_bytes === null ? null : Number(r.file_bytes),
+        sha256: r.file_sha256,
+        file: r.assembly_state === "done" ? `recording-${i + 1}-${r.id.slice(0, 8)}.${extOf(r.mime)}` : null,
+        ...(await gpsExport(r)),
+      })),
+    ),
+    audit: await q(
+      "SELECT at, action, target_type, target_id, details FROM audit_log WHERE target_id = $1 OR target_id = ANY($2::text[]) ORDER BY id",
+      [assignmentId, recs.map((r) => r.id)],
+    ),
   };
   return { d, recs, exp };
 }
@@ -124,7 +175,10 @@ async function runExport(assignmentId: string) {
 adminExportRouter.get("/:id/export.json", async (req, res) => {
   const { d, exp } = await runExport(uuidParam(req, "id"));
   await audit(req.user!.id, "assignment_exported", { type: "assignment", id: d.id }, { format: "json" }, req.ip);
-  res.attachment(`${slug(d.route.name)}-${d.id.slice(0, 8)}.json`).type("json").send(JSON.stringify(exp, null, 2));
+  res
+    .attachment(`${slug(d.route.name)}-${d.id.slice(0, 8)}.json`)
+    .type("json")
+    .send(JSON.stringify(exp, null, 2));
 });
 
 /** Streams from storage into the zip one file at a time; never holds a video in memory. */

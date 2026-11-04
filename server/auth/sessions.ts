@@ -62,7 +62,11 @@ export async function loadSession(req: Request): Promise<SessionUser | null> {
     await q("UPDATE sessions SET last_seen_at = now() WHERE id = $1", [id]);
   }
   return {
-    id: row.id, username: row.username, displayName: row.display_name, role: row.role, sessionId: id,
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    role: row.role,
+    sessionId: id,
   };
 }
 

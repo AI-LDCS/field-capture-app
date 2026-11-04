@@ -13,7 +13,12 @@ declare global {
 }
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message?: string, public extra: object = {}) {
+  constructor(
+    public status: number,
+    public code: string,
+    message?: string,
+    public extra: object = {},
+  ) {
     super(message ?? code);
   }
 }
@@ -40,11 +45,13 @@ export const requireAuth: RequestHandler = (req, _res, next) => {
   next();
 };
 
-export const requireRole = (role: "admin" | "worker"): RequestHandler => (req, _res, next) => {
-  if (!req.user) return next(new HttpError(401, "unauthenticated", "login required"));
-  if (req.user.role !== role) return next(new HttpError(403, "forbidden", "not allowed"));
-  next();
-};
+export const requireRole =
+  (role: "admin" | "worker"): RequestHandler =>
+  (req, _res, next) => {
+    if (!req.user) return next(new HttpError(401, "unauthenticated", "login required"));
+    if (req.user.role !== role) return next(new HttpError(403, "forbidden", "not allowed"));
+    next();
+  };
 
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -74,7 +81,10 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof ZodError) {
     return void res.status(400).json({
       error: "invalid_input",
-      message: err.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).slice(0, 5).join("; "),
+      message: err.issues
+        .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+        .slice(0, 5)
+        .join("; "),
     });
   }
   const e = err as { code?: string; message?: string; type?: string; status?: number };
