@@ -16,15 +16,20 @@ It is built to be careful with the data: a recording survives a refresh or crash
 | --- | --- | --- | --- | --- | --- |
 | **Cost** | 💳 From US$43/user/month | 💳 Paid ArcGIS licensing | 🆓 Free core app, optional paid cloud | 🆓 Free and open source | 🙌 No third-party per-user licensing |
 | **GPS** | ✅ | ✅ Tracking | ✅ Continuous tracking | ✅ Coordinates | ✅ |
-| **Synchronized video and GPS** | ✅ | ➖ | ❌ None documented | ❓ Not verified | ✅ |
-| **Video length** | ⚠️ Short clips suggested in practice | ⚠️ 10 MB field-app attachment limit | ➖ | ⚠️ 99 MB limit in our test | 🔍 To be verified |
-| **Offline collection** | ✅ | ✅ | ✅ | ✅ | 🔍 To be verified |
+| **Synchronized video and GPS** | ✅ | ❌ Video is a separate attachment | ❌ None documented | ❌ None documented | ✅ |
+| **Video length** | ⚠️ Short clips suggested in practice | ⚠️ 10 MB field-app attachment limit | ✅ Up to 10 GB per file on QFieldCloud, under 2 GB recommended | ⚠️ 99 MB limit in our test | ✅ No fixed limit\* |
+| **Offline collection** | ✅ | ✅ | ✅ | ✅ | ⚠️ Keeps recording if the connection drops† |
 | **Centralized storage** | ✅ | ✅ | ⚠️ Limited free cloud storage | ✅ | ✅ |
-| **Route-based work** | ➖ | ➖ | ✅ Route navigation | ➖ | ✅ Simple route-based recording |
-| **Standardized data exports** | ➖ | ➖ | ➖ | ➖ | ✅ |
-| **Getting started** | ➖ | ⚠️ Licensing and configuration complexity | ⚠️ Requires GIS setup | 📝 Form-based collection | 🏗️ Requires development and testing |
+| **Route-based work** | ⚠️ Assigns records, no dedicated routing found | ⚠️ Opens a navigation app for one point | ⚠️ Navigates to one point, routes open in an external app | ⚠️ Navigates to a target, records the walked track | ✅ Simple route-based recording |
+| **Standardized data exports** | ✅ CSV, Excel, Shapefile, KML, GeoJSON, GeoPackage and more | ✅ CSV, Excel, KML, Shapefile, File Geodatabase | ✅ Through QGIS (GeoPackage and more) | ✅ CSV, Excel, Shapefile | ✅ Video, GPS JSON, full ZIP |
 
-✅ supported · ⚠️ limited · ❌ not available · ❓ / 🔍 still to verify · ➖ not assessed
+✅ supported · ⚠️ limited · ❌ not available
+
+\* Limited by free space on the phone and the server, at about 30 MB per minute. The phone deletes its copy once a recording has finished uploading and the server has verified it, so each recording must fit on the phone. If space runs very low, recording stops by itself and keeps what it saved. Very long recordings have not been tested yet.
+
+† The app needs a connection to open. If the connection drops, recording continues on the phone and uploads resume when it returns.
+
+Other products were checked against their own documentation in November 2026, and can change: [Fulcrum exports](https://help.fulcrumapp.com/data/in-what-file-formats-can-i-export-my-data), [Fulcrum video tracks](https://help.fulcrumapp.com/en/articles/74290-what-is-spatialvideo-and-how-does-it-work), [Survey123 media](https://doc.arcgis.com/en/survey123/create/main/xlsformmedia.htm), [QField navigation](https://docs.qfield.org/how-to/navigation-and-positioning/navigation/), [QFieldCloud file limits](https://docs.qfield.org/reference/qfieldcloud/projects/), [Open Foris Arena](https://www.openforis.org/arena/), [Arena Mobile](https://www.openforis.org/arena-mobile/) and [its source](https://github.com/openforis/arena-mobile). The 99 MB limit is from our own test.
 
 ## What it does
 
