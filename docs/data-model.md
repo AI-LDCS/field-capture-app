@@ -1,6 +1,6 @@
 # Data model
 
-PostgreSQL 17 with PostGIS. Schema changes are plain SQL files in `db/migrations`, applied in name order, once each, under an advisory lock at start-up. They only go forward: to roll back, restore a backup (see [operations](operations.md#backup-and-restore)).
+PostgreSQL 18 with PostGIS. Schema changes are plain SQL files in `db/migrations`, applied in name order, once each, under an advisory lock at start-up. They only go forward: to roll back, restore a backup (see [operations](operations.md#backup-and-restore)).
 
 | Migration | Adds |
 | --- | --- |

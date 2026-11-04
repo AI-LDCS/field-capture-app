@@ -44,7 +44,20 @@ docker run --rm -v field-capture_rustfs-data:/data:ro -v "$PWD":/backup alpine \
 
 For a copy that is consistent with the database, stop writes first: `docker compose stop app rustfs`, run the archive, then `docker compose start rustfs app`. A copy taken while uploads are running may miss the newest objects.
 
+This archive is RustFS's own internal format: it is for restoring into RustFS.
+
+To get the recordings as **ordinary files**, for example to hand them over or read them elsewhere, use the export:
+
+```bash
+npm run export:storage                      # ./rustfs-export-<date>-<time>.tar
+npm run export:storage -- /backups/all.tar  # or a file you name
+```
+
+It needs the app container running and enough free disk for all the video, and it reads the bucket without changing anything. The `.tar` holds every object under its storage key, plus a `manifest.json` with each one's size and SHA-256. The file only appears once the export has finished and its object count matches. Uploads that finish after it starts may be missing. There is no script to load an export back in; use the volume archive above for restoring.
+
 Copy both files off the server. A backup that lives only on the same disk is not a backup.
+
+Upgrades, schema changes and moving servers follow the [database migration plan](database-migration.md).
 
 ### Restore
 

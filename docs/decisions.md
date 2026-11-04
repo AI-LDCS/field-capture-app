@@ -80,6 +80,11 @@ The choices that shaped the system, with the reason and what was rejected. Each 
 **Decided.** SQL files applied in order; `pg` with parameterised queries.
 **Why.** PostGIS geometry columns and trigger-based rules fit SQL better than an ORM; the schema is small and easy to read.
 
+## PostgreSQL 18, in the old data folder
+
+**Decided.** The database runs PostgreSQL 18 with PostGIS from the Debian packages. `PGDATA` stays at `/var/lib/postgresql/data` rather than the folder the Postgres 18 image would use by default.
+**Why.** It avoids a major upgrade later, while there is little data. With the default folder, 18 would ignore an existing volume and start empty, which looks like lost data. With this one it refuses to start.
+
 ## One image, one process
 
 **Decided.** API, static web app and the video job in one Node process; Postgres, RustFS and Caddy as separate containers; no queue, no orchestrator.

@@ -12,6 +12,7 @@ Start with the [main README](../README.md) for what the system is and how to run
 | change a setting or threshold | [Configuration](configuration.md) |
 | put it on a server | [Deployment](deployment.md) |
 | keep it running, back it up, fix it | [Operations](operations.md) |
+| [Database migration plan](database-migration.md) | schema changes, Postgres upgrades, moving servers, going back |
 | run or write tests | [Testing](testing.md) |
 | learn why things are the way they are | [Decisions](decisions.md) |
 | know what is missing and what is next | [Roadmap](roadmap.md) |

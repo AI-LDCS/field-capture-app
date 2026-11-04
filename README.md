@@ -134,6 +134,7 @@ docker-compose.dev.yml      laptop override: private ports on 127.0.0.1, dev too
 | `npm run test:unit` | pure-logic tests only, nothing else needed |
 | `npm run test:coverage` | all tests with a coverage table |
 | `npm run typecheck` | TypeScript check |
+| `npm run export:storage` | export everything in RustFS to one `.tar` file |
 
 ## Configuration
 
@@ -141,7 +142,7 @@ Environment variables (database, storage, allowed origins, cookies, admin bootst
 
 ## Tech stack
 
-Node 22, Express 5, TypeScript, zod · React 19, Vite, Leaflet · PostgreSQL 17 with PostGIS · RustFS (S3-compatible) · Caddy · Argon2id · ffmpeg (video remux) · Docker Compose · `node:test` for tests.
+Node 22, Express 5, TypeScript, zod · React 19, Vite, Leaflet · PostgreSQL 18 with PostGIS · RustFS (S3-compatible) · Caddy · Argon2id · ffmpeg (video remux) · Docker Compose · `node:test` for tests.
 
 ## Testing
 
@@ -184,6 +185,7 @@ The full list and the proposed next steps are in the [Roadmap](docs/roadmap.md).
 | [Configuration](docs/configuration.md) | environment variables and tuning constants |
 | [Deployment](docs/deployment.md) | Tailscale and public-server setup, updates |
 | [Operations](docs/operations.md) | backup and restore, troubleshooting, admin recovery |
+| [Database migration plan](docs/database-migration.md) | schema changes, Postgres upgrades, moving servers, going back |
 | [Testing](docs/testing.md) | how the tests work and what they cover |
 | [Decisions](docs/decisions.md) | why it is built this way |
 | [Roadmap](docs/roadmap.md) | limits and what comes next |
