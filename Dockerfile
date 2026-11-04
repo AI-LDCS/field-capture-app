@@ -1,5 +1,6 @@
 # --- build ---
-FROM node:22-bookworm-slim AS build
+# Its output is plain JavaScript, so it runs natively even when the image is for another CPU.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

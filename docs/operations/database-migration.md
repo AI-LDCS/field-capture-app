@@ -51,7 +51,7 @@ Schema changes are SQL files in `db/migrations`. The app applies new ones in nam
 
 A new major version cannot open the old version's data folder. It stops with `database files are incompatible with server`, and the app stays down until the data is moved. Video in RustFS is not affected.
 
-Do this **while the old image is still running**, before any `docker compose up --build`. If you have already rebuilt, go back to the previous `db/Dockerfile` and rebuild the `db` service first, so you can take the dump.
+Do this **while the old image is still running**, before any `docker compose up --build` or `up` after a `pull`. A `pull` alone is safe; it does not restart anything. If you have already rebuilt, go back to the previous `db/Dockerfile` and rebuild the `db` service first, so you can take the dump.
 
 1. Update `db/Dockerfile` to the new version, including the PostGIS package names. Run `npm test` against it.
 2. Rehearse with a copy of real data: restore a dump into a temporary stack on the new version, and compare the counts.

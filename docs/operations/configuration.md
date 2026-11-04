@@ -33,6 +33,7 @@ Copy `.env.example` to `.env` and fill it in. Docker Compose reads `.env` for su
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | The database the `db` container creates. |
 | `TAILNET_HOST` | The machine's Tailscale DNS name (`tailscale status` shows it); used for the certificate file names and the Caddy site. |
 | `TAILNET_HTTPS_PORT` | Host port for the tailnet profile (default `443`; if you change it, `PUBLIC_ORIGINS` must include the port). |
+| `IMAGE_TAG` | Which published images to pull: `latest` (default), or `sha-<commit>` to pin or go back. See [Deployment](deployment.md#updating). |
 | `DOMAIN` | Public hostname for the `public` profile; Caddy gets a Let's Encrypt certificate for it. |
 
 ### Compose profiles

@@ -79,13 +79,31 @@ docker compose logs -f caddy-public     # watch it obtain the certificate
 
 ## Updating
 
+CI publishes the images to GHCR after the tests pass on `main`, for `linux/amd64` and `linux/arm64`, so a server does not have to build anything:
+
+| Image | Tags |
+| --- | --- |
+| `ghcr.io/mai-ru-software-house/field-capture-app` | `latest`, `sha-<commit>` |
+| `ghcr.io/mai-ru-software-house/field-capture-db` | `latest`, `sha-<commit>` |
+
+The images are private. Log in once on each server, with a GitHub token that only has `read:packages`:
+
 ```bash
-git pull
-docker compose --profile <tailnet|public> up -d --build
-docker compose logs --tail 20 app      # migrations apply automatically; look for "migration applied"
+docker login ghcr.io -u <github-user>
 ```
 
-Migrations only go forward. Before an update that adds one, make a [backup](runbook.md#backup-and-restore). To go back to an older version after a migration ran, restore the backup taken before it.
+Back up first if the update adds a migration; the app applies it when it starts. Then:
+
+```bash
+git pull                                                # compose file and Caddy settings
+docker compose --profile <tailnet|public> pull
+docker compose --profile <tailnet|public> up -d --no-build
+docker compose logs --tail 20 app                       # look for "migration applied"
+```
+
+To go back to an older version, or stay on one, set `IMAGE_TAG=sha-<commit>` in `.env` and run the same `pull` and `up` commands. The commit's short SHA is on its CI run. **This does not undo a migration**: if one ran since that version, restore the [backup](runbook.md#backup-and-restore) taken before it. Check for a Postgres major version change too, and follow the [migration plan](database-migration.md#major-version-upgrade) if there is one.
+
+To build on the machine instead, as on a laptop, use `docker compose --profile <tailnet|public> up -d --build`.
 
 ## What starts, and in what order
 

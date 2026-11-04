@@ -49,7 +49,8 @@ So adding a route without a test makes `npm test` fail and names the route. CI r
 | --- | --- |
 | Static checks | Biome lint and formatting, TypeScript, ShellCheck on `scripts/`, `npm audit` (fails on high or critical, production dependencies only), `npm run build`, and the unit tests |
 | Full tests | `npm test` against the real Postgres and RustFS from `docker-compose.yml`, with `.env.example` as its settings |
-| Docker images | builds the app image |
+| Docker images | builds the app and database images for `linux/amd64` and `linux/arm64`, after the tests pass. On `main` it also pushes them to GHCR |
+| Published images | on `main` only: logs in, pulls the pushed images by commit on `amd64`, as a server would, and starts them |
 
 ### Lint rules
 
