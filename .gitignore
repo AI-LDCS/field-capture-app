@@ -9,3 +9,8 @@ certs/
 *.pem
 .DS_Store
 .test-hits/
+# backups and exports: they hold password hashes and recordings
+*.dump
+*.partial
+rustfs-*.tar
+rustfs-*.tgz

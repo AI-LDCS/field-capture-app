@@ -5,3 +5,12 @@ dist
 certs
 .git
 test
+.github
+.test-hits
+deploy
+docs
+scripts
+*.dump
+*.partial
+rustfs-*.tar
+rustfs-*.tgz
