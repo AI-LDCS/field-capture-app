@@ -4,7 +4,7 @@ Everything runs with Docker Compose. Pick an edge profile:
 
 | Profile | For | Address | TLS certificate |
 | --- | --- | --- | --- |
-| `tailnet` | a laptop or server reachable over Tailscale | `https://<machine>.<tailnet>.ts.net` | files made by `tailscale cert` |
+| `tailnet` | a laptop or server reachable over Tailscale | `https://<machine>.<tailnet>.ts.net` | files made by [`scripts/tailnet-cert.sh`](#the-tailnet-certificate-script) |
 | `public` | a VPS with a public IP | `https://<your domain>` | automatic (Let's Encrypt, by Caddy) |
 
 Browsers allow the camera and GPS only on **HTTPS** (or `localhost`), so a phone needs one of these.
@@ -56,13 +56,11 @@ The script makes `POSTGRES_PASSWORD` (and the copy in `DATABASE_URL`), `S3_ACCES
 - Leave `COOKIE_SECURE=true` and `TRUST_PROXY=1`.
 - `DATABASE_URL` in the example file is only for developing on the host; the containers build their own and ignore it.
 
-Get the certificate (it must be named after the host, because the Caddyfile looks for `/certs/<TAILNET_HOST>.crt`):
+Get the certificate. This also fills in `TAILNET_HOST` and `PUBLIC_ORIGINS` ([what the script does](#the-tailnet-certificate-script)):
 
 ```bash
 ./scripts/tailnet-cert.sh
 ```
-
-The script runs `tailscale cert` for `TAILNET_HOST` (from `.env`; if unset it uses this machine's name from `tailscale status`) and writes the files into `certs/`. It also sets `TAILNET_HOST` in `.env` when it is missing or still the example value, and adds `https://<host>:<TAILNET_HTTPS_PORT>` to `PUBLIC_ORIGINS` (dropping the example entry and keeping any other origins). If `caddy-tailnet` is running it restarts it. It does nothing while the current certificate has more than 30 days left, and `--force` renews anyway. A failed request leaves the old files in place.
 
 Start:
 
@@ -75,8 +73,27 @@ Open `https://<TAILNET_HOST>` and sign in with `ADMIN_USERNAME` and the `ADMIN_P
 
 Notes:
 
-- Tailscale certificates are short-lived (about 90 days). Renew by running `./scripts/tailnet-cert.sh` again (it restarts Caddy for you), or run `./scripts/tailnet-cert.sh --install-cron` once to add a daily check to your crontab; it only renews when fewer than 30 days remain and logs to `certs/renew.log`.
 - The port `443` is published on all interfaces of the machine. To limit it to your Tailscale address, change the `caddy-tailnet` `ports:` line to `"<tailscale-ip>:443:443"`.
+
+## The tailnet certificate script
+
+Caddy on the `tailnet` profile does not get its own certificate. It reads `certs/<TAILNET_HOST>.crt` and `.key`, and `scripts/tailnet-cert.sh` makes those files. Tailscale must be installed and running here, with HTTPS certificates enabled for your tailnet.
+
+| Command | Does |
+| --- | --- |
+| `./scripts/tailnet-cert.sh` | Gets a certificate, or renews it when fewer than 30 days remain. Otherwise it does nothing, so it is safe to run often. |
+| `./scripts/tailnet-cert.sh --force` | Renews even if the current one is still valid. |
+| `./scripts/tailnet-cert.sh --install-cron` | Asks, then adds a daily check at 04:17 to your crontab. It logs to `certs/renew.log`. |
+
+Each run also:
+
+- **Finds the host:** `TAILNET_HOST` from the environment or `.env`. If that is empty or still the example value, it uses this machine's name from `tailscale status` and writes it to `.env`.
+- **Sets the allowed origin:** adds `https://<host>` to `PUBLIC_ORIGINS`, with `:<TAILNET_HTTPS_PORT>` only if that port is not 443. It drops the example entry and keeps any others.
+- **Restarts Caddy** when it writes a new certificate, because Caddy reads the files only at start. If Caddy is not running, it tells you how to start it.
+
+Tailscale certificates last about 90 days, so run `--install-cron` once on any machine that stays up. Without it, HTTPS stops working when the certificate expires. If `tailscale cert` is refused, check that HTTPS is enabled in the admin console (DNS page), and that you may run it (try `sudo`). The `certs/` folder holds the private key and is not committed.
+
+This applies whether you pull images from GHCR or build them: the certificate stays on the machine, never in an image.
 
 ## First start (public VPS)
 
