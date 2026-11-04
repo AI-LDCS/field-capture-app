@@ -20,6 +20,9 @@ export class ApiError extends Error {
   }
 }
 
+/** The server answered that this does not exist (or is not yours). A failed connection is not this. */
+export const isNotFound = (e: unknown) => e instanceof ApiError && e.status === 404;
+
 let onUnauthenticated: (() => void) | null = null;
 export const setUnauthenticatedHandler = (f: () => void) => {
   onUnauthenticated = f;

@@ -60,5 +60,7 @@ When you stop, you are back on the assignment's home page. **Check & finish** un
 | The phone is nearly full | Recording stops by itself when space is very low. Free space and start again. |
 | Location is blocked | You cannot record. Allow location for this site in your browser settings and tap **Try again**. |
 | It says GPS is weak | Move to open sky. Tall buildings and covered streets make GPS worse. |
+| Assignment not found | It was withdrawn or removed, or the link is old. Go back to your list. Anything still on this phone is kept. |
+| Can't reach the server | The first time you open an assignment it needs a connection. The page keeps trying by itself. |
 
 Other people using the same phone cannot see or upload your data, and you cannot see theirs.

@@ -3,7 +3,7 @@ import { Circle, CircleMarker, MapContainer, Polyline, useMap } from "react-leaf
 import { CONFIG } from "@shared/config.ts";
 import { coverageMask, distToLineM } from "@shared/geo.ts";
 import type { AssignmentDetail, LngLat, PreflightOutcome } from "@shared/types.ts";
-import { api } from "../api.ts";
+import { api, isNotFound } from "../api.ts";
 import { toast } from "../feedback.tsx";
 import { Badge, Tiles, fmtBytes, ll } from "../ui.tsx";
 import { Onboard, useCameraOpener, useStorage } from "./Onboard.tsx";
@@ -47,6 +47,7 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
   const session = useSession();
   const local = useLocalRecordings(id);
   const { storage, recheck } = useStorage(!!session.camera);
+  const [gone, setGone] = useState(false);
   const [gpsDenied, setGpsDenied] = useState(false);
   const [gpsNonce, setGpsNonce] = useState(0);
   // Onboard opens only from the Start Recording tap: that is the moment the worker says they are on site, and
@@ -60,8 +61,15 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
       const d = await api.myAssignment(id);
       setRun(d);
       setOffline(false);
+      setGone(false);
       void putAssignment({ id, detail: d }).catch(() => {});
-    } catch {
+    } catch (e) {
+      // the server's answer, not a lost connection: a saved copy would only hide that it is gone
+      if (isNotFound(e)) {
+        setOffline(false);
+        setGone(true);
+        return;
+      }
       setOffline(true);
       const l = await getAssignment(id).catch(() => undefined);
       if (l) setRun((cur) => cur ?? l.detail);
@@ -165,7 +173,19 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
     if (step === "record" || (step === "onboard" && !onboarding)) location.replace(home);
   }, [step, onboarding, !!session.active, home]);
 
-  if (!run) return <p>Loading…</p>;
+  // Never replaces a running recording: it keeps going whatever the server says about the assignment.
+  if (gone && !(session.active && session.activeAssignmentId === id)) {
+    return (
+      <section className="card">
+        <h3>Assignment not found</h3>
+        <p className="muted">It may have been withdrawn or removed. Recordings still on this phone are kept.</p>
+        <a className="btn" href="#/">
+          Back to my assignments
+        </a>
+      </section>
+    );
+  }
+  if (!run) return <p>{offline ? "Can't reach the server. Trying again…" : "Loading…"}</p>;
 
   const pre = run.preflight ?? preflightLocal;
   const preflightDone = !!pre && !redo;
