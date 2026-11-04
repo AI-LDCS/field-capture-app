@@ -112,3 +112,28 @@ export function bearingDeg(a: LngLat, b: LngLat): number {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 export const compass = (deg: number) => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(deg / 45) % 8];
+
+/** Point at a fraction (0..1) of the line's length, with the direction of travel there. */
+export function pointAtFraction(coords: LngLat[], f: number): { point: LngLat; bearing: number } | null {
+  if (coords.length < 2) return null;
+  const total = lineLengthM(coords);
+  if (total === 0) return null;
+  let want = total * f;
+  for (let i = 1; i < coords.length; i++) {
+    const d = haversineM(coords[i - 1], coords[i]);
+    if (want <= d || i === coords.length - 1) {
+      const t = d === 0 ? 0 : Math.min(1, want / d);
+      const a = coords[i - 1],
+        b = coords[i];
+      return { point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], bearing: bearingDeg(a, b) };
+    }
+    want -= d;
+  }
+  return null;
+}
+
+/** Evenly spaced points along a line, about `spacingM` apart, for direction arrows. A short line still gets one, at its middle. */
+export function arrowsAlong(coords: LngLat[], spacingM: number, max = 20): { point: LngLat; bearing: number }[] {
+  const n = Math.max(1, Math.min(max, Math.round(lineLengthM(coords) / spacingM)));
+  return Array.from({ length: n }, (_, k) => pointAtFraction(coords, (k + 0.5) / n)).filter((a) => a !== null);
+}

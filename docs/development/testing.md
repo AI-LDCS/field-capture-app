@@ -19,10 +19,10 @@ The tool is Node's built-in test runner (`node:test`) run through `tsx`; there i
 | `test/integration/api.test.ts` | API, real Postgres | login, lockout, cookies, sessions, worker lifecycle, roles, ownership, CSRF, route versions and immutability, assignments, curved segments, audit |
 | `test/integration/recordings.test.ts` | API, real Postgres + RustFS | ownership of recordings, chunk upload rules, finalize and assembly, range playback, completion decisions, review, export |
 | `test/integration/endpoints.test.ts` | API, real Postgres + RustFS | every endpoint's success and refusal cases, a bad-input sweep over all bodies, a no-login/wrong-role sweep over all routes |
-| `test/unit/geo.test.ts` | unit | distances, coverage, bearings, GPS quality flags and review thresholds |
+| `test/unit/geo.test.ts` | unit | distances, coverage, bearings, direction arrows, GPS quality flags and review thresholds |
 | `test/unit/preflight.test.ts` | unit | the GPS-check rules |
 | `test/unit/curve.test.ts` | unit | curve smoothing |
-| `test/unit/editor.test.ts` | unit | the route editor's edit model: reorder, split, join, parse coordinates, undo/redo |
+| `test/unit/editor.test.ts` | unit | the route editor's edit model: reorder, split, join, snap, parse coordinates, undo/redo |
 | `test/repo/docs.test.ts` | repo | the docs list every endpoint and environment variable, and their links and file paths resolve |
 | `test/repo/structure.test.ts` | repo | the layout rules in [architecture](architecture.md#layout-rules) hold |
 | `test/integration/check-endpoints.ts` | check (runs after the tests) | every endpoint answered with a 2xx in some test |

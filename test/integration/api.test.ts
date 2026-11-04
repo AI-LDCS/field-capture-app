@@ -639,6 +639,26 @@ describe("routes and versions", () => {
     assert.ok(seen.body.segments[0].coords.length > 40, "the worker walks the curve, not the corners");
   });
 
+  it("autosaving a draft writes one audit row per working session, not one per save", async () => {
+    const admin = await adminClient();
+    const v = await admin.post("/api/admin/routes", { name: "Autosave", segments: [] });
+    const count = async () =>
+      (await t.pool.query("SELECT count(*)::int AS n FROM audit_log WHERE action = 'route_draft_saved' AND target_id = $1", [v.body.id]))
+        .rows[0].n;
+    const segments = [{ required: true, coords: line(100.5, 13.75) }];
+    for (let i = 0; i < 3; i++)
+      assert.equal((await admin.put(`/api/admin/route-versions/${v.body.id}`, { name: `Autosave ${i}`, segments })).status, 200);
+    assert.equal(await count(), 1);
+    const saved = await admin.get(`/api/admin/route-versions/${v.body.id}`);
+    assert.equal(saved.body.routeName, "Autosave 2"); // every save still lands
+
+    await t.pool.query("UPDATE audit_log SET at = at - interval '11 minutes' WHERE action = 'route_draft_saved' AND target_id = $1", [
+      v.body.id,
+    ]);
+    await admin.put(`/api/admin/route-versions/${v.body.id}`, { segments });
+    assert.equal(await count(), 2);
+  });
+
   it("a curved segment can still be edited as a draft, but not once published", async () => {
     const admin = await adminClient();
     const v = await admin.post("/api/admin/routes", {

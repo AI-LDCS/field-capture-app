@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Circle, CircleMarker, MapContainer, Polyline, useMap } from "react-leaflet";
 import { CONFIG } from "@shared/config.ts";
 import { coverageMask, distToLineM } from "@shared/geo.ts";
 import type { AssignmentDetail, LngLat, PreflightOutcome } from "@shared/types.ts";
 import { api, isNotFound } from "../api.ts";
 import { toast } from "../feedback.tsx";
-import { Badge, Tiles, fmtBytes, ll } from "../ui.tsx";
+import { AboveArrows, Badge, DirectionArrows, Tiles, fmtBytes, ll } from "../ui.tsx";
 import { Onboard, useCameraOpener, useStorage } from "./Onboard.tsx";
 import { type Fix, fakeGps, gpsSource } from "./lib/gps.ts";
 import { getAssignment, gpsOf, putAssignment } from "./lib/localdb.ts";
@@ -356,26 +356,26 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
         <MapContainer center={[13.7563, 100.5018]} zoom={16} style={{ height: "100%" }}>
           <Tiles />
           <FitOnce run={run} />
-          {run.segments.map((sg, i) => (
-            <Polyline
-              key={sg.id}
-              positions={sg.coords.map(ll)}
-              pathOptions={{
-                color:
-                  sg.status === "skipped" ? "#9ca3af" : cov(i) >= sg.minCoverageRatio ? "#16a34a" : sg.required ? "#1d4ed8" : "#ea580c",
-                weight: 6,
-                dashArray: sg.required ? undefined : "8 8",
-              }}
-            />
-          ))}
+          {run.segments.map((sg, i) => {
+            const color =
+              sg.status === "skipped" ? "#9ca3af" : cov(i) >= sg.minCoverageRatio ? "#16a34a" : sg.required ? "#1d4ed8" : "#ea580c";
+            return (
+              <Fragment key={sg.id}>
+                <Polyline positions={sg.coords.map(ll)} pathOptions={{ color, weight: 6, dashArray: sg.required ? undefined : "8 8" }} />
+                <DirectionArrows coords={sg.coords} color={color} />
+              </Fragment>
+            );
+          })}
           {trail.length > 1 && <Polyline positions={trail.map(ll)} pathOptions={{ color: "#111827", weight: 2 }} />}
           {fix && <Circle center={[fix.lat, fix.lng]} radius={fix.acc} pathOptions={{ color: "#2563eb", weight: 1, fillOpacity: 0.1 }} />}
           {fix && (
-            <CircleMarker
-              center={[fix.lat, fix.lng]}
-              radius={7}
-              pathOptions={{ color: "#fff", fillColor: "#2563eb", fillOpacity: 1, weight: 2 }}
-            />
+            <AboveArrows>
+              <CircleMarker
+                center={[fix.lat, fix.lng]}
+                radius={7}
+                pathOptions={{ color: "#fff", fillColor: "#2563eb", fillOpacity: 1, weight: 2 }}
+              />
+            </AboveArrows>
           )}
         </MapContainer>
       </div>

@@ -155,7 +155,14 @@ adminRoutesRouter.put("/route-versions/:vid", async (req, res) => {
     const v = await draftOrThrow(c, vid);
     if (body.name) await q("UPDATE route_versions SET name = $1 WHERE id = $2", [body.name, vid], c); // the draft only
     await writeSegments(c, vid, body.segments);
-    await audit(req.user!.id, "route_draft_saved", { type: "route_version", id: vid }, { segments: body.segments.length }, req.ip, c);
+    // The editor autosaves, so one working session writes one row, not one per edit.
+    const recent = await q1(
+      `SELECT 1 FROM audit_log WHERE action = 'route_draft_saved' AND target_id = $1 AND actor_id = $2 AND at > now() - interval '10 minutes' LIMIT 1`,
+      [vid, req.user!.id],
+      c,
+    );
+    if (!recent)
+      await audit(req.user!.id, "route_draft_saved", { type: "route_version", id: vid }, { segments: body.segments.length }, req.ip, c);
     return loadVersion(c, vid);
   });
   res.json(out);

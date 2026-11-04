@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   curveOf,
+  endOf,
   midAfter,
   segLength,
   commit,
@@ -14,15 +15,16 @@ import {
   moveSeg,
   parseLatLng,
   parsePoints,
-  pointAtFraction,
   redo,
   removePoint,
   reverseSeg,
   setPoint,
+  snapTarget,
   splitAt,
   toInput,
   undo,
 } from "../../web/src/admin/editor/model.ts";
+import { pointAtFraction } from "../../shared/geo.ts";
 import type { LngLat } from "../../shared/types.ts";
 
 const P = (...xs: number[][]) => xs as LngLat[];
@@ -30,6 +32,43 @@ const seg = (name: string, coords: LngLat[], required = true) => makeSeg(coords,
 const names = (s: { name: string }[]) => s.map((x) => x.name).join(",");
 
 describe("editor model", () => {
+  describe("snap", () => {
+    const flat = (a: LngLat, b: LngLat) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const a = seg("A", P([0, 0], [10, 0]));
+    const b = seg("B", P([20, 0], [30, 0]));
+    const c = seg("C", P([40, 0], [50, 0]));
+    const all = [a, b, c];
+
+    it("an end sticks to another segment's start, and a start to another segment's end", () => {
+      assert.deepEqual(snapTarget(all, a.key, "end", [19, 0], flat, 2), [20, 0]);
+      assert.deepEqual(snapTarget(all, b.key, "start", [11, 0], flat, 2), [10, 0]);
+    });
+    it("never sticks an end to an end, or a start to a start", () => {
+      assert.equal(snapTarget(all, a.key, "end", [29, 0], flat, 2), null);
+      assert.equal(snapTarget(all, b.key, "start", [41, 0], flat, 2), null);
+    });
+    it("never sticks to the segment's own other end", () => {
+      assert.equal(snapTarget([a], a.key, "end", [1, 0], flat, 2), null);
+    });
+    it("stays free outside the radius, and takes the nearest inside it", () => {
+      assert.equal(snapTarget(all, a.key, "end", [17, 0], flat, 2), null);
+      const near = seg("N", P([21, 0], [25, 0]));
+      assert.deepEqual(snapTarget([a, b, near], a.key, "end", [20.8, 0], flat, 2), [21, 0]);
+    });
+    it("ignores a segment with no points yet", () => {
+      assert.equal(snapTarget([a, seg("E", [])], a.key, "end", [0, 0], flat, 2), null);
+    });
+    it("only the first and last points count as ends", () => {
+      const s = seg("S", P([0, 0], [1, 0], [2, 0]));
+      assert.deepEqual([endOf(s, 0), endOf(s, 1), endOf(s, 2)], ["start", null, "end"]);
+    });
+    it("joining snapped segments keeps one shared point", () => {
+      const end = snapTarget(all, a.key, "end", [19, 0], flat, 2)!;
+      const joined = joinWithNext(setPoint([a, b], a.key, 1, end), a.key);
+      assert.deepEqual(joined[0].coords, P([0, 0], [20, 0], [30, 0]));
+    });
+  });
+
   it("drag-reorder moves a segment and keeps the rest in order", () => {
     const s = [seg("A", P([0, 0], [1, 0])), seg("B", P([1, 0], [2, 0])), seg("C", P([2, 0], [3, 0])), seg("D", P([3, 0], [4, 0]))];
     assert.equal(names(moveSeg(s, 0, 2)), "B,C,A,D");

@@ -2,7 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CONFIG } from "../../shared/config.ts";
 import { analyseQuality, coverageFor, qualityReasons } from "../../shared/quality.ts";
-import { bearingDeg, compass, coverageMask, densify, distToLineM, haversineM, lineLengthM, segmentCoverage } from "../../shared/geo.ts";
+import {
+  arrowsAlong,
+  bearingDeg,
+  compass,
+  coverageMask,
+  densify,
+  distToLineM,
+  haversineM,
+  lineLengthM,
+  segmentCoverage,
+} from "../../shared/geo.ts";
 import type { GpsPoint, LngLat } from "../../shared/types.ts";
 
 const LAT = 13.75;
@@ -14,6 +24,32 @@ const east = (len: number): LngLat[] => [
   [100.5 + mLng(len), LAT],
 ];
 const opts = CONFIG.coverage;
+
+describe("direction arrows", () => {
+  it("spaces arrows along the line, all pointing the way it runs", () => {
+    const a = arrowsAlong(east(800), 80);
+    assert.equal(a.length, 10);
+    for (const x of a) assert.ok(Math.abs(x.bearing - 90) < 1);
+    assert.ok(a[0].point[0] < a[9].point[0]);
+  });
+  it("a reversed line points the other way", () => {
+    const [x] = arrowsAlong([...east(100)].reverse(), 80);
+    assert.ok(Math.abs(x.bearing - 270) < 1);
+  });
+  it("a short line still gets one arrow, at its middle", () => {
+    const a = arrowsAlong(east(10), 80);
+    assert.equal(a.length, 1);
+    assert.ok(Math.abs(a[0].point[0] - (100.5 + mLng(5))) < 1e-9);
+  });
+  it("stops at the limit on a very long line", () => {
+    assert.equal(arrowsAlong(east(50_000), 80).length, 20);
+  });
+  it("draws nothing for a line with no length", () => {
+    assert.deepEqual(arrowsAlong([], 80), []);
+    assert.deepEqual(arrowsAlong([[100.5, LAT]], 80), []);
+  });
+});
+
 const pt = (lng: number, lat: number, acc = 5, extra: Partial<GpsPoint> = {}): GpsPoint => ({ seq: 0, t: 0, lat, lng, acc, ...extra });
 /** fixes every `every` metres along the east line */
 const along = (len: number, every: number, acc = 5): GpsPoint[] =>

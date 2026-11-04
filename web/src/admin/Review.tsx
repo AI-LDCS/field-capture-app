@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Circle, CircleMarker, MapContainer, Polyline, useMap } from "react-leaflet";
 import type { AssignmentDetail, LngLat, RecordingSummary } from "@shared/types.ts";
 import { api } from "../api.ts";
 import { toast } from "../feedback.tsx";
 import { Play } from "../icons.tsx";
-import { Badge, Card, FitTo, Tiles, fmtBytes, ll, useLoad, when } from "../ui.tsx";
+import { AboveArrows, Badge, Card, DirectionArrows, FitTo, Tiles, fmtBytes, ll, useLoad, when } from "../ui.tsx";
 
 type Row = { seq: number; t: number; lat: number; lng: number; acc: number };
 
@@ -174,11 +174,13 @@ export default function Review({ id }: { id: string }) {
           <FitTo pts={allPts.length ? allPts : null} />
           <Follow pos={pos} on={follow} />
           {run.segments.map((s) => (
-            <Polyline
-              key={s.id}
-              positions={s.coords.map(ll)}
-              pathOptions={{ color: segColor(s), weight: 7, opacity: 0.6, dashArray: s.required ? undefined : "8 8" }}
-            />
+            <Fragment key={s.id}>
+              <Polyline
+                positions={s.coords.map(ll)}
+                pathOptions={{ color: segColor(s), weight: 7, opacity: 0.6, dashArray: s.required ? undefined : "8 8" }}
+              />
+              <DirectionArrows coords={s.coords} color={segColor(s)} />
+            </Fragment>
           ))}
           {Object.entries(tracks).map(([rid, rows]) => (
             <Polyline
@@ -189,11 +191,13 @@ export default function Review({ id }: { id: string }) {
           ))}
           {pos && <Circle center={[pos.lat, pos.lng]} radius={pos.acc} pathOptions={{ color: "#dc2626", weight: 1, fillOpacity: 0.12 }} />}
           {pos && (
-            <CircleMarker
-              center={[pos.lat, pos.lng]}
-              radius={9}
-              pathOptions={{ color: "#fff", weight: 3, fillColor: "#dc2626", fillOpacity: 1 }}
-            />
+            <AboveArrows>
+              <CircleMarker
+                center={[pos.lat, pos.lng]}
+                radius={9}
+                pathOptions={{ color: "#fff", weight: 3, fillColor: "#dc2626", fillOpacity: 1 }}
+              />
+            </AboveArrows>
           )}
         </MapContainer>
       </div>

@@ -29,6 +29,7 @@ The **Start recording** button stays grey until both pass. Hold the phone so the
 The screen shows a **map** on top and your **camera** below. You can drag the bar between them.
 
 - The blue dot is you. The red dashed line and the arrow tell you where to go next and how far.
+- The small arrows on the route show which way to walk each segment.
 - The numbers at the bottom show how much of each segment is covered. Walk each required segment until it is green.
 - An optional segment can be skipped with **Skip it**.
 - **Keep the screen on and stay in this page.** If you switch to another app or lock the screen, **recording stops**. If that happens, start a new recording.

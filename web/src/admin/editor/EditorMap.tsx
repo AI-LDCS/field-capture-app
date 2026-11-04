@@ -2,8 +2,12 @@ import L from "leaflet";
 import { Fragment, useMemo, useRef, useState } from "react";
 import { CircleMarker, MapContainer, Marker, Polyline, useMapEvents } from "react-leaflet";
 import type { LngLat } from "@shared/types.ts";
-import { FitTo, Tiles, ll } from "../../ui.tsx";
-import { curveOf, midAfter, pointAtFraction, seqColor, type Seg } from "./model.ts";
+import { FitTo, Tiles, arrowIcon, ll } from "../../ui.tsx";
+import { pointAtFraction } from "@shared/geo.ts";
+import { curveOf, endOf, midAfter, seqColor, snapTarget, type Seg, type SegEnd } from "./model.ts";
+
+/** How close, in screen pixels, a segment's end must come before it sticks. Pixels, so it feels the same at every zoom. */
+const SNAP_PX = 18;
 
 const icons = new Map<string, L.DivIcon>();
 function icon(html: string, size: number, cls = ""): L.DivIcon {
@@ -16,8 +20,12 @@ function icon(html: string, size: number, cls = ""): L.DivIcon {
   return i;
 }
 
-function Clicks({ onClick }: { onClick: (p: LngLat) => void }) {
-  useMapEvents({ click: (e) => onClick([e.latlng.lng, e.latlng.lat]) });
+function Clicks({ onClick, onMove }: { onClick: (p: LngLat) => void; onMove: (p: LngLat | null) => void }) {
+  useMapEvents({
+    click: (e) => onClick([e.latlng.lng, e.latlng.lat]),
+    mousemove: (e) => onMove([e.latlng.lng, e.latlng.lat]),
+    mouseout: () => onMove(null),
+  });
   return null;
 }
 
@@ -27,6 +35,7 @@ type Props = {
   selPt: number | null;
   draw: boolean;
   readOnly: boolean;
+  snap: boolean;
   fit: LngLat[] | null;
   center: LngLat;
   onSelect: (key: string | null) => void;
@@ -38,12 +47,28 @@ type Props = {
 
 /** The map: numbered, coloured, directed segments. The selected one gets draggable vertices. */
 export default function EditorMap(props: Props) {
-  const { segs, sel, selPt, draw, readOnly, fit, center, onSelect, onSelectPt, onAddPoint, onMovePoint, onInsertMid } = props;
+  const { segs, sel, selPt, draw, readOnly, snap, fit, center, onSelect, onSelectPt, onAddPoint, onMovePoint, onInsertMid } = props;
   // while a vertex is dragged the line follows it; the edit is committed once, on drop
-  const [live, setLive] = useState<{ key: string; i: number; p: LngLat } | null>(null);
+  const [live, setLive] = useState<{ key: string; i: number; p: LngLat; snapped: boolean } | null>(null);
   // releasing a dragged vertex also produces a map click; it must not deselect or add a point
   const lastDrag = useRef(0);
+  const map = useRef<L.Map>(null);
+  // the point the next click in draw mode would stick to
+  const [hover, setHover] = useState<LngLat | null>(null);
   const n = segs.length;
+
+  const snapFor = (key: string, end: SegEnd | null, p: LngLat): LngLat | null => {
+    const m = map.current;
+    if (!snap || readOnly || !end || !m) return null;
+    const px = (a: LngLat, b: LngLat) => m.latLngToContainerPoint(ll(a)).distanceTo(m.latLngToContainerPoint(ll(b)));
+    return snapTarget(segs, key, end, p, px, SNAP_PX);
+  };
+  // a new point becomes the segment's start if it is the first one, otherwise its new end
+  const snapDrawn = (p: LngLat) => {
+    const s = segs.find((x) => x.key === sel);
+    return s ? snapFor(s.key, s.coords.length ? "end" : "start", p) : null;
+  };
+  const ring = live?.snapped ? live.p : draw ? hover : null;
 
   const shown = useMemo(
     () => segs.map((s) => (live && live.key === s.key ? { ...s, coords: s.coords.map((c, j) => (j === live.i ? live.p : c)) } : s)),
@@ -52,14 +77,18 @@ export default function EditorMap(props: Props) {
 
   return (
     <div className={draw ? "drawing" : ""} style={{ height: "100%" }}>
-      <MapContainer center={[center[1], center[0]]} zoom={16} style={{ height: "100%" }}>
+      <MapContainer ref={map} center={[center[1], center[0]]} zoom={16} style={{ height: "100%" }}>
         <Tiles />
         <FitTo pts={fit} />
         <Clicks
           onClick={(p) => {
             if (Date.now() - lastDrag.current < 400) return;
-            if (draw && !readOnly) onAddPoint(p);
+            if (draw && !readOnly) onAddPoint(snapDrawn(p) ?? p);
             else onSelect(null);
+          }}
+          onMove={(p) => {
+            const next = draw && p ? snapDrawn(p) : null;
+            if (next !== hover) setHover(next);
           }}
         />
 
@@ -98,16 +127,7 @@ export default function EditorMap(props: Props) {
               )}
               {(() => {
                 const m = pointAtFraction(line, 0.5);
-                return (
-                  m && (
-                    <Marker
-                      position={ll(m.point)}
-                      interactive={false}
-                      zIndexOffset={300}
-                      icon={icon(`<span style="color:${color};transform:rotate(${Math.round(m.bearing)}deg)">▲</span>`, 22, "seg-arrow")}
-                    />
-                  )
-                );
+                return m && <Marker position={ll(m.point)} interactive={false} zIndexOffset={300} icon={arrowIcon(color, m.bearing)} />;
               })()}
             </Fragment>
           );
@@ -148,13 +168,14 @@ export default function EditorMap(props: Props) {
                       },
                       drag: (e) => {
                         const p = (e.target as L.Marker).getLatLng();
-                        setLive({ key: s.key, i, p: [p.lng, p.lat] });
+                        const to = snapFor(s.key, endOf(s, i), [p.lng, p.lat]);
+                        setLive({ key: s.key, i, p: to ?? [p.lng, p.lat], snapped: !!to });
                       },
                       dragend: (e) => {
                         lastDrag.current = Date.now();
                         const p = (e.target as L.Marker).getLatLng();
                         setLive(null);
-                        onMovePoint(s.key, i, [p.lng, p.lat]);
+                        onMovePoint(s.key, i, snapFor(s.key, endOf(s, i), [p.lng, p.lat]) ?? [p.lng, p.lat]);
                       },
                     }}
                   />
@@ -170,6 +191,9 @@ export default function EditorMap(props: Props) {
                 )}
               </Fragment>
             ))}
+        {ring && (
+          <CircleMarker center={ll(ring)} radius={15} pathOptions={{ color: "#16a34a", weight: 3, fill: false }} interactive={false} />
+        )}
       </MapContainer>
     </div>
   );

@@ -105,7 +105,7 @@ A route is a name plus numbered **versions** (`draft`, `published`, `archived`).
 Body `{ name (1 to 120 characters), segments: SegmentInput[] }` (0 to 200 segments). Creates the route and a **draft v1**. `201 RouteVersion`.
 
 ### PUT /api/admin/route-versions/:vid
-Body `{ name?, segments }`. Replaces the draft's segments (and renames the draft). `200 RouteVersion`.
+Body `{ name?, segments }`. Replaces the draft's segments (and renames the draft). `200 RouteVersion`. The editor autosaves through this, so `route_draft_saved` is written at most once per 10 minutes per draft and admin.
 Errors: `409 not_a_draft` (published and archived versions cannot be edited; only their name can change, through a route rename).
 
 ### PATCH /api/admin/routes/:id

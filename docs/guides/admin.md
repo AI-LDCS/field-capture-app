@@ -55,6 +55,10 @@ A route is an ordered list of **segments**. Each segment is **required** (must b
 1. **＋ New segment**, then click the map to add points along the path. Press **Esc** (or the Draw button) to stop.
 2. Each segment is **Curved** by default: place points along the sidewalk and the line bends smoothly through them. Add a point wherever it bends. Switch a segment to **Straight** for point-to-point lines. The app does not know where sidewalks are; it only smooths what you place.
 
+**Snap** (on by default; the **Snap** button on the map turns it off, and your browser remembers)
+- Bring the end of a segment close to the start of another, or a start close to an end, and it sticks to that exact point. A green ring shows where. This works when you drag a segment's first or last point, and when you click to add points while drawing.
+- Only the point you move changes. The two segments are not linked, so dragging one end away again separates them. Typed and pasted coordinates are never snapped.
+
 **Edit points**
 - **Drag** a point on the map. Click a **+** on the line to add a point there. Select a point and press **Delete** to remove it.
 - Below the list, a table shows the selected segment's points as **latitude and longitude**: edit the numbers, press **+** to add a point after one, **✂** to split the segment there, **✕** to delete. Type `lat, lng` and press Add to append a point.
@@ -64,7 +68,9 @@ A route is an ordered list of **segments**. Each segment is **required** (must b
 - **Drag the ⋮⋮ grip** to change the walking order (the arrows also work). The numbers, colours and direction arrows on the map follow the order.
 - Name, **Required / Optional**, **Must cover (%)** (how much of the segment the worker's track must cover; default 90), **Reverse** direction, **Join with next**, **Delete**.
 
-**Safety**: **Ctrl/Cmd + Z** undoes, **Shift + Ctrl/Cmd + Z** redoes; leaving with unsaved changes warns you. **Save draft** keeps it as a draft; **Save & publish** publishes it.
+**Autosave**: a draft saves itself about 2 seconds after you stop editing, and the status next to the title says **Saved**. A new route is saved as soon as it has a finished segment, named **Untitled route** until you name it; give it a real name before publishing. A segment with fewer than 2 points waits until it has 2. If the connection drops, it keeps trying, and leaving the tab warns you. Published versions never change.
+
+**Safety**: **Ctrl/Cmd + Z** undoes, **Shift + Ctrl/Cmd + Z** redoes. **Revert** goes back to how the route was when you opened the page. **Save draft** saves now; **Save & publish** publishes.
 
 The street / terrain / satellite switch is at the top right of every map.
 
@@ -84,7 +90,7 @@ Status words:
 
 ## Reviewing
 
-Open an assignment to see the worker, status, the **reasons** behind it, the GPS-check result and GPS quality counts. The map shows the segments (green = done) and the recorded track.
+Open an assignment to see the worker, status, the **reasons** behind it, the GPS-check result and GPS quality counts. The map shows the segments (green = done), arrows for their walking direction, and the recorded track.
 
 - **Needs review** happens when the GPS check was skipped, many GPS points were poor or off route, there were several gaps, or the recording was made with test (simulated) data. **Approve** completes it; **Send back** returns it to in progress so the worker can record more. **Re-evaluate** recomputes from the stored data.
 - **Segments** table: each segment's status and coverage, and where it was seen. Press **▶** to jump the video to the moment that recording was on that segment.

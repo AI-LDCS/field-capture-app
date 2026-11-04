@@ -1,5 +1,5 @@
 import { smoothLine } from "@shared/curve.ts";
-import { bearingDeg, haversineM, lineLengthM } from "@shared/geo.ts";
+import { haversineM, lineLengthM } from "@shared/geo.ts";
 import type { LngLat, SegmentInput } from "@shared/types.ts";
 
 /** Editing model. Every function is pure: it returns a new list and never mutates its input. */
@@ -93,30 +93,34 @@ export function midAfter(s: Seg, i: number): LngLat {
   return midpoint(s.coords[i], s.coords[i + 1]);
 }
 
+export type SegEnd = "start" | "end";
+/** Which end of the segment a point is. Inner points are neither. */
+export const endOf = (s: Seg, i: number): SegEnd | null => (i === 0 ? "start" : i === s.coords.length - 1 ? "end" : null);
+
+/**
+ * The point a segment's end should stick to: the nearest end of another segment within `radius`. A start sticks to
+ * another segment's end, and an end to another segment's start. `distance` decides the units, so the map can use screen pixels.
+ */
+export function snapTarget(segs: Seg[], key: string, end: SegEnd, p: LngLat, distance: (a: LngLat, b: LngLat) => number, radius: number) {
+  let best: LngLat | null = null;
+  let bestD = radius;
+  for (const s of segs) {
+    if (s.key === key || !s.coords.length) continue;
+    const c = end === "start" ? s.coords[s.coords.length - 1] : s.coords[0];
+    const d = distance(p, c);
+    if (d <= bestD) {
+      best = c;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
 export const segLength = (s: Seg) => lineLengthM(curveOf(s).line);
 export const totalLength = (segs: Seg[]) => segs.reduce((a, s) => a + segLength(s), 0);
 
 /** A segment is usable once it has two points. Returns the 1-based numbers of the ones that are not. */
 export const incompleteSegments = (segs: Seg[]) => segs.flatMap((s, i) => (s.coords.length < 2 ? [i + 1] : []));
-
-/** Point at a fraction (0..1) of the line's length, with the direction of travel there. */
-export function pointAtFraction(coords: LngLat[], f: number): { point: LngLat; bearing: number } | null {
-  if (coords.length < 2) return null;
-  const total = lineLengthM(coords);
-  if (total === 0) return null;
-  let want = total * f;
-  for (let i = 1; i < coords.length; i++) {
-    const d = haversineM(coords[i - 1], coords[i]);
-    if (want <= d || i === coords.length - 1) {
-      const t = d === 0 ? 0 : Math.min(1, want / d);
-      const a = coords[i - 1],
-        b = coords[i];
-      return { point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], bearing: bearingDeg(a, b) };
-    }
-    want -= d;
-  }
-  return null;
-}
 
 /** Colour by position in the walking order, so the sequence is visible on the map and in the list. */
 export const seqColor = (i: number, n: number) => `hsl(${Math.round(210 + (n <= 1 ? 0 : (i / (n - 1)) * 130))} 75% 45%)`;

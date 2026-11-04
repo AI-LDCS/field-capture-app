@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LngLat, RouteVersion } from "@shared/types.ts";
-import { api } from "../../api.ts";
+import { ApiError, api } from "../../api.ts";
 import { confirmDialog, toast } from "../../feedback.tsx";
-import { Pencil, Plus, Redo, Undo } from "../../icons.tsx";
+import { Magnet, Pencil, Plus, Redo, Undo } from "../../icons.tsx";
 import EditorMap from "./EditorMap.tsx";
 import {
   commit,
@@ -41,6 +41,24 @@ export function EditVersion({ versionId }: { versionId: string }) {
   return <Editor version={data} />;
 }
 
+/** Save this long after the last edit, or at the latest this long after the first one, even if edits never pause. */
+const AUTOSAVE_MS = 2000;
+const AUTOSAVE_MAX_WAIT_MS = 15_000;
+const RETRY_MS = 5000;
+/** The name of a route nobody has named yet, so drawing can be saved from the first segment. It cannot be published. */
+const UNTITLED = "Untitled route";
+const snapshot = (n: string, s: Seg[]) => JSON.stringify([n.trim() || UNTITLED, toInput(s)]);
+
+const SNAP_KEY = "fc-editor-snap";
+/** On unless this browser turned it off. */
+const loadSnap = () => {
+  try {
+    return localStorage.getItem(SNAP_KEY) !== "off";
+  } catch {
+    return true;
+  }
+};
+
 const fromVersion = (v?: RouteVersion): Seg[] =>
   (v?.segments ?? []).map((s) =>
     makeSeg(s.coords, { name: s.name, required: s.required, smooth: s.smooth, minCoverage: s.minCoverageRatio }),
@@ -54,15 +72,46 @@ function Editor({ version }: { version?: RouteVersion }) {
   const [sel, setSel] = useState<string | null>(null);
   const [selPt, setSelPt] = useState<number | null>(null);
   const [draw, setDraw] = useState(false);
+  const [snap, setSnap] = useState(loadSnap);
   const [fit, setFit] = useState<LngLat[] | null>(version ? version.segments.flatMap((s) => s.coords) : null);
   const [center, setCenter] = useState<LngLat>([100.5018, 13.7563]);
   const [bulk, setBulk] = useState("");
   const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [vid, setVid] = useState(version?.id);
-  const snapshot = (n: string, s: Seg[]) => JSON.stringify([n.trim(), toInput(s)]);
-  const [saved, setSaved] = useState(() => snapshot(version?.routeName ?? "", fromVersion(version)));
+  const [opened] = useState(() => snapshot(version?.routeName ?? "", fromVersion(version)));
+  const [saved, setSaved] = useState(opened);
   const dirty = !readOnly && snapshot(name, segs) !== saved;
+
+  // Autosave sends the segments that are finished. One still being drawn joins the next save, once it has two points.
+  const complete = useMemo(() => segs.filter((s) => s.coords.length >= 2), [segs]);
+  const saveable = snapshot(name, complete);
+  const pending = !readOnly && saveable !== saved;
+  const canAutosave = pending && (!!vid || complete.length > 0); // opening New route and leaving creates nothing
+  const [saving, setSaving] = useState(false);
+  const [retrying, setRetrying] = useState(0);
+  const [refused, setRefused] = useState<{ payload: string; message: string } | null>(null); // the server said no: wait for the next edit
+  const isRefused = refused?.payload === saveable;
+
+  // One save at a time, in order, so two saves cannot both create the route and an older one cannot land last.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const vidNow = useRef(version?.id);
+  const persist = (n: string, s: Seg[]) => {
+    const run = queue.current.then(async () => {
+      const routeName = n.trim() || UNTITLED;
+      if (vidNow.current) await api.saveDraft(vidNow.current, routeName, toInput(s));
+      else {
+        vidNow.current = (await api.createRoute(routeName, toInput(s))).id;
+        // a reload opens this draft. Not a hash change, which would rebuild the editor and lose the undo history.
+        if (location.hash === "#/routes/new") history.replaceState(null, "", `#/routes/edit/${vidNow.current}`);
+      }
+      setVid(vidNow.current);
+      setSaved(snapshot(n, s));
+      return vidNow.current;
+    });
+    queue.current = run.catch(() => {});
+    return run;
+  };
 
   const edit = (next: Seg[]) => setH((x) => commit(x, next));
   const selSeg = segs.find((s) => s.key === sel) ?? null;
@@ -80,6 +129,44 @@ function Editor({ version }: { version?: RouteVersion }) {
       { timeout: 4000 },
     );
   }, []);
+
+  const pendingSince = useRef<number | null>(null);
+  useEffect(() => {
+    if (!canAutosave) pendingSince.current = null;
+    if (!canAutosave || busy || isRefused) return;
+    pendingSince.current ??= Date.now();
+    const wait = retrying ? RETRY_MS : Math.min(AUTOSAVE_MS, Math.max(0, pendingSince.current + AUTOSAVE_MAX_WAIT_MS - Date.now()));
+    const t = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await persist(name, complete);
+        pendingSince.current = null;
+        setRetrying(0);
+        setRefused(null);
+      } catch (x: any) {
+        // the server refused this content, so sending it again cannot help; anything else may be the network
+        if (x instanceof ApiError && x.status >= 400 && x.status < 500) {
+          setRetrying(0);
+          setRefused({ payload: saveable, message: x.message });
+        } else setRetrying((r) => r + 1);
+      } finally {
+        setSaving(false);
+      }
+    }, wait);
+    return () => clearTimeout(t);
+  }, [saveable, canAutosave, busy, isRefused, retrying]);
+
+  // leaving the page inside the wait still saves the last edit
+  const published = useRef(false);
+  const latest = useRef({ canAutosave, name, complete });
+  latest.current = { canAutosave, name, complete };
+  useEffect(
+    () => () => {
+      const l = latest.current;
+      if (l.canAutosave && !published.current) void persist(l.name, l.complete).catch(() => {});
+    },
+    [],
+  );
 
   // leaving with unsaved edits asks first
   useEffect(() => {
@@ -116,6 +203,16 @@ function Editor({ version }: { version?: RouteVersion }) {
     setSel(key);
     setSelPt(null);
     if (!key) setDraw(false);
+  };
+
+  const toggleSnap = () => {
+    const next = !snap;
+    setSnap(next);
+    try {
+      localStorage.setItem(SNAP_KEY, next ? "on" : "off");
+    } catch {
+      /* it just is not remembered */
+    }
   };
 
   const newSegment = () => {
@@ -162,10 +259,6 @@ function Editor({ version }: { version?: RouteVersion }) {
   };
 
   const save = async (): Promise<string | null> => {
-    if (!name.trim()) {
-      toast.error("Give the route a name");
-      return null;
-    }
     const bad = incompleteSegments(segs);
     if (bad.length) {
       toast.error(`Segment ${bad.join(", ")} needs at least 2 points (or delete it)`);
@@ -174,13 +267,10 @@ function Editor({ version }: { version?: RouteVersion }) {
     }
     setBusy(true);
     try {
-      let id = vid;
-      if (!id) {
-        id = (await api.createRoute(name, toInput(segs))).id;
-        setVid(id);
-      } else await api.saveDraft(id, name, toInput(segs));
-      setSaved(snapshot(name, segs));
-      return id;
+      const id = await persist(name, segs);
+      setRefused(null);
+      setRetrying(0);
+      return id ?? null;
     } catch (x: any) {
       toast.error(x.message);
       return null;
@@ -192,34 +282,77 @@ function Editor({ version }: { version?: RouteVersion }) {
     if (await save()) toast.success("Draft saved");
   };
   const savePublish = async () => {
+    if (!name.trim() || name.trim() === UNTITLED) {
+      toast.error("Give the route a name");
+      return;
+    }
     const id = await save();
     if (!id) return;
+    published.current = true;
     try {
       await api.publish(id);
       toast.success("Route published");
       location.hash = "#/routes";
     } catch (x: any) {
+      published.current = false;
       toast.error(x.message);
     }
   };
 
+  // Close waits for the save, so the Routes page lists what was just drawn.
+  const close = async () => {
+    let safe = complete.length === segs.length && !isRefused;
+    try {
+      if (canAutosave) await persist(name, complete);
+      await queue.current;
+    } catch {
+      safe = false;
+    }
+    if (!safe) {
+      const leave = await confirmDialog({
+        title: "Leave with unsaved changes?",
+        body: "Some changes could not be saved, or a segment has fewer than 2 points. They are lost if you leave.",
+        confirmLabel: "Leave",
+        cancelLabel: "Keep editing",
+        danger: true,
+      });
+      if (!leave) return;
+    }
+    location.hash = "#/routes";
+  };
+
   const revert = async () => {
     const ok = await confirmDialog({
-      title: "Discard all unsaved changes?",
-      body: "The route goes back to how it was when last saved.",
-      confirmLabel: "Discard changes",
+      title: "Go back to how it was when you opened it?",
+      body: "This replaces the saved draft too. Undo brings your changes back while this page stays open.",
+      confirmLabel: "Revert",
       cancelLabel: "Keep editing",
       danger: true,
     });
     if (!ok) return;
-    setH(hist(fromVersion(version)));
-    setName(version?.routeName ?? "");
+    edit(fromVersion(version));
+    if (version) setName(version.routeName);
     setSel(null);
     setSelPt(null);
     setDraw(false);
   };
 
   const total = useMemo(() => totalLength(segs), [segs]);
+  const short = incompleteSegments(segs);
+  const status = saving
+    ? "Saving…"
+    : isRefused
+      ? "Not saved"
+      : retrying && pending
+        ? "Can't save. Trying again…"
+        : short.length
+          ? `Segment ${short[0]} needs 2 points to save`
+          : pending
+            ? "Unsaved"
+            : vid
+              ? "Saved"
+              : "";
+  const statusOk = status === "Saved" || status === "Saving…";
 
   return (
     <div className="editor">
@@ -230,6 +363,7 @@ function Editor({ version }: { version?: RouteVersion }) {
           selPt={selPt}
           draw={draw}
           readOnly={readOnly}
+          snap={snap}
           fit={fit}
           center={center}
           onSelect={pick}
@@ -257,6 +391,14 @@ function Editor({ version }: { version?: RouteVersion }) {
             >
               <Pencil /> Draw
             </button>
+            <button
+              className={snap ? "on" : "ghost"}
+              onClick={toggleSnap}
+              aria-pressed={snap}
+              title="Snap: the end of a segment sticks to the start of another when you bring them close"
+            >
+              <Magnet /> Snap
+            </button>
             <button className="ghost" disabled={!h.past.length} onClick={() => setH(undo)} title="Undo (Ctrl/Cmd+Z)" aria-label="Undo">
               <Undo />
             </button>
@@ -281,7 +423,12 @@ function Editor({ version }: { version?: RouteVersion }) {
           title={readOnly ? `${version!.routeName} · v${version!.version}` : version ? `Edit draft · v${version.version}` : "New route"}
           right={
             <>
-              {dirty && <span className="dirty">unsaved</span>} {version && <Badge s={version.status} />}
+              {!readOnly && status && (
+                <span className={statusOk ? "muted small" : "dirty"} role="status">
+                  {status}
+                </span>
+              )}{" "}
+              {version && <Badge s={version.status} />}
             </>
           }
         >
@@ -292,9 +439,10 @@ function Editor({ version }: { version?: RouteVersion }) {
           ) : (
             <label>
               Route name
-              <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+              <input value={name} maxLength={120} placeholder={UNTITLED} onChange={(e) => setName(e.target.value)} />
             </label>
           )}
+          {isRefused && <p className="err small">{refused.message}</p>}
           <div className="row wrap">
             {!readOnly && (
               <button onClick={() => void saveDraft()} disabled={busy || (!dirty && !!vid)}>
@@ -306,14 +454,20 @@ function Editor({ version }: { version?: RouteVersion }) {
                 Save &amp; publish
               </button>
             )}
-            {!readOnly && dirty && (
+            {!readOnly && snapshot(name, segs) !== opened && (
               <button className="ghost" onClick={() => void revert()}>
                 Revert
               </button>
             )}
-            <a className="btn ghost" href="#/routes">
-              {readOnly ? "Back" : "Close"}
-            </a>
+            {readOnly ? (
+              <a className="btn ghost" href="#/routes">
+                Back
+              </a>
+            ) : (
+              <button className="ghost" onClick={() => void close()}>
+                Close
+              </button>
+            )}
           </div>
         </Card>
 

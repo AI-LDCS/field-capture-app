@@ -83,6 +83,12 @@ export const Pencil = (p: P) => (
     <path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1Z" />
   </Svg>
 );
+export const Magnet = (p: P) => (
+  <Svg {...p}>
+    <path d="M6 3v9a6 6 0 0 0 12 0V3h-4v9a2 2 0 0 1-4 0V3z" />
+    <path d="M6 7h4M14 7h4" />
+  </Svg>
+);
 export const Undo = (p: P) => (
   <Svg {...p}>
     <path d="M9 14 4 9l5-5" />

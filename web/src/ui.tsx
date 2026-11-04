@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { LayersControl, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import L from "leaflet";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { LayersControl, Marker, Pane, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { arrowsAlong } from "@shared/geo.ts";
 import type { LngLat } from "@shared/types.ts";
 import { Modal } from "./feedback.tsx";
 import { More } from "./icons.tsx";
@@ -62,6 +64,38 @@ export function Tiles() {
     </LayersControl>
   );
 }
+
+const arrowIcons = new Map<string, L.DivIcon>();
+/** A direction arrow in the line's colour. Pointing up is north, so `bearing` is the rotation. */
+export function arrowIcon(color: string, bearing: number): L.DivIcon {
+  const deg = Math.round(bearing);
+  const k = `${color}|${deg}`;
+  let i = arrowIcons.get(k);
+  if (!i) {
+    i = L.divIcon({
+      className: "seg-arrow",
+      html: `<span style="color:${color};transform:rotate(${deg}deg)">▲</span>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    });
+    arrowIcons.set(k, i);
+  }
+  return i;
+}
+
+const ARROW_SPACING_M = 80;
+/** Arrows along a route segment, showing which way to walk it. */
+export function DirectionArrows({ coords, color }: { coords: LngLat[]; color: string }) {
+  const arrows = useMemo(() => arrowsAlong(coords, ARROW_SPACING_M), [coords]);
+  return arrows.map((a, i) => <Marker key={i} position={ll(a.point)} interactive={false} icon={arrowIcon(color, a.bearing)} />);
+}
+
+/** For what must stay visible on top of the arrows, such as the person's position. Leaflet draws markers above lines and circles. */
+export const AboveArrows = ({ children }: { children: ReactNode }) => (
+  <Pane name="above-arrows" style={{ zIndex: 620 }}>
+    {children}
+  </Pane>
+);
 
 export function FitTo({ pts }: { pts: LngLat[] | null }) {
   const map = useMap();
