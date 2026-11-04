@@ -62,6 +62,17 @@ describe("authentication", () => {
     await t.pool.query("DELETE FROM login_attempts"); // keep other tests independent
   });
 
+  it("survives losing its idle database connections, as when Postgres restarts", async () => {
+    const admin = await adminClient();
+    await admin.get("/api/admin/users");
+    const killed = await t.pool.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()",
+    );
+    assert.ok(killed.rowCount !== null);
+    await new Promise((r) => setTimeout(r, 200)); // an unhandled pool error would end the test process here
+    assert.equal((await admin.get("/api/admin/users")).status, 200);
+  });
+
   it("stores passwords as Argon2id", async () => {
     const { rows } = await t.pool.query("SELECT password_hash FROM users");
     assert.ok(rows.length > 0 && rows.every((r) => r.password_hash.startsWith("$argon2id$")));

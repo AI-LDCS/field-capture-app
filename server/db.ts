@@ -6,6 +6,9 @@ pg.types.setTypeParser(1700, (v) => Number(v)); // numeric
 pg.types.setTypeParser(20, (v) => Number(v)); // bigint
 
 export const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
+// Without a listener, an idle connection dropped by Postgres (a restart, say) would crash the process.
+// The pool replaces the connection on the next query.
+pool.on("error", (e) => console.error(`lost an idle database connection: ${e.message}`));
 
 export type Db = Pick<pg.Pool, "query">;
 

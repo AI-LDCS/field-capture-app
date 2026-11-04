@@ -51,6 +51,8 @@ jobs:
         run: cp .env.example .env
       - name: Start Postgres and RustFS
         run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait db rustfs
+      - name: Install ffmpeg (the video test is skipped without it)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Tests and endpoint check
         run: npm test
       - name: Service logs
