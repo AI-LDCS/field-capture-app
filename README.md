@@ -134,6 +134,8 @@ docker-compose.dev.yml      laptop override: private ports on 127.0.0.1, dev too
 | `npm run test:unit` | pure-logic tests only, nothing else needed |
 | `npm run test:coverage` | all tests with a coverage table |
 | `npm run typecheck` | TypeScript check |
+| `npm run check` | lint and formatting check (Biome), as CI runs it |
+| `npm run format` | apply the formatting |
 | `npm run export:storage` | export everything in RustFS to one `.tar` file |
 
 ## Configuration
@@ -168,7 +170,7 @@ Works end to end and is tested on the server side. Known limits:
 
 - The phone code has almost no automated tests (only the retry and error-text helper, `test/retry.test.ts`). The storage retry and the storage readout have not been tried on a real phone with a full disk. It was checked by hand in a desktop browser with fake GPS and camera, and by the owner on phones in normal use. Not yet stress-tested: long walks (25 minutes or more), low storage, a poor or interrupted network, several phone models. Which phones and what was found is not recorded here yet.
 - No background recording (a browser limit): switching apps or locking the screen stops it.
-- No offline loading of the app, no admin delete or retention, no monitoring or CI yet.
+- No offline loading of the app, no admin delete or retention, no monitoring yet.
 - The free OpenStreetMap, OpenTopoMap and Esri satellite tile servers are used; use a tile provider for production.
 
 The full list and the proposed next steps are in the [Roadmap](docs/roadmap.md).
@@ -193,4 +195,4 @@ The full list and the proposed next steps are in the [Roadmap](docs/roadmap.md).
 
 ## License
 
-No license has been chosen yet. Until one is added, all rights are reserved by the author.
+Copyright © 2026 Suppakorn Krabtong. Licensed under [Creative Commons Attribution-NonCommercial 4.0 International](LICENSE) (CC BY-NC 4.0): you may share and adapt it with credit, but not for commercial purposes.

@@ -51,7 +51,7 @@ function Shell() {
     <a href={h} className={match.includes(page ?? "") ? "on" : ""}>{label}</a>
   );
 
-  let body;
+  let body: ReactNode;
   if (admin) {
     body =
       page === "downloads" ? <Downloads />

@@ -2,6 +2,8 @@
   "name": "field-capture-app",
   "private": true,
   "version": "0.1.0",
+  "author": "Suppakorn Krabtong",
+  "license": "CC-BY-NC-4.0",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -14,6 +16,9 @@
     "start": "node dist/server.js",
     "test": "rm -rf .test-hits && tsx --env-file=.env --test --test-concurrency=1 test/*.test.ts && tsx test/check-endpoints.ts",
     "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome ci .",
     "dev:server": "ENABLE_DEV_TOOLS=true COOKIE_SECURE=false PUBLIC_ORIGINS=http://localhost:3100 tsx watch --env-file=.env server/index.ts",
     "test:unit": "tsx --test test/curve.test.ts test/editor.test.ts test/geo.test.ts test/preflight.test.ts test/retry.test.ts test/docs.test.ts",
     "test:coverage": "rm -rf .test-hits && tsx --env-file=.env --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=\"server/**\" --test-coverage-include=\"shared/**\" --test-coverage-include=\"web/src/editor/**\" --test-reporter=spec test/*.test.ts"
@@ -32,6 +37,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.4",
     "@types/archiver": "^8.0.0",
     "@types/express": "^5.0.6",
     "@types/leaflet": "^1.9.22",

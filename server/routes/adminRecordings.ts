@@ -57,7 +57,7 @@ adminRecordingsRouter.get("/:id/video", async (req: Request, res: Response) => {
   const rec = await recording(req);
   ready(rec);
   const range = typeof req.headers.range === "string" ? req.headers.range : undefined;
-  let obj;
+  let obj: Awaited<ReturnType<typeof getObject>>;
   try {
     obj = await getObject(rec.file_key, range);
   } catch (e: any) {

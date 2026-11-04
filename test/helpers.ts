@@ -81,7 +81,7 @@ export class Client {
     }
     const buf = Buffer.from(await r.arrayBuffer());
     const text = buf.toString("utf8");
-    let json: any = undefined;
+    let json: any ;
     try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
     return { status: r.status, body: json, headers: r.headers, bytes: buf };
   }

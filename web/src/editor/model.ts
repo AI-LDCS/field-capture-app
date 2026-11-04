@@ -73,7 +73,10 @@ const curves = new WeakMap<LngLat[], { line: LngLat[]; at: number[] }>();
 export function curveOf(s: Pick<Seg, "smooth" | "coords">): { line: LngLat[]; at: number[] } {
   if (!s.smooth) return { line: s.coords, at: s.coords.map((_, i) => i) };
   let c = curves.get(s.coords);
-  if (!c) curves.set(s.coords, (c = smoothLine(s.coords)));
+  if (!c) {
+    c = smoothLine(s.coords);
+    curves.set(s.coords, c);
+  }
   return c;
 }
 

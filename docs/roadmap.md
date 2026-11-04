@@ -26,13 +26,13 @@ What is built, what is known to be missing, and what is planned next. Nothing he
 - Several recordings of one assignment are reviewed separately; there is no merged video.
 - The route editor edits geometry only; there is no import of GPX or GeoJSON files (pasting `lat, lng` lines works).
 
-**Operations gaps**: no automatic monitoring or alerts, no Docker health check on the app service, backups are manual, no CI. See [operations](operations.md#known-gaps).
+**Operations gaps**: no automatic monitoring or alerts, no Docker health check on the app service, backups are manual. See [operations](operations.md#known-gaps).
 
 ## Next: milestone 3 (proposed order)
 
 1. **Record and fix what phone testing shows.** First, always. Write down the phones and browsers used and any problems found.
 2. **Data lifecycle**: admin delete of a recording or assignment (audited, removes the video from storage); a storage page (space per worker and route); a cleanup job for stale unfinished recordings and orphan objects.
-3. **Ready for a public server**: scheduled backups and a rehearsed restore; a production tile provider; alerts for failed builds, stuck uploads and low disk; CI that runs `npm test`.
+3. **Ready for a public server**: scheduled backups and a rehearsed restore; a production tile provider; alerts for failed builds, stuck uploads and low disk.
 4. **Offline**: a service worker so the app loads without a connection; skip and un-skip queued on the phone and synced later.
 5. **Admin dashboard**: assignments needing review, failed video builds, stale in-progress work; a global audit page.
 6. **Hardening**: rate limits for the whole API, per-recording upload limits, a dependency audit, and one real long test (a 25-minute recording with low storage and a poor network).

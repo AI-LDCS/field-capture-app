@@ -6,6 +6,8 @@ npm test               # all tests, then the endpoint check
 npm run test:unit      # pure logic only: no database or storage needed
 npm run test:coverage  # all tests with a line/branch coverage table
 npm run typecheck      # TypeScript, no emit
+npm run check          # Biome: lint and formatting, changes nothing
+npm run format         # Biome: apply the formatting
 ```
 
 The tool is Node's built-in test runner (`node:test`) run through `tsx`; there is no separate framework. `.env` supplies the database and storage credentials (loaded with `--env-file`).
@@ -36,7 +38,24 @@ Each API test file starts its own server in-process against a **new database** (
 2. While tests run, the test server records which route answered each request and its status (`createApp({ onHit })`), one file per test process in `.test-hits/`.
 3. After the tests, `test/check-endpoints.ts` compares the two. **Any endpoint that never answered with a 2xx fails the whole run.** It also lists endpoints that were never exercised with a refusal (read-only routes such as lists, where the only possible refusal is a login failure that is checked separately by the sweeps).
 
-So adding a route without a test makes `npm test` fail and names the route. The check runs only when someone runs `npm test`; there is no CI yet ([roadmap](roadmap.md)).
+So adding a route without a test makes `npm test` fail and names the route. CI runs it on every push.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to any branch, on GitHub Actions:
+
+| Job | Runs |
+| --- | --- |
+| Static checks | Biome lint and formatting, TypeScript, ShellCheck on `scripts/`, `npm audit` (fails on high or critical, production dependencies only), `npm run build`, and the unit tests |
+| Full tests | `npm test` against the real Postgres and RustFS from `docker-compose.yml`, with `.env.example` as its settings |
+| Docker images | builds the app image |
+
+### Lint rules
+
+`biome.json` uses Biome's recommended rules, and any error fails CI. These are the exceptions:
+
+- **Warnings, so they stay visible without failing CI:** React hook dependency lists (some are deliberate, and adding a dependency can restart the camera or GPS), list keys that use an index, and five accessibility rules. They are worth working through, but each one changes behaviour and needs testing on its own.
+- **Off:** `useButtonType` (forms here rely on the default submit button), `useIterableCallbackReturn` (`list.forEach((f) => f())` is harmless) and `noNonNullAssertion` (`req.user!` after `requireAuth` is safe).
 
 ## Coverage
 

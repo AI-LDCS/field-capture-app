@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint and formatting
+        run: npm run check
+      - name: Types
+        run: npm run typecheck
+      - name: Shell scripts
+        run: shellcheck scripts/*.sh
+      - name: Known vulnerabilities in production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Build
+        run: npm run build
+      - name: Unit tests
+        run: npm run test:unit
+
+  test:
+    name: Full tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Settings
+        run: cp .env.example .env
+      - name: Start Postgres and RustFS
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait db rustfs
+      - name: Tests and endpoint check
+        run: npm test
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --tail=100 db rustfs
+
+  images:
+    name: Docker images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the app image
+        run: docker build -t field-capture-app:ci .

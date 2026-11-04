@@ -133,11 +133,11 @@ main:has(.editor) { max-width: 1320px; }
 .pact { display: flex; gap: 2px; justify-content: flex-end; } .pact button { padding: 2px 7px; }
 
 /* map markers */
-.seg-badge span { display: block; width: 26px; height: 26px; line-height: 26px; text-align: center; color: #fff; font: 700 13px system-ui; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,.5); margin-left: -13px; margin-top: -13px; }
+.seg-badge span { display: block; width: 26px; height: 26px; text-align: center; color: #fff; font: 700 13px system-ui; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,.5); margin-left: -13px; margin-top: -13px; }
 .seg-arrow span { display: block; font-size: 15px; line-height: 22px; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
 .vtx { width: 16px; height: 16px; background: #fff; border: 3px solid #111827; border-radius: 50%; box-sizing: border-box; cursor: grab; }
 .vtx.first { border-color: #16a34a; } .vtx.last { border-color: #dc2626; }
-.vtx-mid { width: 18px; height: 18px; line-height: 14px; text-align: center; background: var(--card, #fff); color: #111; font: 700 14px system-ui; border: 2px solid #111827; border-radius: 50%; opacity: .75; cursor: copy; box-sizing: border-box; }
+.vtx-mid { width: 18px; height: 18px; text-align: center; background: var(--card, #fff); color: #111; font: 700 14px system-ui; border: 2px solid #111827; border-radius: 50%; opacity: .75; cursor: copy; box-sizing: border-box; }
 .vtx-mid:hover { opacity: 1; background: #fde047; }
 .pwrow { margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; }
 /* ---- recording view: map + camera split ---- */

@@ -9,7 +9,10 @@ const icons = new Map<string, L.DivIcon>();
 function icon(html: string, size: number, cls = ""): L.DivIcon {
   const k = `${cls}|${size}|${html}`;
   let i = icons.get(k);
-  if (!i) icons.set(k, (i = L.divIcon({ className: cls, html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] })));
+  if (!i) {
+    i = L.divIcon({ className: cls, html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+    icons.set(k, i);
+  }
   return i;
 }
 
