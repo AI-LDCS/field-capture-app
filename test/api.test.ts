@@ -65,10 +65,11 @@ describe("authentication", () => {
   it("survives losing its idle database connections, as when Postgres restarts", async () => {
     const admin = await adminClient();
     await admin.get("/api/admin/users");
+    await Promise.all([1, 2, 3].map(() => t.pool.query("SELECT pg_sleep(0.05)"))); // several idle connections to lose
     const killed = await t.pool.query(
       "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()",
     );
-    assert.ok(killed.rowCount !== null);
+    assert.ok((killed.rowCount ?? 0) >= 1, "at least one idle connection was dropped");
     await new Promise((r) => setTimeout(r, 200)); // an unhandled pool error would end the test process here
     assert.equal((await admin.get("/api/admin/users")).status, 200);
   });
