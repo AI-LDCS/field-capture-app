@@ -4,10 +4,10 @@ import { type PreflightEval, type PreflightSample, evaluatePreflight, preflightP
 import type { AssignmentDetail, PreflightOutcome } from "@shared/types.ts";
 import { api } from "../api.ts";
 import { fmtBytes } from "../ui.tsx";
-import { openCamera, storageCheck } from "./camera.ts";
-import { fakeGps, gpsSource } from "./gps.ts";
-import { closeCamera, getSession, setSession, useSession } from "./session.ts";
-import { useSettings } from "./settings.ts";
+import { openCamera, storageCheck } from "./lib/camera.ts";
+import { fakeGps, gpsSource } from "./lib/gps.ts";
+import { closeCamera, getSession, setSession, useSession } from "./lib/session.ts";
+import { useSettings } from "./lib/settings.ts";
 
 export type StorageInfo = Awaited<ReturnType<typeof storageCheck>>;
 

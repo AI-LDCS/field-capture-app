@@ -3,7 +3,7 @@
 # their storage key, plus a manifest.json with each file's size and SHA-256. The app container must be running.
 #   npm run export:storage                    # writes ./rustfs-export-<date>-<time>.tar
 #   npm run export:storage -- /backups/x.tar  # or a file you name
-# Uploads that finish after it starts may be missing. Details: docs/operations.md#video
+# Uploads that finish after it starts may be missing. Details: docs/operations/runbook.md#video
 set -euo pipefail
 
 OUT="${1:-rustfs-export-$(date +%Y%m%d-%H%M%S).tar}"

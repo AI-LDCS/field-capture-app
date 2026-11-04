@@ -6,13 +6,13 @@ import type { AssignmentDetail, LngLat, PreflightOutcome } from "@shared/types.t
 import { api } from "../api.ts";
 import { Badge, Tiles, fmtBytes, ll } from "../ui.tsx";
 import { Onboard, useCameraOpener, useStorage } from "./Onboard.tsx";
-import { type Fix, fakeGps, gpsSource } from "./gps.ts";
-import { getAssignment, gpsOf, putAssignment } from "./localdb.ts";
-import { DevPanel, RecordingList, Recovery, useLocalRecordings } from "./localui.tsx";
+import { type Fix, fakeGps, gpsSource } from "./lib/gps.ts";
+import { getAssignment, gpsOf, putAssignment } from "./lib/localdb.ts";
+import { DevPanel, RecordingList, Recovery, useLocalRecordings } from "./Recordings.tsx";
 import RecordingView, { type Mask } from "./RecordingView.tsx";
-import { startRecording } from "./recorder.ts";
-import { closeCamera, getSession, setSession, useSession } from "./session.ts";
-import { devToolsOn, getSettings, useSettings } from "./settings.ts";
+import { startRecording } from "./lib/recorder.ts";
+import { closeCamera, getSession, setSession, useSession } from "./lib/session.ts";
+import { devToolsOn, getSettings, useSettings } from "./lib/settings.ts";
 
 function FitOnce({ run }: { run: AssignmentDetail }) {
   const map = useMap();

@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { User } from "@shared/types.ts";
 import { api, setUnauthenticatedHandler } from "./api.ts";
-import { scanInterrupted, setLocalUser, unsentSummary } from "./worker/localdb.ts";
-import { isRecording, useSession } from "./worker/session.ts";
-import { setDevTools } from "./worker/settings.ts";
-import { resumeUploader, startUploader, stopUploader } from "./worker/uploader.ts";
+import { scanInterrupted, setLocalUser, unsentSummary } from "./worker/lib/localdb.ts";
+import { isRecording, useSession } from "./worker/lib/session.ts";
+import { setDevTools } from "./worker/lib/settings.ts";
+import { resumeUploader, startUploader, stopUploader } from "./worker/lib/uploader.ts";
 
 type Auth = {
   user: User | null;

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { audit } from "../audit.ts";
+import { audit } from "../services/audit.ts";
 import { generatePassword, hashPassword } from "../auth/password.ts";
 import { deleteUserSessions } from "../auth/sessions.ts";
 import { q, q1, tx } from "../db.ts";

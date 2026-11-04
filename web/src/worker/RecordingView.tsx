@@ -3,10 +3,10 @@ import { Circle, CircleMarker, MapContainer, Polyline, useMap, useMapEvents } fr
 import { CONFIG } from "@shared/config.ts";
 import { bearingDeg, compass, distToLineM, haversineM } from "@shared/geo.ts";
 import type { AssignmentDetail, LngLat } from "@shared/types.ts";
-import type { CameraInfo } from "./camera.ts";
-import { type Fix, fakeGps } from "./gps.ts";
-import type { ActiveRecording } from "./recorder.ts";
-import { useSettings } from "./settings.ts";
+import type { CameraInfo } from "./lib/camera.ts";
+import { type Fix, fakeGps } from "./lib/gps.ts";
+import type { ActiveRecording } from "./lib/recorder.ts";
+import { useSettings } from "./lib/settings.ts";
 import { Tiles, fmtBytes } from "../ui.tsx";
 
 export type Mask = { samples: LngLat[]; covered: boolean[] };

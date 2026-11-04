@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { audit } from "../audit.ts";
+import { audit } from "../services/audit.ts";
 import { q, q1, tx } from "../db.ts";
 import type { AssignmentDetail, RecordingSummary } from "../../shared/types.ts";
-import { finishAssignment, refreshSegments } from "../evaluate.ts";
+import { finishAssignment, refreshSegments } from "../services/evaluate.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
 
 // ---------- shared shape ----------

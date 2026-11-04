@@ -2,12 +2,14 @@ import "leaflet/dist/leaflet.css";
 import "./styles.css";
 import { Component, StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { Assignments, RoutesPage, Workers } from "./admin.tsx";
-import { Downloads } from "./Downloads.tsx";
+import { Assignments } from "./admin/Assignments.tsx";
+import { RoutesPage } from "./admin/Routes.tsx";
+import { Workers } from "./admin/Workers.tsx";
+import { Downloads } from "./admin/Downloads.tsx";
 import { AuthProvider, ChangePassword, Login, SessionBanner, useAuth } from "./auth.tsx";
-import Review from "./Review.tsx";
-import { EditVersion, NewRoute } from "./RouteEditor.tsx";
-import { MyAssignments } from "./worker.tsx";
+import Review from "./admin/Review.tsx";
+import { EditVersion, NewRoute } from "./admin/editor/RouteEditor.tsx";
+import { MyAssignments } from "./worker/AssignmentList.tsx";
 import WorkerRun from "./worker/RunPage.tsx";
 
 const useHash = () => {

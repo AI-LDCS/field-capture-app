@@ -1,14 +1,14 @@
 import crypto from "node:crypto";
 import express, { Router, type Request } from "express";
 import { z } from "zod";
-import { audit } from "../audit.ts";
+import { audit } from "../services/audit.ts";
 import { config } from "../config.ts";
 import { q, q1, tx } from "../db.ts";
-import { kickAssembler } from "../assemble.ts";
-import { refreshSegments } from "../evaluate.ts";
+import { kickAssembler } from "../services/assemble.ts";
+import { refreshSegments } from "../services/evaluate.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
-import { sendGpsDownload, sendVideoDownload } from "../downloads.ts";
-import { putObject } from "../storage.ts";
+import { sendGpsDownload, sendVideoDownload } from "../services/downloads.ts";
+import { putObject } from "../services/storage.ts";
 
 /** Everything a worker does with a recording. Each route is scoped to recordings the caller owns. */
 export const workerRecordingsRouter = Router();

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
-import { audit } from "../audit.ts";
+import { audit } from "../services/audit.ts";
 import { dummyHash, hashPassword, verifyPassword } from "../auth/password.ts";
 import { clearCookie, COOKIE_NAME, createSession, deleteSession, deleteUserSessions, readCookie } from "../auth/sessions.ts";
 import { config } from "../config.ts";

@@ -47,7 +47,7 @@ flowchart LR
 4. The server recomputes coverage from the GPS it holds and decides: `completed`, `needs_review`, `in_progress`, or `pending_sync`.
 5. A background job builds one playable, seekable video from the chunks.
 
-Read more: [Architecture](docs/architecture.md) and [Field flow](docs/field-flow.md).
+Read more: [Architecture](docs/development/architecture.md) and [Field flow](docs/reference/field-flow.md).
 
 ## Quick start
 
@@ -80,7 +80,7 @@ A phone only allows the camera and GPS on HTTPS.
 docker compose --profile tailnet up -d --build
 ```
 
-Open `https://<TAILNET_HOST>` on a device that is on your tailnet. Full steps, including certificate renewal: [Deployment](docs/deployment.md).
+Open `https://<TAILNET_HOST>` on a device that is on your tailnet. Full steps, including certificate renewal: [Deployment](docs/operations/deployment.md).
 
 ### Run on a public server
 
@@ -90,7 +90,7 @@ Point a domain at the server, set `DOMAIN` and `PUBLIC_ORIGINS=https://<domain>`
 docker compose --profile public up -d --build
 ```
 
-Caddy gets a certificate automatically. Read the [security checklist](docs/security.md#before-going-public-checklist) first, and never use the dev override on a server.
+Caddy gets a certificate automatically. Read the [security checklist](docs/reference/security.md#before-going-public-checklist) first, and never use the dev override on a server.
 
 ## First steps
 
@@ -101,24 +101,30 @@ Caddy gets a certificate automatically. Read the [security checklist](docs/secur
 5. The worker signs in on a phone, opens the assignment, passes the GPS and camera checks, and records.
 6. After **Check & finish**, open the assignment as admin to review.
 
-Guides: [Admin guide](docs/admin-guide.md), [Worker guide](docs/worker-guide.md).
+Guides: [Admin guide](docs/guides/admin.md), [Worker guide](docs/guides/worker.md).
 
 ## Repository layout
 
 ```
 server/        Express API, completion logic, video assembler, storage, auth
   routes/        one file per area of the API
-  auth/          password hashing, sessions
+  services/      coverage and status, video assembly, downloads, storage, audit
+  auth/          password hashing, sessions, the first admin
 shared/        code used by both server and browser: types, thresholds, geometry,
-               coverage, curve smoothing, GPS-check logic
+               coverage, GPS quality, curve smoothing, GPS-check logic
 web/public/    the logo (SVG), tab icon and phone home-screen icon
 web/src/       React app
-  editor/        the route editor (map, segment list, points table, edit model)
-  worker/        phone-side recording, upload, local database, recording screen
+  admin/         admin pages, including editor/ (the route editor)
+  worker/        worker pages
+    lib/           phone-side recording, upload, local database, GPS, camera
 db/            migrations (plain SQL) and the Postgres + PostGIS image
 deploy/        Caddy configuration for the two edge profiles
-test/          API, unit and docs tests, plus the endpoint-coverage check
-docs/          the documentation
+test/
+  unit/          pure logic, nothing else needed
+  integration/   the API against real Postgres and RustFS, plus the endpoint check
+  repo/          the docs and the file layout stay correct
+scripts/       set up .env, the tailnet certificate, export RustFS
+docs/          the documentation: guides/, operations/, reference/, development/
 docker-compose.yml          db, rustfs, app, and the edge proxy profiles
 docker-compose.dev.yml      laptop override: private ports on 127.0.0.1, dev tools on
 ```
@@ -140,7 +146,7 @@ docker-compose.dev.yml      laptop override: private ports on 127.0.0.1, dev too
 
 ## Configuration
 
-Environment variables (database, storage, allowed origins, cookies, admin bootstrap, session lengths, dev tools) and the tuning constants (GPS thresholds, coverage, chunk length, bitrate) are listed in [Configuration](docs/configuration.md). The example file is `.env.example`; `.env` is never committed.
+Environment variables (database, storage, allowed origins, cookies, admin bootstrap, session lengths, dev tools) and the tuning constants (GPS thresholds, coverage, chunk length, bitrate) are listed in [Configuration](docs/operations/configuration.md). The example file is `.env.example`; `.env` is never committed.
 
 ## Tech stack
 
@@ -153,7 +159,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db rustfs
 npm test
 ```
 
-110+ tests run against a real database and real object storage (each file gets its own throw-away database and bucket). `npm test` also **fails if any API endpoint has no passing test**, so the claim "every endpoint is tested" cannot drift. Details, coverage and what is not tested: [Testing](docs/testing.md).
+130+ tests run against a real database and real object storage (each file gets its own throw-away database and bucket). `npm test` also **fails if any API endpoint has no passing test**, so the claim "every endpoint is tested" cannot drift. Details, coverage and what is not tested: [Testing](docs/development/testing.md).
 
 ## Security at a glance
 
@@ -162,36 +168,25 @@ npm test
 - CSRF origin check, JSON-only bodies, CSP and other security headers, a login lockout.
 - Published routes and verified recordings are immutable in the database; every chunk is checksummed on the phone and the server.
 - Only the reverse proxy publishes ports; the database and storage stay private. Video is reachable only by admins and every access is audited.
-- **Not protected**: a determined user with their own phone can read browser storage. See [Security](docs/security.md#what-is-not-protected).
+- **Not protected**: a determined user with their own phone can read browser storage. See [Security](docs/reference/security.md#what-is-not-protected).
 
 ## Status and limits
 
 Works end to end and is tested on the server side. Known limits:
 
-- The phone code has almost no automated tests (only the retry and error-text helper, `test/retry.test.ts`). The storage retry and the storage readout have not been tried on a real phone with a full disk. It was checked by hand in a desktop browser with fake GPS and camera, and by the owner on phones in normal use. Not yet stress-tested: long walks (25 minutes or more), low storage, a poor or interrupted network, several phone models. Which phones and what was found is not recorded here yet.
+- The phone code has almost no automated tests (only the retry and error-text helper, `test/unit/retry.test.ts`). The storage retry and the storage readout have not been tried on a real phone with a full disk. It was checked by hand in a desktop browser with fake GPS and camera, and by the owner on phones in normal use. Not yet stress-tested: long walks (25 minutes or more), low storage, a poor or interrupted network, several phone models. Which phones and what was found is not recorded here yet.
 - No background recording (a browser limit): switching apps or locking the screen stops it.
 - No offline loading of the app, no admin delete or retention, no monitoring yet.
 - The free OpenStreetMap, OpenTopoMap and Esri satellite tile servers are used; use a tile provider for production.
 
-The full list and the proposed next steps are in the [Roadmap](docs/roadmap.md).
+The full list and the proposed next steps are in the [Roadmap](docs/development/roadmap.md).
 
 ## Documentation
 
-| | |
-| --- | --- |
-| [Architecture](docs/architecture.md) | parts, request path, modules |
-| [Data model](docs/data-model.md) | tables, database rules, state machines |
-| [API reference](docs/api.md) | every endpoint |
-| [Field flow](docs/field-flow.md) | GPS check, recording, recovery, upload, assembly, completion rules |
-| [Security](docs/security.md) | controls, exposure, what is not protected, checklist |
-| [Configuration](docs/configuration.md) | environment variables and tuning constants |
-| [Deployment](docs/deployment.md) | Tailscale and public-server setup, updates |
-| [Operations](docs/operations.md) | backup and restore, troubleshooting, admin recovery |
-| [Database migration plan](docs/database-migration.md) | schema changes, Postgres upgrades, moving servers, going back |
-| [Testing](docs/testing.md) | how the tests work and what they cover |
-| [Decisions](docs/decisions.md) | why it is built this way |
-| [Roadmap](docs/roadmap.md) | limits and what comes next |
-| [Admin guide](docs/admin-guide.md) · [Worker guide](docs/worker-guide.md) | for the people using it |
+- **Using the app:** [Admin guide](docs/guides/admin.md), [Worker guide](docs/guides/worker.md)
+- **Running it:** [Deployment](docs/operations/deployment.md), [Configuration](docs/operations/configuration.md), [Runbook](docs/operations/runbook.md), [Database migration plan](docs/operations/database-migration.md)
+- **How it works:** [Field flow](docs/reference/field-flow.md), [API reference](docs/reference/api.md), [Data model](docs/reference/data-model.md), [Security](docs/reference/security.md)
+- **Working on the code:** [Architecture](docs/development/architecture.md), [Testing](docs/development/testing.md), [Decisions](docs/development/decisions.md), [Roadmap](docs/development/roadmap.md)
 
 ## License
 

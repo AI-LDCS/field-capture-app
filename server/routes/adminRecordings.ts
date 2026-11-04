@@ -1,11 +1,11 @@
 import { Router, type Request, type Response } from "express";
 import { ZipArchive } from "archiver";
-import { audit } from "../audit.ts";
-import { kickAssembler } from "../assemble.ts";
+import { audit } from "../services/audit.ts";
+import { kickAssembler } from "../services/assemble.ts";
 import { q, q1 } from "../db.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
-import { getObject } from "../storage.ts";
-import { extOf, gpsExport, ready, sendGpsDownload, sendVideoDownload } from "../downloads.ts";
+import { getObject } from "../services/storage.ts";
+import { extOf, gpsExport, ready, sendGpsDownload, sendVideoDownload } from "../services/downloads.ts";
 import { detail } from "./assignments.ts";
 
 /**

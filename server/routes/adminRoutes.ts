@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { PoolClient } from "pg";
 import { smoothLine } from "../../shared/curve.ts";
-import { audit } from "../audit.ts";
+import { audit } from "../services/audit.ts";
 import { pool, q, q1, tx, type Db } from "../db.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
 
