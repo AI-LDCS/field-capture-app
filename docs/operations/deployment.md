@@ -9,6 +9,32 @@ Everything runs with Docker Compose. Pick an edge profile:
 
 Browsers allow the camera and GPS only on **HTTPS** (or `localhost`), so a phone needs one of these.
 
+Then pick where the images come from:
+
+| Images | For | Needs |
+| --- | --- | --- |
+| Pull from GHCR | a small server, or any server that should not build | `docker login ghcr.io`, once, with a token that has `read:packages` |
+| Build on the machine | a laptop, or running code that is not on `main` | enough memory and time to build |
+
+```mermaid
+flowchart TD
+  A[Start: git clone, then scripts/init-env.sh] --> B{Who connects?}
+  B -->|Phones on your Tailscale network| C[Tailnet: set up .env, run scripts/tailnet-cert.sh]
+  B -->|Anyone, on a public domain| D[Public: point DNS at the server, open ports 80 and 443, set up .env]
+  C --> E{Where do images come from?}
+  D --> F{Where do images come from?}
+  E -->|GHCR| G["docker login ghcr.io<br/>docker compose --profile tailnet pull<br/>docker compose --profile tailnet up -d --no-build"]
+  E -->|Build here| H["docker compose --profile tailnet up -d --build"]
+  F -->|GHCR| I["docker login ghcr.io<br/>docker compose --profile public pull<br/>docker compose --profile public up -d --no-build"]
+  F -->|Build here| J["docker compose --profile public up -d --build"]
+  G --> K[Sign in, change the admin password]
+  H --> K
+  I --> K
+  J --> K
+```
+
+Pulling still needs the clone: it holds the compose file, the scripts and the Caddy settings. The first-start steps below show the build commands; to use GHCR, swap in the commands from the chart.
+
 ## Requirements
 
 - Docker Engine with the Compose plugin (v2).
