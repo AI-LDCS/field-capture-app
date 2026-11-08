@@ -13,7 +13,7 @@ The sun, moon and monitor icons at the top choose a Light, Dark or System theme.
 
 ## Your assignments
 
-**My assignments** lists the routes you were given. Tap one to open its home page: the map, **Start Recording**, the segments and your recordings. **Blue** segments are required, **orange dashed** ones are optional, **green** ones are done, **grey** ones are skipped.
+**My assignments** lists the routes you were given. Tap one to open its home page: the map, **Start Recording**, the segments and your recordings. **Blue** segments are required, **orange dashed** ones are optional, **green** ones are done, **grey** ones are skipped. If you move the map away, **⌖ Me** brings it back to where you are and **Route** shows the whole route again.
 
 ## Start a walk
 

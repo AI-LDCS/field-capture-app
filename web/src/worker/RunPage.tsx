@@ -1,3 +1,4 @@
+import type L from "leaflet";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Circle, CircleMarker, MapContainer, Polyline, useMap } from "react-leaflet";
 import { CONFIG } from "@shared/config.ts";
@@ -15,12 +16,41 @@ import { startRecording } from "./lib/recorder.ts";
 import { closeCamera, getSession, setSession, useSession } from "./lib/session.ts";
 import { devToolsOn, getSettings, useSettings } from "./lib/settings.ts";
 
+const routeBounds = (run: AssignmentDetail) => run.segments.flatMap((s) => s.coords.map(ll));
+
+/** Buttons over the map that bring the view back: to the worker's position, or to the whole route. */
+function RecenterButtons({ map, run, fix }: { map: L.Map | null; run: AssignmentDetail; fix: Fix | null }) {
+  if (!map) return null;
+  return (
+    <div className="map-recenter">
+      <button
+        type="button"
+        disabled={!fix}
+        title={fix ? "Center on my location" : "No GPS fix yet"}
+        onClick={() => fix && map.setView([fix.lat, fix.lng], Math.max(map.getZoom(), 18))}
+      >
+        ⌖ Me
+      </button>
+      <button
+        type="button"
+        title="Show the whole route"
+        onClick={() => {
+          const pts = routeBounds(run);
+          if (pts.length) map.fitBounds(pts, { padding: [30, 30] });
+        }}
+      >
+        Route
+      </button>
+    </div>
+  );
+}
+
 function FitOnce({ run }: { run: AssignmentDetail }) {
   const map = useMap();
   const done = useRef(false);
   useEffect(() => {
     if (done.current) return;
-    const pts = run.segments.flatMap((s) => s.coords.map(ll));
+    const pts = routeBounds(run);
     if (pts.length) {
       map.fitBounds(pts, { padding: [30, 30], animate: false });
       done.current = true;
@@ -55,6 +85,7 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
   const [onboarding, setOnboarding] = useState(false);
   const wantCamera = useRef(false);
   const cameraOpener = useCameraOpener(wantCamera);
+  const [homeMap, setHomeMap] = useState<L.Map | null>(null);
 
   const load = async () => {
     try {
@@ -354,7 +385,7 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
       <Recovery assignmentId={id} />
 
       <div className="map">
-        <MapContainer center={[13.7563, 100.5018]} zoom={16} style={{ height: "100%" }}>
+        <MapContainer ref={setHomeMap} center={[13.7563, 100.5018]} zoom={16} style={{ height: "100%" }}>
           <Tiles />
           <FitOnce run={run} />
           {run.segments.map((sg, i) => {
@@ -379,6 +410,7 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
             </AboveArrows>
           )}
         </MapContainer>
+        <RecenterButtons map={homeMap} run={run} fix={fix} />
       </div>
       <p className="small muted">
         {gpsDenied ? <span className="err">Location is blocked</span> : fix ? `GPS ±${fix.acc.toFixed(0)} m` : "No GPS fix yet"}
