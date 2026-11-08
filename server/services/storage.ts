@@ -87,13 +87,23 @@ export async function listKeys(Prefix = ""): Promise<string[]> {
 export async function multipart(Key: string, ContentType: string) {
   const { UploadId } = await s3.send(new CreateMultipartUploadCommand({ Bucket: Bucket(), Key, ContentType }));
   const parts: { PartNumber: number; ETag: string }[] = [];
+  let next = 0;
   return {
+    /** Parts may be sent several at once: the number is taken when the call is made, so file order is kept. */
     async part(body: Buffer) {
-      const n = parts.length + 1;
+      const n = ++next;
       const r = await s3.send(new UploadPartCommand({ Bucket: Bucket(), Key, UploadId, PartNumber: n, Body: body }));
       parts.push({ PartNumber: n, ETag: r.ETag! });
     },
-    complete: () => s3.send(new CompleteMultipartUploadCommand({ Bucket: Bucket(), Key, UploadId, MultipartUpload: { Parts: parts } })),
+    complete: () =>
+      s3.send(
+        new CompleteMultipartUploadCommand({
+          Bucket: Bucket(),
+          Key,
+          UploadId,
+          MultipartUpload: { Parts: [...parts].sort((a, b) => a.PartNumber - b.PartNumber) },
+        }),
+      ),
     abort: () => s3.send(new AbortMultipartUploadCommand({ Bucket: Bucket(), Key, UploadId })).catch(() => {}),
   };
 }

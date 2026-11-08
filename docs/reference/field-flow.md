@@ -124,14 +124,14 @@ If the session dies while recording (a password reset, a deactivation, expiry):
 
 Finalize is cheap (it only checks the manifest). The playable file is built afterwards by a background job (`server/services/assemble.ts`):
 
-1. The recording is marked `assembly_state = pending`. The job claims one at a time (`FOR UPDATE SKIP LOCKED`), so a retried finalize cannot start a second build. On start-up anything left `running` by a crash goes back to `pending`.
-2. It reads every chunk from storage in order, **re-checks each against its recorded hash**, and writes one file in a temporary directory.
+1. The recording is marked `assembly_state = pending`. Up to `ASSEMBLY_CONCURRENCY` builders (default 3) run at once; each claims one recording at a time (`FOR UPDATE SKIP LOCKED`), so two builders never take the same recording and a retried finalize cannot start a second build. On start-up anything left `running` by a crash goes back to `pending`.
+2. It reads the chunks from storage, several at a time, **re-checks each against its recorded hash**, and writes them strictly in order into one file in a temporary directory.
 3. If ffmpeg is available and `REMUX` is on, it rewrites the file with `-c copy` (no re-encoding; `-movflags +faststart` for MP4). `MediaRecorder` files have no duration and no seek index; without this step browsers cannot seek and may not show the length. If ffmpeg fails, the plain concatenation is used.
-4. It uploads the result as one object using multipart upload in **8 MiB** parts (parts must be at least 5 MiB, so 1 MB chunks cannot be copied directly), hashing as it goes, and stores the size and SHA-256.
+4. It uploads the result as one object using multipart upload in **8 MiB** parts, up to 4 at once (parts must be at least 5 MiB, so 1 MB chunks cannot be copied directly), hashing as it goes, and stores the size and SHA-256.
 5. **Only then** it deletes the chunk objects (so "keep forever" does not mean double storage) and sets `chunks_purged`.
 6. On any error the state is `failed` with the message, an audit entry is written, and an admin can press **Retry** (`POST /api/admin/recordings/:id/reassemble`). The chunks are kept until a build succeeds.
 
-Disk needs while building: about **two times the recording size** in the container's temporary directory (the raw file and the remuxed file). A 25-minute recording at 4 Mbps is roughly 750 MB.
+Disk needs while building: about **two times the recording size per builder** in the container's temporary directory (the raw file and the remuxed file). A 25-minute recording at 4 Mbps is roughly 750 MB, so three builders on such recordings need about 4.5 GB free.
 
 ## How the server decides
 

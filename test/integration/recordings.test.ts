@@ -307,6 +307,47 @@ describe("finalize and assembly", () => {
       assert.ok(audit.includes(a), a);
   });
 
+  it("several recordings built at the same time each come out as their own chunks in order", async () => {
+    const admin = await adminClient();
+    const v = await publish(admin, "Many");
+    // 10 x 1 MB per recording: more chunks than are read ahead at once, and two upload parts per file
+    const jobs = await Promise.all(
+      [0, 1, 2, 3].map(async (i) => {
+        const w = await makeWorker(admin, `many-${i}`);
+        const asg = await assign(admin, v.id, w.id);
+        const chunks = chunksOf(10, 1_000_000);
+        const id = await upload(w.client, asg.id, chunks, walk(await curveOf(w.client, asg.id)));
+        return { id, whole: Buffer.concat(chunks) };
+      }),
+    );
+    await Promise.all(jobs.map((j) => assembled(j.id)));
+    for (const j of jobs) {
+      const { rows } = await t.pool.query("SELECT file_bytes, file_sha256 FROM recordings WHERE id = $1", [j.id]);
+      assert.equal(Number(rows[0].file_bytes), j.whole.length);
+      assert.equal(rows[0].file_sha256, sha256(j.whole));
+      assert.ok((await admin.get(`/api/admin/recordings/${j.id}/video`)).bytes.equals(j.whole));
+    }
+  });
+
+  it("a chunk damaged in storage fails the build cleanly and keeps the chunks for a retry", async () => {
+    const admin = await adminClient();
+    const w = await makeWorker(admin, "damaged");
+    const asg = await assign(admin, (await publish(admin, "Damaged")).id, w.id);
+    const { id, res } = await register(w.client, asg.id);
+    assert.equal(res.status, 201);
+    const chunks = chunksOf(20, 3000);
+    for (const [i, b] of chunks.entries()) assert.equal((await putChunk(w.client, id, i, b)).status, 200);
+    const gps = walk(await curveOf(w.client, asg.id));
+    assert.equal((await w.client.post(`/api/me/recordings/${id}/gps`, { points: gps })).status, 200);
+    // damage one chunk in the middle, while later ones are being read ahead
+    const { rows } = await t.pool.query("SELECT object_key FROM recording_chunks WHERE recording_id = $1 AND seq = 5", [id]);
+    await t.storage.putObject(rows[0].object_key, Buffer.from("not the bytes the phone sent"));
+    assert.equal((await w.client.post(`/api/me/recordings/${id}/finalize`, manifest(chunks, gps))).status, 200);
+    await assert.rejects(assembled(id), /chunk 5 is corrupt/);
+    const keys = await t.storage.listKeys(`rec/${id}/`);
+    assert.equal(keys.length, chunks.length, "chunks kept, no half-built file left behind");
+  });
+
   it("a crash during assembly is picked up again on restart", async () => {
     const admin = await adminClient();
     const w = await makeWorker(admin, "crashy");

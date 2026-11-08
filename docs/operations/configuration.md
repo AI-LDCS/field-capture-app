@@ -22,6 +22,7 @@ Copy `.env.example` to `.env` and fill it in. Docker Compose reads `.env` for su
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | required | Storage credentials. The same values configure RustFS. |
 | `S3_BUCKET` | `recordings` | Bucket name; created at start-up if missing. |
 | `ENABLE_DEV_TOOLS` | `false` | Fake GPS and canvas camera on the worker page. Development only. |
+| `ASSEMBLY_CONCURRENCY` | `3` | How many finished videos the server builds at the same time. Each build needs about twice its recording's size in temporary disk space. |
 | `REMUX` | `true` | Rewrite finished videos with ffmpeg for duration and seeking. Falls back to the plain file if ffmpeg is missing or fails. |
 | `SESSION_ABSOLUTE_HOURS` | `336` | Maximum session age (14 days). |
 | `SESSION_IDLE_HOURS` | `24` | Sign out after this long without a request. |

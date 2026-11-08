@@ -23,7 +23,14 @@ export const config = {
   },
   /** Fake GPS and a fake camera for testing without walking. Off unless this is set. */
   devTools: bool(env.ENABLE_DEV_TOOLS, false),
-  assembly: { partBytes: 8 * 1024 * 1024, pollMs: 5000, remux: bool(env.REMUX, true) },
+  assembly: {
+    partBytes: 8 * 1024 * 1024,
+    pollMs: 5000,
+    remux: bool(env.REMUX, true),
+    concurrency: Math.max(1, int(env.ASSEMBLY_CONCURRENCY, 3)), // videos built at the same time
+    fetchAhead: 8, // chunks read from storage at once while building one video
+    uploadsInFlight: 4, // parts of the finished file sent to storage at once
+  },
   adminUsername: env.ADMIN_USERNAME ?? "",
   adminPassword: env.ADMIN_PASSWORD ?? "",
   session: {
