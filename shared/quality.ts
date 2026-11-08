@@ -4,8 +4,7 @@ import type { GpsPoint, GpsQuality, LngLat } from "./types.ts";
 
 /** Coverage of each segment from all given GPS tracks combined. */
 export function coverageFor(segmentCoords: LngLat[][], tracks: GpsPoint[][]): number[] {
-  const all = tracks.flat();
-  return segmentCoords.map((c) => segmentCoverage(c, all, CONFIG.coverage));
+  return segmentCoords.map((c) => segmentCoverage(c, tracks, CONFIG.coverage));
 }
 
 /** Flags (never drops) imperfect data. Gaps and jumps are measured inside one recording. */

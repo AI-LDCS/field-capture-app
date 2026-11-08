@@ -165,10 +165,10 @@ Jumps and gaps are measured inside one recording, never between two. An admin ca
 `shared/geo.ts` (`coverageMask`, `segmentCoverage`). The same code runs on the phone (to draw progress) and on the server (to decide).
 
 1. The segment's stored line is sampled into points about 5 m apart (a denser line, such as a curve, keeps its own denser points).
-2. A sample is **covered** if a usable GPS point lies within **25 m** of it. Points with reported accuracy worse than 50 m are ignored for coverage (but stored and flagged).
+2. Each recording's fixes are taken in order. A usable fix (reported accuracy 50 m or better; worse ones are stored and flagged but ignored here) that lies within **25 m beside** the line lands on the line and covers **5 m along it either side** (`reachM`). Two fixes in a row that both land on the line also cover the stretch between them, if that stretch is no longer than the distance really moved between them (plus 10 m of slack). A fix more than 25 m from the line breaks the chain. Two recordings are never joined to each other.
 3. **Coverage = covered samples ÷ all samples.** A segment is `completed` at its `minCoverageRatio` (default 0.9).
 
-So 90% means the walked track covers at least 90% of the segment, not that the last GPS point reached the end. Timestamps correlate video and GPS but do not prove the route was followed; coverage comes from positions.
+So 90% means the walked track covers at least 90% of the segment, not that the last GPS point reached the end. Progress follows the worker's real position along the line: an earlier rule counted every sample within 25 m of any fix, so the bar ran up to 25 m ahead and a short segment could complete with little more than half of it walked. Timestamps correlate video and GPS but do not prove the route was followed; coverage comes from positions.
 
 ## Curved segments
 

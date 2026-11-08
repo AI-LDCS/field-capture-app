@@ -55,53 +55,84 @@ export function distToLineM(p: LngLat, coords: LngLat[]): number {
   return best;
 }
 
-export type CoverageOpts = { bufferM: number; stepM: number; maxAccuracyM: number };
+export type CoverageOpts = { bufferM: number; stepM: number; maxAccuracyM: number; reachM: number };
+type FixLike = Pick<GpsPoint, "lat" | "lng" | "acc">;
+
+/** Where p lands on the line: metres along it from the start, and metres beside it. */
+function projectOnLine(p: LngLat, coords: LngLat[], cum: number[]): { along: number; dist: number } {
+  if (coords.length === 1) return { along: 0, dist: haversineM(p, coords[0]) };
+  let best = { along: 0, dist: Infinity };
+  for (let i = 1; i < coords.length; i++) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const k = Math.cos(rad(p[1])) * rad(1) * R;
+    const m = rad(1) * R;
+    const px = (p[0] - a[0]) * k,
+      py = (p[1] - a[1]) * m;
+    const bx = (b[0] - a[0]) * k,
+      by = (b[1] - a[1]) * m;
+    const len2 = bx * bx + by * by;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, (px * bx + py * by) / len2));
+    const dist = Math.hypot(px - bx * t, py - by * t);
+    if (dist < best.dist) best = { along: cum[i - 1] + t * (cum[i] - cum[i - 1]), dist };
+  }
+  return best;
+}
 
 /**
- * Which ~stepM-spaced sample points of the segment lie within bufferM of at least one
- * usable GPS point. Points worse than maxAccuracyM are ignored (kept elsewhere, never counted).
+ * Which ~stepM-spaced sample points of the segment the worker walked past.
+ *
+ * Each track is one recording's fixes in order. A usable fix (accuracy within maxAccuracyM) that lies within
+ * bufferM beside the line lands on it and covers reachM along it either side. Two fixes in a row that both
+ * land on the line also cover the stretch between them, when that stretch is no longer than the distance
+ * really moved between them (plus 2 x reachM of slack): walking it is the only way to get from one to the
+ * other. A fix beside the line covers only where it lands, never bufferM ahead, so progress follows the
+ * worker's real position. Tracks are never joined to each other: the end of one recording and the start of
+ * the next say nothing about what lies between.
  */
-export function coverageMask(
-  coords: LngLat[],
-  points: Pick<GpsPoint, "lat" | "lng" | "acc">[],
-  opts: CoverageOpts,
-): { samples: LngLat[]; covered: boolean[] } {
+export function coverageMask(coords: LngLat[], tracks: FixLike[][], opts: CoverageOpts): { samples: LngLat[]; covered: boolean[] } {
   const samples = densify(coords, opts.stepM);
-  const usable = points.filter((p) => p.acc <= opts.maxAccuracyM);
-  if (samples.length === 0 || usable.length === 0) return { samples, covered: samples.map(() => false) };
-  // spatial grid so the check stays fast with thousands of points
-  const cell = Math.max(opts.bufferM, 10);
-  const latM = rad(1) * R;
-  const key = (lat: number, lng: number) => {
-    const lngM = Math.cos(rad(lat)) * rad(1) * R;
-    return `${Math.floor((lat * latM) / cell)}:${Math.floor((lng * lngM) / cell)}`;
-  };
-  const grid = new Map<string, LngLat[]>();
-  for (const p of usable) {
-    const k = key(p.lat, p.lng);
-    (grid.get(k) ?? grid.set(k, []).get(k)!).push([p.lng, p.lat]);
-  }
-  const covered = samples.map((s) => {
-    const lngM = Math.cos(rad(s[1])) * rad(1) * R;
-    const cy = Math.floor((s[1] * latM) / cell);
-    const cx = Math.floor((s[0] * lngM) / cell);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const list = grid.get(`${cy + dy}:${cx + dx}`);
-        if (list && list.some((q) => haversineM(s, q) <= opts.bufferM)) return true;
+  if (samples.length === 0) return { samples, covered: [] };
+  const cum = [0];
+  for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + haversineM(coords[i - 1], coords[i]));
+  const sAlong = [0];
+  for (let i = 1; i < samples.length; i++) sAlong.push(sAlong[i - 1] + haversineM(samples[i - 1], samples[i]));
+
+  const spans: [number, number][] = [];
+  for (const track of tracks) {
+    let prev: { at: LngLat; along: number } | null = null;
+    for (const f of track) {
+      if (f.acc > opts.maxAccuracyM) continue; // a weak fix says nothing either way
+      const at: LngLat = [f.lng, f.lat];
+      const pr = projectOnLine(at, coords, cum);
+      if (pr.dist > opts.bufferM) {
+        prev = null; // left the line: the walk along it starts again from the next fix on it
+        continue;
       }
+      spans.push([pr.along - opts.reachM, pr.along + opts.reachM]);
+      if (prev && Math.abs(pr.along - prev.along) <= haversineM(prev.at, at) + 2 * opts.reachM) {
+        spans.push([Math.min(prev.along, pr.along), Math.max(prev.along, pr.along)]);
+      }
+      prev = { at, along: pr.along };
     }
-    return false;
-  });
+  }
+  spans.sort((a, b) => a[0] - b[0]);
+  const covered = samples.map(() => false);
+  let k = 0;
+  for (const [lo, hi] of spans) {
+    // samples are in order along the line; spans are sorted by start, so walk both once
+    while (k < samples.length && sAlong[k] < lo) k++;
+    for (let j = k; j < samples.length && sAlong[j] <= hi; j++) covered[j] = true;
+  }
   return { samples, covered };
 }
 
 /**
- * Coverage = share of the segment's length that lies within bufferM of at least
- * one usable GPS point. The end point being reached is not enough on its own.
+ * Coverage = share of the segment's sample points the worker walked past (see coverageMask).
+ * The end point being reached is not enough on its own.
  */
-export function segmentCoverage(coords: LngLat[], points: Pick<GpsPoint, "lat" | "lng" | "acc">[], opts: CoverageOpts): number {
-  const { samples, covered } = coverageMask(coords, points, opts);
+export function segmentCoverage(coords: LngLat[], tracks: FixLike[][], opts: CoverageOpts): number {
+  const { samples, covered } = coverageMask(coords, tracks, opts);
   return samples.length === 0 ? 0 : covered.filter(Boolean).length / samples.length;
 }
 

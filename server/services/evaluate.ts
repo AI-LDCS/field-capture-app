@@ -54,7 +54,7 @@ async function verifiedTracks(assignmentId: string, db?: Db): Promise<Track[]> {
 export async function refreshSegments(assignmentId: string, db?: Db) {
   const segs = await segments(assignmentId, db);
   const tracks = await verifiedTracks(assignmentId, db);
-  const all = tracks.flatMap((t) => t.points);
+  const all = tracks.map((t) => t.points);
 
   await q(
     "DELETE FROM segment_evidence WHERE assignment_segment_id IN (SELECT id FROM assignment_segments WHERE assignment_id = $1)",
@@ -76,7 +76,7 @@ export async function refreshSegments(assignmentId: string, db?: Db) {
     }
     // which stretch of which recording was on this segment (for "jump to segment" in review)
     for (const t of tracks) {
-      const tm = coverageMask(s.coords, t.points, CONFIG.coverage);
+      const tm = coverageMask(s.coords, [t.points], CONFIG.coverage);
       const c = tm.samples.length ? tm.covered.filter(Boolean).length / tm.samples.length : 0;
       const near = t.points.filter(
         (p) => p.acc <= CONFIG.coverage.maxAccuracyM && distToLineM([p.lng, p.lat], s.coords) <= CONFIG.coverage.bufferM,

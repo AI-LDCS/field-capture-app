@@ -137,8 +137,9 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
       }
       const verifiedIds = new Set(verified.map((r) => r.id));
       const localRows = await Promise.all(local.filter((r) => !verifiedIds.has(r.id)).map((r) => gpsOf(r.id).catch(() => [])));
-      const points = [...verified.flatMap((r) => serverRows.current.get(r.id) ?? []), ...localRows.flat()];
-      const m = cur.segments.map((x) => coverageMask(x.coords, points, CONFIG.coverage));
+      // one track per recording, kept apart: coverage never joins the end of one to the start of the next
+      const tracks = [...verified.map((r) => serverRows.current.get(r.id) ?? []), ...localRows];
+      const m = cur.segments.map((x) => coverageMask(x.coords, tracks, CONFIG.coverage));
       if (dead) return;
       setMasks(m);
       setLocalCov(m.map((x) => (x.samples.length ? x.covered.filter(Boolean).length / x.samples.length : 0)));

@@ -88,28 +88,29 @@ describe("distances", () => {
 
 describe("coverage", () => {
   it("walking the whole segment covers it; the end point alone does not", () => {
-    assert.ok(segmentCoverage(east(300), along(300, 10), opts) > 0.99);
+    assert.ok(segmentCoverage(east(300), [along(300, 10)], opts) > 0.99);
     const onlyEnd = [pt(100.5 + mLng(300), LAT)];
-    assert.ok(segmentCoverage(east(300), onlyEnd, opts) < 0.2, "reaching the destination is not walking the route");
+    assert.ok(segmentCoverage(east(300), [onlyEnd], opts) < 0.2, "reaching the destination is not walking the route");
   });
-  it("half walked is about half covered (plus the buffer around the last fix)", () => {
-    const c = segmentCoverage(east(300), along(150, 10), opts);
-    assert.ok(c > 0.5 && c < 0.65, `coverage ${c}`);
+  it("half walked is about half covered (plus reachM past the last fix)", () => {
+    const c = segmentCoverage(east(300), [along(150, 10)], opts);
+    assert.ok(c > 0.5 && c < 0.55, `coverage ${c}`);
   });
   it("points farther than the buffer from the line do not count", () => {
     const off = along(300, 10).map((p) => ({ ...p, lat: p.lat + mLat(opts.bufferM + 5) }));
-    assert.equal(segmentCoverage(east(300), off, opts), 0);
+    assert.equal(segmentCoverage(east(300), [off], opts), 0);
     const near = along(300, 10).map((p) => ({ ...p, lat: p.lat + mLat(opts.bufferM - 5) }));
-    assert.ok(segmentCoverage(east(300), near, opts) > 0.95);
+    assert.ok(segmentCoverage(east(300), [near], opts) > 0.95);
   });
   it("poor-accuracy points are ignored for coverage but nothing breaks", () => {
-    assert.equal(segmentCoverage(east(300), along(300, 10, opts.maxAccuracyM + 1), opts), 0);
-    assert.ok(segmentCoverage(east(300), along(300, 10, opts.maxAccuracyM), opts) > 0.99, "exactly at the limit still counts");
+    assert.equal(segmentCoverage(east(300), [along(300, 10, opts.maxAccuracyM + 1)], opts), 0);
+    assert.ok(segmentCoverage(east(300), [along(300, 10, opts.maxAccuracyM)], opts) > 0.99, "exactly at the limit still counts");
     assert.equal(segmentCoverage(east(300), [], opts), 0);
-    assert.equal(segmentCoverage([], along(300, 10), opts), 0);
+    assert.equal(segmentCoverage(east(300), [[]], opts), 0);
+    assert.equal(segmentCoverage([], [along(300, 10)], opts), 0);
   });
   it("the mask says which parts are covered, so 'where next' can find the gap", () => {
-    const m = coverageMask(east(300), along(120, 10), opts);
+    const m = coverageMask(east(300), [along(120, 10)], opts);
     assert.equal(m.samples.length, m.covered.length);
     assert.equal(m.covered[0], true);
     assert.equal(m.covered[m.covered.length - 1], false);
@@ -125,6 +126,44 @@ describe("coverage", () => {
     const both = coverageFor([east(300)], [first, second])[0];
     assert.ok(both > 0.99, `together ${both}`);
     assert.ok(coverageFor([east(300)], [first])[0] < 0.7);
+  });
+  it("one fix covers only where it lands, not bufferM ahead of the worker", () => {
+    const c = segmentCoverage(east(100), [[pt(100.5 + mLng(50), LAT)]], opts);
+    assert.ok(c <= (2 * opts.reachM + opts.stepM) / 100, `coverage ${c}`);
+  });
+  it("two recordings are never joined: the stretch between them stays open", () => {
+    const a = along(300, 10).filter((p) => p.seq <= 10); // 0-100 m
+    const b = along(300, 10).filter((p) => p.seq >= 20); // 200-300 m
+    const m = coverageMask(east(300), [a, b], opts);
+    const mid = m.samples.findIndex((s) => s[0] >= 100.5 + mLng(150));
+    assert.equal(m.covered[mid], false);
+    assert.ok(segmentCoverage(east(300), [a, b], opts) < 0.75);
+  });
+  it("a short move that lands much further along a bent route does not fill the bend", () => {
+    // a U: 100 m east, 20 m north, 100 m back west; the two long legs are 20 m apart
+    const u: LngLat[] = [
+      [100.5, LAT],
+      [100.5 + mLng(100), LAT],
+      [100.5 + mLng(100), LAT + mLat(20)],
+      [100.5, LAT + mLat(20)],
+    ];
+    const hop = [pt(100.5 + mLng(50), LAT, 5, { seq: 0 }), pt(100.5 + mLng(50), LAT + mLat(20), 5, { seq: 1, t: 1000 })];
+    assert.ok(segmentCoverage(u, [hop], opts) < 0.15);
+  });
+  // Field report: a 61 m segment walked in two recordings with a reload between them. With a 25 m circle
+  // around each fix the bar ran ~35 points ahead and the segment completed with ~60% really walked.
+  it("progress follows the worker on a short route walked in two recordings", () => {
+    const line = east(61);
+    const fix = (m: number, seq: number) => pt(100.5 + mLng(m), LAT + mLat(1), 3, { seq, t: seq * 1000 });
+    const walk = (from: number, to: number, step = 0.9) =>
+      Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => fix(from + i * step, i));
+    const first = walk(9, 26.7);
+    const firstOnly = segmentCoverage(line, [first], opts);
+    assert.ok(firstOnly > 0.3 && firstOnly < 0.55, `after recording 1 (worker at 44%): ${firstOnly}`);
+    const atSixty = segmentCoverage(line, [first, walk(28.5, 37)], opts);
+    assert.ok(atSixty < 0.75, `worker at 60% must not read as done: ${atSixty}`);
+    const done = segmentCoverage(line, [first, walk(28.5, 62.5)], opts);
+    assert.ok(done >= 0.9, `walked to the end: ${done}`);
   });
 });
 

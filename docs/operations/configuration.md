@@ -57,7 +57,8 @@ In `shared/config.ts` (shared by the phone and the server, so they cannot disagr
 | | `windowMs` | 12 000 | length of the stability window |
 | | `minSamples` | 5 | fewest distinct fixes in the window |
 | | `maxSpreadM` | 8 | largest allowed distance from the window's average position |
-| `coverage` | `bufferM` | 25 | a GPS point within this distance covers a part of a segment |
+| `coverage` | `bufferM` | 25 | how far beside a segment a GPS point may be and still count as on it |
+| | `reachM` | 5 | how far along the segment, either side, a single GPS point covers |
 | | `stepM` | 5 | spacing of the samples along a segment |
 | | `defaultMinRatio` | 0.9 | default share of a segment that must be covered |
 | | `maxAccuracyM` | 50 | fixes worse than this are kept and flagged but not counted |

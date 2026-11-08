@@ -8,7 +8,8 @@ export const CONFIG = {
     maxSpreadM: 8, // max distance of any sample from window centroid
   },
   coverage: {
-    bufferM: 25, // GPS point within this distance covers a part of the segment
+    bufferM: 25, // how far beside the line a GPS point may be and still count as on it
+    reachM: 5, // how far along the line, either side, a single GPS point covers
     stepM: 5, // segment densify step
     defaultMinRatio: 0.9,
     maxAccuracyM: 50, // points worse than this are kept but flagged, not counted
