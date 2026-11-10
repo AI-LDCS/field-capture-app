@@ -573,6 +573,9 @@ input[type="checkbox"] {
 .local-rec .row {
   margin-top: 0;
 }
+.skip-form {
+  margin-top: 8px;
+}
 .finish {
   margin-top: 12px;
   padding-top: 4px;

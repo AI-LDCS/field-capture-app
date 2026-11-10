@@ -72,7 +72,8 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
   const [masks, setMasks] = useState<Mask[]>([]);
   const [preflightLocal, setPreflightLocal] = useState<PreflightOutcome | null>(null);
   const [redo, setRedo] = useState(false);
-  const [skipReason, setSkipReason] = useState("");
+  // the segment whose skip form is open, and the reason typed into it
+  const [skipping, setSkipping] = useState<{ segId: string; reason: string } | null>(null);
   const s = useSettings();
   const session = useSession();
   const local = useLocalRecordings(id);
@@ -446,11 +447,37 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
                       Undo skip
                     </button>
                   ) : (
-                    <button className="ghost" onClick={() => void act(() => api.mySkip(id, sg.id, skipReason))}>
-                      Skip
-                    </button>
+                    skipping?.segId !== sg.id && (
+                      <button className="ghost" onClick={() => setSkipping({ segId: sg.id, reason: "" })}>
+                        Skip
+                      </button>
+                    )
                   ))}
               </div>
+              {skipping?.segId === sg.id && !sg.required && !completed && !done && sg.status !== "skipped" && (
+                <form
+                  className="skip-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const reason = skipping.reason;
+                    void act(() => api.mySkip(id, sg.id, reason)).then((d) => d && setSkipping(null));
+                  }}
+                >
+                  <input
+                    autoFocus
+                    maxLength={200}
+                    placeholder={`Why skip segment #${i + 1}? (optional)`}
+                    value={skipping.reason}
+                    onChange={(e) => setSkipping({ segId: sg.id, reason: e.target.value })}
+                  />
+                  <div className="row">
+                    <button type="submit">Confirm skip</button>
+                    <button type="button" className="ghost" onClick={() => setSkipping(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
               <div className="meter">
                 <div style={{ width: `${c * 100}%` }} />
                 <i style={{ left: `${sg.minCoverageRatio * 100}%` }} />
@@ -462,9 +489,6 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
             </div>
           );
         })}
-        {run.segments.some((x) => !x.required) && (
-          <input placeholder="Reason for skipping (optional)" value={skipReason} onChange={(e) => setSkipReason(e.target.value)} />
-        )}
       </section>
 
       <section className="card">

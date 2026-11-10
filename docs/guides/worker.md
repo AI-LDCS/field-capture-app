@@ -15,6 +15,8 @@ The sun, moon and monitor icons at the top choose a Light, Dark or System theme.
 
 **My assignments** lists the routes you were given. Tap one to open its home page: the map, **Start Recording**, the segments and your recordings. **Blue** segments are required, **orange dashed** ones are optional, **green** ones are done, **grey** ones are skipped. If you move the map away, **⌖ Me** brings it back to where you are and **Route** shows the whole route again.
 
+To skip an optional segment from here, tap **Skip** beside it, type why if you like, then tap **Confirm skip**. **Undo skip** puts it back.
+
 ## Start a walk
 
 Go outside to where you will start, then tap **Start Recording** on the assignment's home page. The checks run by themselves:
