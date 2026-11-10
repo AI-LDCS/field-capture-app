@@ -178,7 +178,7 @@ This is smoothing only. It does not know where a sidewalk really is: a bad point
 
 ## The recording screen
 
-While recording, the page becomes a full-screen split: the **map** on top and the **live camera** below, with a draggable divider (position remembered; a swap button flips them). The map shows the worker's position and accuracy, their trail, and each segment coloured by progress. A hint bar shows an arrow and distance to the **nearest uncovered part of the first unfinished segment** and how many metres of it are left, plus warnings (off route, weak GPS). An optional segment can be skipped from the hint bar. Stop needs two taps within three seconds so a stray tap does not end the recording.
+While recording, the page becomes a full-screen split: the **map** on top and the **live camera** below, with a draggable divider (position remembered; a swap button flips them). The map shows the worker's position and accuracy, their trail for this recording (it starts empty and leaves out points worse than `maxAccuracyM`), and each segment coloured by progress. A hint bar shows an arrow and distance to the **nearest uncovered part of the first unfinished segment** and how many metres of it are left, plus warnings (off route, weak GPS). An optional segment can be skipped from the hint bar. Stop needs two taps within three seconds so a stray tap does not end the recording.
 
 ## Dev tools
 

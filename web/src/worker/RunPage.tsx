@@ -67,7 +67,10 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
   const [run, setRun] = useState<AssignmentDetail | null>(null);
   const [offline, setOffline] = useState(false);
   const [fix, setFix] = useState<Fix | null>(null);
-  const [trail, setTrail] = useState<LngLat[]>([]);
+  // the live line on the recording screen, tagged with the recording it belongs to
+  const [trail, setTrail] = useState<{ recordingId: string | null; pts: LngLat[] }>({ recordingId: null, pts: [] });
+  // the lines on the home map: what each recording actually saved
+  const [paths, setPaths] = useState<{ id: string; pts: LngLat[] }[]>([]);
   const [localCov, setLocalCov] = useState<number[]>([]);
   const [masks, setMasks] = useState<Mask[]>([]);
   const [preflightLocal, setPreflightLocal] = useState<PreflightOutcome | null>(null);
@@ -117,13 +120,21 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
     if (s.fake && run?.segments[0]) fakeGps.setStart(run.segments[0].coords[0]);
   }, [s.fake, run?.id]);
 
+  // The trail starts empty with each recording and grows only while it runs.
+  const recordingId = session.active && session.activeAssignmentId === id ? session.active.id : null;
+  const recordingRef = useRef(recordingId);
+  recordingRef.current = recordingId;
+
   useEffect(
     () =>
       gpsSource().subscribe(
         (f) => {
           setGpsDenied(false);
           setFix(f);
-          setTrail((t) => [...t.slice(-400), [f.lng, f.lat]]);
+          // a point too vague to count for coverage is too vague to draw: it only adds spikes
+          const rid = recordingRef.current;
+          if (!rid || f.acc > CONFIG.coverage.maxAccuracyM) return;
+          setTrail((t) => ({ recordingId: rid, pts: [...(t.recordingId === rid ? t.pts.slice(-400) : []), [f.lng, f.lat]] }));
         },
         (_msg, denied) => {
           if (denied) setGpsDenied(true);
@@ -168,11 +179,19 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
         }
       }
       const verifiedIds = new Set(verified.map((r) => r.id));
-      const localRows = await Promise.all(local.filter((r) => !verifiedIds.has(r.id)).map((r) => gpsOf(r.id).catch(() => [])));
+      const stillLocal = local.filter((r) => !verifiedIds.has(r.id));
+      const localRows = await Promise.all(stillLocal.map((r) => gpsOf(r.id).catch(() => [])));
       // one track per recording, kept apart: coverage never joins the end of one to the start of the next
       const tracks = [...verified.map((r) => serverRows.current.get(r.id) ?? []), ...localRows];
+      const trackIds = [...verified.map((r) => r.id), ...stillLocal.map((r) => r.id)];
       const m = cur.segments.map((x) => coverageMask(x.coords, tracks, CONFIG.coverage));
       if (dead) return;
+      setPaths(
+        tracks.map((t, i) => ({
+          id: trackIds[i],
+          pts: t.filter((p) => p.acc <= CONFIG.coverage.maxAccuracyM).map((p): LngLat => [p.lng, p.lat]),
+        })),
+      );
       setMasks(m);
       setLocalCov(m.map((x) => (x.samples.length ? x.covered.filter(Boolean).length / x.samples.length : 0)));
     };
@@ -233,7 +252,7 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
         cov={run.segments.map((_, i) => cov(i))}
         masks={masks}
         fix={fix}
-        trail={trail}
+        trail={trail.recordingId === session.active.id ? trail.pts : []}
         camera={session.camera}
         active={session.active}
         onSkip={async (segId) => {
@@ -399,7 +418,9 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
               </Fragment>
             );
           })}
-          {trail.length > 1 && <Polyline positions={trail.map(ll)} pathOptions={{ color: "#111827", weight: 2 }} />}
+          {paths.map(
+            (p) => p.pts.length > 1 && <Polyline key={p.id} positions={p.pts.map(ll)} pathOptions={{ color: "#111827", weight: 2 }} />,
+          )}
           {fix && <Circle center={[fix.lat, fix.lng]} radius={fix.acc} pathOptions={{ color: "#2563eb", weight: 1, fillOpacity: 0.1 }} />}
           {fix && (
             <AboveArrows>
