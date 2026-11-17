@@ -126,8 +126,8 @@ CI publishes the images to GHCR after the tests pass on `main`, for `linux/amd64
 
 | Image | Tags |
 | --- | --- |
-| `ghcr.io/mai-ru-software-house/field-capture-app` | `latest`, `sha-<commit>` |
-| `ghcr.io/mai-ru-software-house/field-capture-db` | `latest`, `sha-<commit>` |
+| `ghcr.io/ai-ldcs/field-capture-app` | `latest`, `sha-<commit>` |
+| `ghcr.io/ai-ldcs/field-capture-db` | `latest`, `sha-<commit>` |
 
 The images are private. Log in once on each server, with a GitHub token that only has `read:packages`:
 

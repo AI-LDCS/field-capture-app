@@ -2,7 +2,7 @@ name: field-capture
 
 services:
   db:
-    image: ghcr.io/mai-ru-software-house/field-capture-db:${IMAGE_TAG:-latest}
+    image: ghcr.io/ai-ldcs/field-capture-db:${IMAGE_TAG:-latest}
     build: ./db
     restart: unless-stopped
     environment:
@@ -33,7 +33,7 @@ services:
       - rustfs-data:/data
 
   app:
-    image: ghcr.io/mai-ru-software-house/field-capture-app:${IMAGE_TAG:-latest}
+    image: ghcr.io/ai-ldcs/field-capture-app:${IMAGE_TAG:-latest}
     build: .
     restart: unless-stopped
     environment:
