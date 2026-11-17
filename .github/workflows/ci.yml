@@ -96,8 +96,8 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' }}
           provenance: false
           tags: |
-            ghcr.io/mai-ru-software-house/${{ matrix.image }}:latest
-            ghcr.io/mai-ru-software-house/${{ matrix.image }}:sha-${{ steps.commit.outputs.short }}
+            ghcr.io/ai-ldcs/${{ matrix.image }}:latest
+            ghcr.io/ai-ldcs/${{ matrix.image }}:sha-${{ steps.commit.outputs.short }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -128,8 +128,8 @@ jobs:
       - name: Both CPU types are published
         run: |
           for image in field-capture-app field-capture-db; do
-            docker buildx imagetools inspect "ghcr.io/mai-ru-software-house/$image:sha-${GITHUB_SHA::7}" | tee /dev/stderr | grep -q linux/amd64
-            docker buildx imagetools inspect "ghcr.io/mai-ru-software-house/$image:sha-${GITHUB_SHA::7}" | grep -q linux/arm64
+            docker buildx imagetools inspect "ghcr.io/ai-ldcs/$image:sha-${GITHUB_SHA::7}" | tee /dev/stderr | grep -q linux/amd64
+            docker buildx imagetools inspect "ghcr.io/ai-ldcs/$image:sha-${GITHUB_SHA::7}" | grep -q linux/arm64
           done
       - name: Pull and start, as a server does
         run: |
