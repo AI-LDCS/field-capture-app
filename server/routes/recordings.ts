@@ -7,7 +7,7 @@ import { q, q1, tx } from "../db.ts";
 import { kickAssembler } from "../services/assemble.ts";
 import { refreshSegments } from "../services/evaluate.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
-import { sendGpsDownload, sendVideoDownload } from "../services/downloads.ts";
+import { sendGpsDownload, sendVideoDownload, variantOf } from "../services/downloads.ts";
 import { putObject } from "../services/storage.ts";
 
 /** Everything a worker does with a recording. Each route is scoped to recordings the caller owns. */
@@ -92,9 +92,12 @@ workerRecordingsRouter.get("/:id/gps", async (req, res) => {
   );
 });
 
-/** A worker's own files, once they are on the server (verified, and for the video, built). Someone else's id is a 404. */
+/**
+ * A worker's own files, once they are on the server (verified, and for the video, built). Someone else's id is a 404.
+ * The video is the anonymized copy unless `?variant=original` asks for the one the phone recorded.
+ */
 workerRecordingsRouter.get("/:id/download", async (req, res) => {
-  await sendVideoDownload(req, res, await owned(req));
+  await sendVideoDownload(req, res, await owned(req), variantOf(req, "anonymized"));
 });
 workerRecordingsRouter.get("/:id/gps.json", async (req, res) => {
   await sendGpsDownload(req, res, await owned(req));

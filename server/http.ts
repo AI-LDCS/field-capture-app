@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { ZodError } from "zod";
 import { config } from "./config.ts";
@@ -53,6 +54,24 @@ export const requireRole =
     next();
   };
 
+/**
+ * The anonymizer worker's routes. They accept the bearer token only (never a session cookie, see
+ * requireAnonymizerToken), so a browser cannot be tricked into acting through them, and the CSRF checks
+ * below do not apply: the worker is not a browser, so it sends no Origin and uploads raw video.
+ */
+const isAnonymizerCall = (req: Request) => req.originalUrl.startsWith("/api/anonymizer/");
+
+/** Off (404) until ANONYMIZER_TOKEN is set. The token is compared by digest, in constant time. */
+export const requireAnonymizerToken: RequestHandler = (req, _res, next) => {
+  const want = config.anonymizer.token;
+  if (!want) return next(notFound("no such endpoint"));
+  const m = /^Bearer (.+)$/.exec(String(req.headers.authorization ?? ""));
+  if (!m) return next(new HttpError(401, "unauthenticated", "bearer token required"));
+  const digest = (s: string) => crypto.createHash("sha256").update(s).digest();
+  if (!crypto.timingSafeEqual(digest(m[1]), digest(want))) return next(new HttpError(401, "bad_token", "wrong token"));
+  next();
+};
+
 const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
@@ -61,6 +80,7 @@ const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  */
 export const csrfGuard: RequestHandler = (req, _res, next) => {
   if (!UNSAFE.has(req.method)) return next();
+  if (isAnonymizerCall(req)) return next();
   const origin = req.headers.origin;
   if (origin) {
     if (!config.publicOrigins.includes(origin.replace(/\/$/, ""))) return next(new HttpError(403, "bad_origin", "origin not allowed"));

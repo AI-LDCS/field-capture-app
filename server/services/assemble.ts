@@ -162,7 +162,8 @@ async function assemble(id: string) {
 
     // 4. only now is the chunk copy redundant
     await q(
-      "UPDATE recordings SET assembly_state = 'done', file_key = $1, file_bytes = $2, file_sha256 = $3, file_mime = $4, chunks_purged = true WHERE id = $5",
+      // the anonymizer worker picks it up from here (anon_state 'pending'); an earlier run's result is never reset
+      "UPDATE recordings SET assembly_state = 'done', file_key = $1, file_bytes = $2, file_sha256 = $3, file_mime = $4, chunks_purged = true, anon_state = CASE WHEN anon_state = 'none' THEN 'pending' ELSE anon_state END WHERE id = $5",
       [key, total, hash.digest("hex"), baseMime(rec.mime), id],
     );
     await deleteObjects(chunks.map((c) => c.object_key));

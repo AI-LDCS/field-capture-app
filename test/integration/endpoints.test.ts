@@ -413,6 +413,7 @@ describe("every endpoint refuses bad input and missing login", () => {
       ["GET", `/api/admin/recordings/${NIL}/download`],
       ["GET", `/api/admin/recordings/${NIL}/gps.json`],
       ["POST", `/api/admin/recordings/${NIL}/reassemble`],
+      ["POST", `/api/admin/recordings/${NIL}/reanonymize`],
       ["GET", `/api/admin/route-versions/${NIL}`],
     ] as const) {
       assert.equal((await new Client(t.base).req(m, p, m === "GET" ? undefined : {})).status, 401, `anon ${m} ${p}`);

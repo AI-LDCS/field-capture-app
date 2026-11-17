@@ -49,7 +49,7 @@ What the system protects, how, and what it deliberately does **not** protect. Wr
 - Every `/api/admin` route requires an admin; every `/api/me` route requires a worker. Checks run on the server; the web app hiding a button is not a control.
 - **Ownership**: every worker query is scoped to the signed-in worker (`assignments.user_id`, `recordings.user_id`). Another worker's assignment or recording answers `404`, identical to a missing one, and registering a recording id that belongs to someone else also answers `404` (never "existing"), so ids cannot be probed.
 - **Admins manage workers only.** There is no admin-creates-admin feature.
-- **Workers download only what the server already holds, and only their own.** `GET /api/me/recordings/:id/download` and `/gps.json` answer only for the caller's own recording once it is verified (and, for video, built); another worker's id is a `404`. Nothing on the phone is exported before the server has verified it, there is no playback route for workers, and exports of whole assignments stay admin-only. Every download is audited, marked as made by a worker.
+- **Workers download only what the server already holds, and only their own.** `GET /api/me/recordings/:id/download` and `/gps.json` answer only for the caller's own recording once it is verified (and, for video, built); another worker's id is a `404`. The video is the anonymized copy by default; the original needs `?variant=original`, and the default never falls back to it while the copy is still being made. Nothing on the phone is exported before the server has verified it, there is no playback route for workers, and exports of whole assignments stay admin-only. Every download is audited, marked as made by a worker and with the variant.
 
 ## Request safety
 
@@ -97,3 +97,13 @@ What the system protects, how, and what it deliberately does **not** protect. Wr
 - [ ] Test or seed accounts were removed or had their passwords reset.
 - [ ] Backups run and a restore has been tried ([operations](../operations/runbook.md#backup-and-restore)).
 - [ ] A production map tile provider is configured.
+
+## The anonymizer worker
+
+The machine that hides faces and plates is the only non-browser caller of the API, and the only one that can read every original.
+
+- **Bearer token, not a login.** `/api/anonymizer/*` accepts `Authorization: Bearer <ANONYMIZER_TOKEN>` and nothing else; a session cookie, even an admin's, answers `401`. The token is compared by SHA-256 digest in constant time. Without `ANONYMIZER_TOKEN` the routes answer `404`, so a deployment that does not run the worker exposes nothing.
+- **CSRF is skipped for that prefix** because it is never reachable with a cookie; the same guard still applies to everything else.
+- **One recording at a time, only while claimed.** The worker can read an original only for the recording it claimed, and only while its lease is valid. A lease that ran out is rejected (`409 lease_lost`), so a stuck or replaced worker cannot read, overwrite or finish a job that now belongs to another.
+- **Uploads are verified.** A result must match its `Content-Length` and SHA-256, is streamed into storage with nothing visible under its key until it is complete, and is rejected otherwise.
+- **The token is powerful.** Anyone who has it can read every original video. Keep it only on the anonymizer machine, send it only over HTTPS (the tailnet or public proxy), and rotate it by changing `.env` and restarting the app. Detection is not perfect (the model's recall is 0.61 for faces and 0.70 for plates in its authors' tests), so the anonymized copy is a risk reduction, not a guarantee; see [anonymizer](../operations/anonymizer.md#what-it-does-not-promise).

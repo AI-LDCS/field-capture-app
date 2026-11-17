@@ -45,7 +45,7 @@ get_var() { sed -n "s/^$1=//p" "${2:-$WORK}" | head -n 1; }
 
 if [ -f "$ENV_FILE" ]; then
   say "$ENV_FILE already exists."
-  say "Re-seeding replaces POSTGRES_PASSWORD and the S3 keys. Those only take effect on a fresh"
+  say "Re-seeding replaces POSTGRES_PASSWORD, the S3 keys and ANONYMIZER_TOKEN (the anonymizer machine must be given the new one). Those only take effect on a fresh"
   say "database / storage volume; an existing volume keeps the old ones. The old file is kept as $ENV_FILE.bak."
   ask "Replace the secrets in $ENV_FILE? [y/N] "
   case "$REPLY" in y|Y|yes|YES) ;; *) say "left $ENV_FILE untouched."; exit 0 ;; esac
@@ -87,6 +87,7 @@ DB_PW="$(rand_hex 24)"
 set_var POSTGRES_PASSWORD "$DB_PW"
 set_var S3_ACCESS_KEY "$(rand_hex 10)"
 set_var S3_SECRET_KEY "$(rand_hex 20)"
+set_var ANONYMIZER_TOKEN "$(rand_hex 32)"
 set_var ADMIN_PASSWORD "$ADMIN_PW"
 
 # DATABASE_URL (host development) carries the same database password.
@@ -102,7 +103,7 @@ mv "$WORK" "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
 say ""
-say "wrote $ENV_FILE (mode 600) with new POSTGRES_PASSWORD, DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, ADMIN_PASSWORD."
+say "wrote $ENV_FILE (mode 600) with new POSTGRES_PASSWORD, DATABASE_URL, S3_ACCESS_KEY, S3_SECRET_KEY, ANONYMIZER_TOKEN, ADMIN_PASSWORD."
 say "admin username: $(get_var ADMIN_USERNAME "$ENV_FILE")"
 if [ "$ADMIN_GENERATED" = 1 ]; then
   say "admin password: $ADMIN_PW"

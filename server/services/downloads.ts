@@ -7,10 +7,28 @@ import { getObject } from "./storage.ts";
 /** Shared by the admin and worker download routes: what is ready, what a file is called, and how it is sent. */
 export const extOf = (mime: string) => (String(mime).includes("mp4") ? "mp4" : "webm");
 
-export function ready(rec: any) {
+/** Which file of a recording: the one the phone recorded, or the copy with faces and plates hidden. */
+export type Variant = "original" | "anonymized";
+
+/** `?variant=original|anonymized`. Each route says which one it gives when none is asked for. */
+export function variantOf(req: Request, fallback: Variant): Variant {
+  const v = req.query.variant;
+  if (v === undefined) return fallback;
+  if (v === "original" || v === "anonymized") return v;
+  throw new HttpError(400, "bad_variant", "variant is original or anonymized");
+}
+
+/** Checks the recording can be served as `variant`, and says where the file is. Never falls back to the other variant. */
+export function ready(rec: any, variant: Variant = "original") {
   if (rec.status !== "server_verified") throw new HttpError(409, "not_verified", "this recording is not verified yet");
-  if (rec.assembly_state !== "done" || !rec.file_key)
-    throw new HttpError(409, "not_ready", `the video is still being prepared (${rec.assembly_state})`);
+  if (variant === "original") {
+    if (rec.assembly_state !== "done" || !rec.file_key)
+      throw new HttpError(409, "not_ready", `the video is still being prepared (${rec.assembly_state})`);
+    return { key: rec.file_key as string, bytes: Number(rec.file_bytes) };
+  }
+  if (rec.anon_state !== "done" || !rec.anon_key)
+    throw new HttpError(409, "not_anonymized", `the anonymized video is not ready yet (${rec.anon_state})`);
+  return { key: rec.anon_key as string, bytes: Number(rec.anon_bytes) };
 }
 
 /** GPS with wall-clock and video-relative time so it can be matched to the footage. */
@@ -38,20 +56,20 @@ export async function gpsExport(rec: any) {
 }
 
 /** The assembled video as an attachment, audited. `rec` must already be checked for access. */
-export async function sendVideoDownload(req: Request, res: Response, rec: any) {
-  ready(rec);
-  const obj = await getObject(rec.file_key);
+export async function sendVideoDownload(req: Request, res: Response, rec: any, variant: Variant) {
+  const file = ready(rec, variant);
+  const obj = await getObject(file.key);
   await audit(
     req.user!.id,
     "recording_downloaded",
     { type: "recording", id: rec.id },
-    req.user!.role === "admin" ? undefined : { by: "worker" },
+    { variant, ...(req.user!.role === "admin" ? {} : { by: "worker" }) },
     req.ip,
   );
   res.set({
     "Content-Type": rec.file_mime,
     "Content-Length": String(obj.length),
-    "Content-Disposition": `attachment; filename="recording-${rec.id.slice(0, 8)}.${extOf(rec.mime)}"`,
+    "Content-Disposition": `attachment; filename="recording-${rec.id.slice(0, 8)}${variant === "anonymized" ? "-anonymized" : ""}.${extOf(rec.mime)}"`,
   });
   res.on("close", () => obj.body.destroy());
   obj.body.pipe(res);

@@ -3,20 +3,20 @@
 All endpoints are JSON over HTTPS, served by the same Node process as the web app. This page lists every endpoint. A test (`test/repo/docs.test.ts`) fails if an endpoint exists that is not listed here, and `npm test` fails if an endpoint has no test (see [testing](../development/testing.md)).
 
 - [Conventions](#conventions)
-- [Health](#health) · [Auth](#auth) · [Admin: workers](#admin-workers) · [Admin: routes](#admin-routes-and-versions) · [Admin: assignments](#admin-assignments) · [Admin: recordings](#admin-recordings) · [Worker: assignments](#worker-assignments) · [Worker: recordings](#worker-recordings)
+- [Health](#health) · [Auth](#auth) · [Admin: workers](#admin-workers) · [Admin: routes](#admin-routes-and-versions) · [Admin: assignments](#admin-assignments) · [Admin: recordings](#admin-recordings) · [Worker: assignments](#worker-assignments) · [Worker: recordings](#worker-recordings) · [Anonymizer worker](#anonymizer-worker)
 - [Error codes](#error-codes)
 
 Shapes named in **bold** (for example **AssignmentDetail**) are the TypeScript types in `shared/types.ts`.
 
 ## Conventions
 
-**Authentication.** A session cookie (`__Host-sid` over HTTPS, `sid` on plain-http development) set by `POST /api/auth/login`. It is `HttpOnly`, `Secure`, `SameSite=Lax`. There are no API keys or tokens.
+**Authentication.** A session cookie (`__Host-sid` over HTTPS, `sid` on plain-http development) set by `POST /api/auth/login`. It is `HttpOnly`, `Secure`, `SameSite=Lax`. There are no API keys. The one exception is the anonymizer worker (see [Anonymizer worker](#anonymizer-worker)), which is a machine, not a person, and sends a bearer token instead.
 
 **Roles.** `admin` and `worker`. Routes under `/api/admin` need an admin; routes under `/api/me` need a worker. A wrong role answers `403 forbidden`, no login answers `401 unauthenticated`. A worker asking for another worker's assignment or recording gets `404 not_found`, never `403`, so ids cannot be probed.
 
 **State-changing requests** (`POST`, `PUT`, `PATCH`, `DELETE`) must pass the CSRF guard:
 - the `Origin` header must be one of `PUBLIC_ORIGINS` (a request with no `Origin` is accepted only if `Sec-Fetch-Site` is `same-origin` or `none`), otherwise `403 bad_origin`;
-- a request body must be `application/json`, otherwise `415 json_required`. The single exception is `PUT /api/me/recordings/:id/chunks/:seq`, which takes `application/octet-stream`.
+- a request body must be `application/json`, otherwise `415 json_required`. The exceptions are `PUT /api/me/recordings/:id/chunks/:seq`, which takes `application/octet-stream`, and everything under `/api/anonymizer`, which is not a browser: it is called with a bearer token, no cookie, and the CSRF checks are skipped for it (a cookie can never authenticate those routes).
 
 **Errors** are always JSON: `{ "error": "<code>", "message": "<human text>", ...extra }`. Validation failures are `400 invalid_input` with the offending fields in `message`. Database rules that refuse a change (immutable versions, unique names, check constraints) answer `409`. Codes are listed [at the end](#error-codes).
 
@@ -133,7 +133,7 @@ Retires a published version: it can no longer be assigned, existing assignments 
 
 **AssignmentDetail** = AssignmentSummary plus `{ reasons[], preflight, quality, completedAt, recordings: RecordingSummary[], segments: [{ id, routeSegmentId, order, name, required, status, skipReason, completedAt, coords, minCoverageRatio, lengthM, coverage, evidence: [{ recordingId, coverage, firstTMs, lastTMs }] }] }`. Segment `coords` are the stored (smoothed) line the worker must walk.
 
-**RecordingSummary** = `{ id, status ("uploading" | "server_verified"), startedAtMs, endedAtMs, chunkCount, bytes, gpsCount, simulated, stopReason, assembly ("none" | "pending" | "running" | "done" | "failed"), fileBytes }`.
+**RecordingSummary** = `{ id, status ("uploading" | "server_verified"), startedAtMs, endedAtMs, chunkCount, bytes, gpsCount, simulated, stopReason, assembly ("none" | "pending" | "running" | "done" | "failed"), fileBytes, anonymization (the same five values, for the copy with faces and plates hidden), anonymizedBytes }`.
 
 ### GET /api/admin/assignments
 Query `status` and `userId` (both optional). `200 AssignmentSummary[]`, newest first, at most 500. A malformed `userId` answers `404`.
@@ -168,22 +168,25 @@ Download: `assignment.json`, one `gps-N-<id>.json` per verified recording, and t
 Video leaves the system only through these routes, and each view or download is written to the audit log.
 
 ### GET /api/admin/recordings
-`200` list of every **verified** recording, newest first (at most 1000): `{ id, assignmentId, verifiedAt, startedAtMs, endedAtMs, gpsCount, fileBytes, assembly, simulated, worker: { id, username, displayName, deleted }, route: { name, version, deleted } }`. It lists what can be downloaded; the bytes come from the routes below. Used by the Downloads page.
+`200` list of every **verified** recording, newest first (at most 1000): `{ id, assignmentId, verifiedAt, startedAtMs, endedAtMs, gpsCount, fileBytes, assembly, anonymization, anonymizedBytes, simulated, worker: { id, username, displayName, deleted }, route: { name, version, deleted } }`. It lists what can be downloaded; the bytes come from the routes below. Used by the Downloads page.
 
 ### GET /api/admin/recordings/:id/gps
 `200` list of `{ seq, t, lat, lng, acc }`.
 
 ### GET /api/admin/recordings/:id/video
-Streams the assembled video. Supports `Range` and answers `206` with `Content-Range` and `Accept-Ranges: bytes` (needed for seeking and for iOS Safari). `416` for a range past the end. `409 not_verified`, or `409 not_ready` while the file is still being built. Audited as `recording_viewed` (once per play, not per range request).
+Streams the assembled video: the original, or with `?variant=anonymized` the anonymized copy (`400 bad_variant` for any other value; `409 not_anonymized` until that copy exists, and it never falls back to the original). Supports `Range` and answers `206` with `Content-Range` and `Accept-Ranges: bytes` (needed for seeking and for iOS Safari). `416` for a range past the end. `409 not_verified`, or `409 not_ready` while the file is still being built. Audited as `recording_viewed` with `details.variant` (once per play, not per range request).
 
 ### GET /api/admin/recordings/:id/download
-The same file as an attachment. Audited as `recording_downloaded`.
+The same file as an attachment. The original by default (`recording-<id>.webm`); `?variant=anonymized` gives the anonymized copy (`recording-<id>-anonymized.webm`), with the same errors as `/video`. Audited as `recording_downloaded` with `details.variant`.
 
 ### GET /api/admin/recordings/:id/gps.json
 GPS as an attachment: `{ recordingId, assignmentId, mime, simulated, videoStartedAt, videoStartedAtMs, note, points: [{ seq, timestamp, timestampMs, latitude, longitude, accuracyM, videoTimeS }] }`. `videoTimeS` is seconds from the start of the video, so points line up with the footage. Audited as `gps_downloaded`.
 
 ### POST /api/admin/recordings/:id/reassemble
 Starts the video build again for a recording whose build `failed` and whose chunks are still stored. `200 { ok: true }`. `409 cannot_reassemble` if the recording is not verified or its chunks were already cleaned up after a good build.
+
+### POST /api/admin/recordings/:id/reanonymize
+Queues the anonymized copy again, with its attempts reset, for a built recording whose anonymization `failed` (or was never queued). `200 { ok: true }`. `409 cannot_reanonymize` for anything else. Audited as `recording_anonymize_requeued`.
 
 ## Worker: assignments
 
@@ -222,7 +225,7 @@ Errors: `404` if the assignment is not the caller's **or** the id already belong
 `200` list of `{ seq, t, lat, lng, acc }`: the worker's own track (used to draw what is already covered). Not a download; see `gps.json` below.
 
 ### GET /api/me/recordings/:id/download
-The worker's own video as an attachment, only once the server holds it: `409 not_verified` before verification, `409 not_ready` while the file is still being built. Another worker's recording is `404`, the same as a missing one. Audited as `recording_downloaded` with `details.by = "worker"`. There is no playback route for workers.
+The worker's own video as an attachment, only once the server holds it. By default it is the **anonymized** copy; `?variant=original` gives the video as the phone recorded it (`400 bad_variant` for any other value). `409 not_verified` before verification; `409 not_ready` while the original is still being built; `409 not_anonymized` while the anonymized copy is not ready (the default never falls back to the original). Another worker's recording is `404`, the same as a missing one. Audited as `recording_downloaded` with `details.by = "worker"` and `details.variant`. There is no playback route for workers.
 
 ### GET /api/me/recordings/:id/gps.json
 The worker's own GPS as an attachment (the same file the admin gets: points with `videoTimeS`). `409 not_verified` before verification, `404` for someone else's recording. Audited as `gps_downloaded` with `details.by = "worker"`.
@@ -244,6 +247,27 @@ Body `{ startedAt?, endedAt?, stopReason?, chunks: [{ seq, sha256 }], gpsCount }
 ### DELETE /api/me/recordings/:id
 Drops a recording that never received a chunk. `200 { ok: true }`. `409 has_chunks`, `409 already_verified`.
 
+## Anonymizer worker
+
+The machine that hides faces and plates (`worker.py` next to `anonymize.py`, run on the GPU computer; see [anonymizer](../operations/anonymizer.md)). Every route needs `Authorization: Bearer <ANONYMIZER_TOKEN>`; a session cookie does not work. Until `ANONYMIZER_TOKEN` is set the whole prefix answers `404 not_found`; without a bearer header it is `401 unauthenticated`, and a wrong token is `401 bad_token`.
+
+A claim is a **lease**. `POST /claim` returns a `leaseId`; every later call for that recording sends it as the `x-lease-id` header (`400 bad_lease` if it is missing or malformed). A lease runs out after `ANON_LEASE_MINUTES` of silence, and then another claim can take the job, so the old worker's calls answer `409 lease_lost` and cannot finish it.
+
+### POST /api/anonymizer/claim
+Takes the oldest built recording that is waiting. `200 { id, leaseId, leaseSeconds, attempt, ext, mime, bytes, sha256 }` (`bytes` and `sha256` describe the original, so the worker can check its download), or `204` with no body when nothing is waiting. Claims that ran out are first given back, or failed once they have used their 3 attempts. Audited as `recording_anonymize_started`.
+
+### GET /api/anonymizer/:id/source
+Streams the original video to the worker that holds the claim. `409 not_claimed` if nobody does, `409 lease_lost` for a lease that is stale or someone else's.
+
+### POST /api/anonymizer/:id/heartbeat
+"Still working": pushes the lease out by `leaseSeconds`. `200 { ok: true, leaseSeconds }`. The same `409` errors as `/source`.
+
+### PUT /api/anonymizer/:id/result
+Body: the anonymized video, raw bytes, `Content-Type: application/octet-stream`. Headers: `x-lease-id`, `x-sha256` (hex SHA-256 of the body), `Content-Length` (required, `411 length_required` without it), and optionally `x-anon-mode` (a lowercase word such as `solid`). The body streams into storage and is never held in memory. Checks, in this order: `400 bad_checksum` (missing or malformed `x-sha256`), `400 bad_mode`, then after the bytes have arrived `422 size_mismatch` (length differs from `Content-Length`) and `422 checksum_mismatch`. A failed check stores nothing and leaves the claim as it was. If the lease ran out during the upload, `409 lease_lost` and the file is deleted. `200 { ok: true }` records the copy next to the original (`rec/<id>/anon-<lease>.<ext>`) and marks the job `done`. Audited as `recording_anonymized`.
+
+### POST /api/anonymizer/:id/fail
+Body `{ error }` (up to 500 characters). Gives the claim up. The job goes back in the queue while it has attempts left, otherwise it is `failed` until an admin queues it again. `200 { ok: true, retry: boolean }`. Audited as `recording_anonymize_failed`.
+
 ## Error codes
 
 | Status | Code | Meaning |
@@ -255,7 +279,10 @@ Drops a recording that never received a chunk. `200 { ok: true }`. `409 has_chun
 | 400 | `required_segment` | tried to skip a required segment |
 | 400 | `wrong_password`, `same_password` | admin password change |
 | 400 | `dev_tools_off` | simulated recording sent while dev tools are off |
+| 400 | `bad_variant` | `?variant=` is neither `original` nor `anonymized` |
+| 400 | `bad_lease`, `bad_checksum`, `bad_mode` | the anonymizer worker sent a missing or malformed lease, `x-sha256` or `x-anon-mode` |
 | 401 | `unauthenticated`, `invalid_credentials` | no or bad login |
+| 401 | `bad_token` | the anonymizer worker's bearer token is wrong |
 | 403 | `forbidden` | wrong role |
 | 403 | `bad_origin` | CSRF origin check failed |
 | 404 | `not_found` | unknown id, or not yours |
@@ -265,8 +292,11 @@ Drops a recording that never received a chunk. `200 { ok: true }`. `409 has_chun
 | 409 | `worker_inactive` | assigning to a deactivated worker |
 | 409 | `seq_conflict`, `already_verified`, `has_chunks`, `manifest_mismatch` | recording upload state |
 | 409 | `not_verified`, `not_ready`, `cannot_reassemble`, `nothing_to_export` | video or export not available |
+| 409 | `not_anonymized`, `cannot_reanonymize` | the anonymized copy is not ready; or it cannot be queued again |
+| 409 | `not_claimed`, `lease_lost` | the anonymizer worker does not hold the claim (nobody does, or it ran out or belongs to another worker) |
+| 411 | `length_required` | the anonymizer result was sent without a `Content-Length` |
 | 413 | `too_large` | body over the size limit (JSON 2 MB, chunk 32 MiB) |
 | 415 | `json_required` | wrong content type |
-| 422 | `checksum_mismatch` | chunk bytes do not match `x-sha256` |
+| 422 | `checksum_mismatch`, `size_mismatch` | chunk or anonymized-result bytes do not match `x-sha256` or `Content-Length` |
 | 429 | `too_many_attempts` | login lockout |
 | 500 | `server_error` | a bug; check the app log |

@@ -104,4 +104,5 @@ export const api = {
   reEvaluate: (id: string) => post<AssignmentDetail>(`/api/admin/assignments/${id}/re-evaluate`),
   downloads: () => get<DownloadRow[]>("/api/admin/recordings"),
   reassemble: (rid: string) => post(`/api/admin/recordings/${rid}/reassemble`),
+  reanonymize: (rid: string) => post(`/api/admin/recordings/${rid}/reanonymize`),
 };

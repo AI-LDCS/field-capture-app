@@ -598,7 +598,12 @@ describe("worker downloads", () => {
     const id = await upload(mine.client, asg.id, chunks, walk(await curveOf(mine.client, asg.id)));
     await assembled(id);
 
-    const video = await mine.client.get(`/api/me/recordings/${id}/download`);
+    // the default is the anonymized copy, and it does not exist yet; the original is the worker's own, so it is theirs to take
+    const notYet = await mine.client.get(`/api/me/recordings/${id}/download`);
+    assert.equal(notYet.status, 409);
+    assert.equal(notYet.body.error, "not_anonymized");
+    assert.equal((await mine.client.get(`/api/me/recordings/${id}/download?variant=nonsense`)).status, 400);
+    const video = await mine.client.get(`/api/me/recordings/${id}/download?variant=original`);
     assert.equal(video.status, 200);
     assert.match(video.headers.get("content-disposition") ?? "", /attachment; filename="recording-[0-9a-f]{8}\.webm"/);
     assert.ok(video.bytes.equals(Buffer.concat(chunks)), "the same bytes that were uploaded");
@@ -627,7 +632,7 @@ describe("worker downloads", () => {
 
     // verified but the video is still being built: the GPS is available, the video says so
     await t.pool.query("UPDATE recordings SET assembly_state = 'pending' WHERE id = $1", [id]);
-    const early = await mine.client.get(`/api/me/recordings/${id}/download`);
+    const early = await mine.client.get(`/api/me/recordings/${id}/download?variant=original`);
     assert.equal(early.status, 409);
     assert.equal(early.body.error, "not_ready");
     assert.equal((await mine.client.get(`/api/me/recordings/${id}/gps.json`)).status, 200);

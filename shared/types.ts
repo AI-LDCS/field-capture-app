@@ -86,6 +86,9 @@ export type RecordingSummary = {
   stopReason: string | null;
   assembly: "none" | "pending" | "running" | "done" | "failed";
   fileBytes: number | null;
+  /** The copy with faces and plates hidden, made by a separate worker after the video is built. */
+  anonymization: "none" | "pending" | "running" | "done" | "failed";
+  anonymizedBytes: number | null;
 };
 
 /** One verified recording in the admin Downloads list. */
@@ -98,6 +101,8 @@ export type DownloadRow = {
   gpsCount: number;
   fileBytes: number | null;
   assembly: RecordingSummary["assembly"];
+  anonymization: RecordingSummary["anonymization"];
+  anonymizedBytes: number | null;
   simulated: boolean;
   worker: { id: string; username: string; displayName: string; deleted: boolean };
   route: { name: string; version: number; deleted: boolean };

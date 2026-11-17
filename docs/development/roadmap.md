@@ -18,6 +18,7 @@ What is built, what is known to be missing, and what is planned next. Nothing he
 
 - Skipping an optional segment needs a connection (recording and upload do not).
 - No service worker: the app needs a connection to load.
+- Originals are kept after the anonymized copy is made, and workers can still download them. Whether originals should be deleted (or workers limited to the anonymized copy) is undecided; the worker's `?variant=original` is the one place to change.
 - No admin delete for recordings or assignments, no automatic retention or cleanup of unfinished recordings and orphan chunk objects.
 - No global audit screen, no storage usage page, no dashboard of assignments needing attention.
 - No password reset by email and no two-factor login (an admin resets worker passwords).

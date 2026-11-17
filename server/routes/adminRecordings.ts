@@ -5,12 +5,13 @@ import { kickAssembler } from "../services/assemble.ts";
 import { q, q1 } from "../db.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
 import { getObject } from "../services/storage.ts";
-import { extOf, gpsExport, ready, sendGpsDownload, sendVideoDownload } from "../services/downloads.ts";
+import { extOf, gpsExport, ready, sendGpsDownload, sendVideoDownload, variantOf } from "../services/downloads.ts";
 import { detail } from "./assignments.ts";
 
 /**
- * Video and data leave the system only here, for admins, and every view or download is audited.
- * No worker route returns recording bytes.
+ * Admins can reach every file here: the original video, the anonymized copy (`?variant=anonymized`), and the GPS.
+ * A worker gets only their own recordings from /api/me, anonymized by default; the anonymizer worker reads the
+ * original through /api/anonymizer. Every view or download is audited.
  */
 export const adminRecordingsRouter = Router();
 
@@ -31,6 +32,7 @@ const LIST_LIMIT = 1000;
 adminRecordingsRouter.get("/", async (_req, res) => {
   const rows = await q(
     `SELECT r.id, r.assignment_id, r.verified_at, r.started_at_ms, r.ended_at_ms, r.gps_count, r.file_bytes, r.assembly_state, r.simulated,
+            r.anon_state, r.anon_bytes, r.anon_error, r.anon_attempts,
             u.id AS user_id, u.username, u.display_name, (u.deleted_at IS NOT NULL) AS user_deleted,
             v.name AS route_name, v.version, (rt.deleted_at IS NOT NULL) AS route_deleted
        FROM recordings r
@@ -51,6 +53,8 @@ adminRecordingsRouter.get("/", async (_req, res) => {
       gpsCount: r.gps_count ?? 0,
       fileBytes: r.file_bytes === null ? null : Number(r.file_bytes),
       assembly: r.assembly_state,
+      anonymization: r.anon_state,
+      anonymizedBytes: r.anon_bytes === null ? null : Number(r.anon_bytes),
       simulated: r.simulated,
       worker: { id: r.user_id, username: r.username, displayName: r.display_name, deleted: r.user_deleted },
       route: { name: r.route_name, version: r.version, deleted: r.route_deleted },
@@ -71,23 +75,24 @@ adminRecordingsRouter.get("/:id/gps", async (req, res) => {
   );
 });
 
-/** Range-aware proxy: browsers (iOS Safari especially) will not play video without real 206 responses. */
+/** Range-aware proxy: browsers (iOS Safari especially) will not play video without real 206 responses. The original unless `?variant=anonymized`. */
 adminRecordingsRouter.get("/:id/video", async (req: Request, res: Response) => {
   const rec = await recording(req);
-  ready(rec);
+  const variant = variantOf(req, "original");
+  const file = ready(rec, variant);
   const range = typeof req.headers.range === "string" ? req.headers.range : undefined;
   let obj: Awaited<ReturnType<typeof getObject>>;
   try {
-    obj = await getObject(rec.file_key, range);
+    obj = await getObject(file.key, range);
   } catch (e: any) {
     if (e?.$metadata?.httpStatusCode === 416) {
-      res.status(416).set("Content-Range", `bytes */${rec.file_bytes}`).end();
+      res.status(416).set("Content-Range", `bytes */${file.bytes}`).end();
       return;
     }
     throw e;
   }
   if (!range || /^bytes=0-/.test(range))
-    await audit(req.user!.id, "recording_viewed", { type: "recording", id: rec.id }, undefined, req.ip);
+    await audit(req.user!.id, "recording_viewed", { type: "recording", id: rec.id }, { variant }, req.ip);
   res.status(obj.status).set({
     "Content-Type": rec.file_mime,
     "Accept-Ranges": "bytes",
@@ -99,8 +104,9 @@ adminRecordingsRouter.get("/:id/video", async (req: Request, res: Response) => {
   obj.body.pipe(res);
 });
 
+/** The original unless `?variant=anonymized`. */
 adminRecordingsRouter.get("/:id/download", async (req, res) => {
-  await sendVideoDownload(req, res, await recording(req));
+  await sendVideoDownload(req, res, await recording(req), variantOf(req, "original"));
 });
 
 adminRecordingsRouter.get("/:id/gps.json", async (req, res) => {
@@ -113,6 +119,16 @@ adminRecordingsRouter.post("/:id/reassemble", async (req, res) => {
   if (rec.status !== "server_verified" || rec.chunks_purged) throw new HttpError(409, "cannot_reassemble", "nothing to rebuild");
   await q("UPDATE recordings SET assembly_state = 'pending', assembly_error = NULL WHERE id = $1 AND assembly_state = 'failed'", [rec.id]);
   void kickAssembler();
+  res.json({ ok: true });
+});
+
+/** Queue the anonymized copy again after it failed (or if it was never queued). The attempts start over. */
+adminRecordingsRouter.post("/:id/reanonymize", async (req, res) => {
+  const rec = await recording(req);
+  if (rec.status !== "server_verified" || rec.assembly_state !== "done" || !["failed", "none"].includes(rec.anon_state))
+    throw new HttpError(409, "cannot_reanonymize", "only a built recording whose anonymized copy failed can be queued again");
+  await q("UPDATE recordings SET anon_state = 'pending', anon_attempts = 0, anon_error = NULL WHERE id = $1", [rec.id]);
+  await audit(req.user!.id, "recording_anonymize_requeued", { type: "recording", id: rec.id }, undefined, req.ip);
   res.json({ ok: true });
 });
 
@@ -161,6 +177,9 @@ async function runExport(assignmentId: string) {
         bytes: r.file_bytes === null ? null : Number(r.file_bytes),
         sha256: r.file_sha256,
         file: r.assembly_state === "done" ? `recording-${i + 1}-${r.id.slice(0, 8)}.${extOf(r.mime)}` : null,
+        anonymizedBytes: r.anon_bytes === null ? null : Number(r.anon_bytes),
+        anonymizedSha256: r.anon_sha256,
+        anonymizedFile: r.anon_state === "done" ? `recording-${i + 1}-${r.id.slice(0, 8)}-anonymized.${extOf(r.mime)}` : null,
         ...(await gpsExport(r)),
       })),
     ),
@@ -181,7 +200,7 @@ adminExportRouter.get("/:id/export.json", async (req, res) => {
     .send(JSON.stringify(exp, null, 2));
 });
 
-/** Streams from storage into the zip one file at a time; never holds a video in memory. */
+/** Streams from storage into the zip one file at a time (the original, then its anonymized copy); never holds a video in memory. */
 adminExportRouter.get("/:id/export.zip", async (req, res) => {
   const { d, recs, exp } = await runExport(uuidParam(req, "id"));
   if (!recs.length) throw new HttpError(409, "nothing_to_export", "no verified recordings to download");
@@ -195,11 +214,16 @@ adminExportRouter.get("/:id/export.zip", async (req, res) => {
   zip.append(JSON.stringify(exp, null, 2), { name: `${dir}/assignment.json` });
   for (const r of exp.recordings) {
     zip.append(JSON.stringify(await gpsExport(recs[r.index - 1]), null, 2), { name: `${dir}/gps-${r.index}-${r.id.slice(0, 8)}.json` });
-    if (!r.file) continue;
-    const obj = await getObject(recs[r.index - 1].file_key);
-    const done = new Promise((resolve) => zip.once("entry", resolve));
-    zip.append(obj.body, { name: `${dir}/${r.file}` });
-    await done; // next video only after this one is fully written
+    for (const [name, key] of [
+      [r.file, recs[r.index - 1].file_key],
+      [r.anonymizedFile, recs[r.index - 1].anon_key],
+    ] as const) {
+      if (!name || !key) continue;
+      const obj = await getObject(key);
+      const done = new Promise((resolve) => zip.once("entry", resolve));
+      zip.append(obj.body, { name: `${dir}/${name}` });
+      await done; // next video only after this one is fully written
+    }
   }
   void zip.finalize();
 });
