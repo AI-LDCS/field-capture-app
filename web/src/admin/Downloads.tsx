@@ -55,9 +55,18 @@ export function Downloads() {
           </div>
           <div className="row wrap">
             {r.assembly === "done" ? (
-              <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download`}>
-                Video
-              </a>
+              <>
+                <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download`}>
+                  Original
+                </a>
+                {r.anonymization === "done" ? (
+                  <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download?variant=anonymized`}>
+                    Anonymized
+                  </a>
+                ) : (
+                  <span className="small muted">{r.anonymization === "failed" ? "anonymizing failed" : "anonymizing…"}</span>
+                )}
+              </>
             ) : (
               <span className="small muted">{r.assembly === "failed" ? "video build failed" : "preparing video…"}</span>
             )}

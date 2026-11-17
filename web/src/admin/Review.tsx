@@ -35,6 +35,14 @@ function Follow({ pos, on }: { pos: { lat: number; lng: number } | null; on: boo
 const segColor = (s: AssignmentDetail["segments"][number]) =>
   s.status === "completed" ? "#16a34a" : s.status === "skipped" ? "#9ca3af" : s.required ? "#1d4ed8" : "#ea580c";
 
+const anonymizationText: Record<RecordingSummary["anonymization"], string> = {
+  none: "",
+  pending: "anonymizing…",
+  running: "anonymizing…",
+  done: "anonymized",
+  failed: "anonymizing failed",
+};
+
 const assemblyText: Record<RecordingSummary["assembly"], string> = {
   none: "not verified",
   pending: "preparing video…",
@@ -51,13 +59,16 @@ export default function Review({ id }: { id: string }) {
   const [follow, setFollow] = useState(true);
   const videos = useRef(new Map<string, HTMLVideoElement>());
 
-  // keep polling while any video is still being prepared
+  // keep polling while a video is still being built (fast), or its anonymized copy is (slow: it can take hours)
   const preparing = run?.recordings.some((r) => r.status === "server_verified" && r.assembly !== "done" && r.assembly !== "failed");
+  const anonymizing = run?.recordings.some(
+    (r) => r.assembly === "done" && (r.anonymization === "pending" || r.anonymization === "running"),
+  );
   useEffect(() => {
-    if (!preparing) return;
-    const t = setInterval(reload, 3000);
+    if (!preparing && !anonymizing) return;
+    const t = setInterval(reload, preparing ? 3000 : 20000);
     return () => clearInterval(t);
-  }, [preparing]);
+  }, [preparing, anonymizing]);
 
   useEffect(() => {
     if (!run) return;
@@ -289,7 +300,18 @@ export default function Review({ id }: { id: string }) {
                   )}
                   {r.assembly === "done" && (
                     <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download`}>
-                      Video
+                      Video (original)
+                    </a>
+                  )}
+                  {r.assembly === "done" && <span className="small muted">{anonymizationText[r.anonymization]}</span>}
+                  {r.anonymization === "failed" && (
+                    <button className="ghost small" onClick={() => void act(() => api.reanonymize(r.id), "Anonymizing again")}>
+                      Retry
+                    </button>
+                  )}
+                  {r.anonymization === "done" && (
+                    <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download?variant=anonymized`}>
+                      Video (anonymized)
                     </a>
                   )}
                   <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/gps.json`}>

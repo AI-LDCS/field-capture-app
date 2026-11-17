@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Readable } from "node:stream";
 import {
   AbortMultipartUploadCommand,
@@ -43,6 +44,47 @@ export async function ensureBucket() {
 
 export const putObject = (Key: string, Body: Buffer, ContentType?: string) =>
   s3.send(new PutObjectCommand({ Bucket: Bucket(), Key, Body, ContentType }));
+
+/**
+ * Streams a body into one object without holding it in memory: parts of `partBytes` go up one at a time,
+ * so a slow storage slows the sender down (backpressure). Nothing exists under `Key` until the last part
+ * is in, and a failure leaves nothing behind. `check` runs on the total before the object is completed.
+ */
+export async function putStream(
+  Key: string,
+  ContentType: string,
+  body: AsyncIterable<Buffer | Uint8Array>,
+  partBytes: number,
+  check: (bytes: number, sha256: string) => void,
+) {
+  const mp = await multipart(Key, ContentType);
+  const hash = crypto.createHash("sha256");
+  let total = 0;
+  let held: Buffer[] = [];
+  let heldBytes = 0;
+  try {
+    for await (const piece of body) {
+      const b = Buffer.from(piece);
+      hash.update(b);
+      total += b.length;
+      held.push(b);
+      heldBytes += b.length;
+      if (heldBytes >= partBytes) {
+        await mp.part(Buffer.concat(held));
+        held = [];
+        heldBytes = 0;
+      }
+    }
+    if (heldBytes) await mp.part(Buffer.concat(held));
+    const sha256 = hash.digest("hex");
+    check(total, sha256);
+    await mp.complete();
+    return { bytes: total, sha256 };
+  } catch (e) {
+    await mp.abort();
+    throw e;
+  }
+}
 
 export type ObjectRead = { body: Readable; status: number; length: number; contentRange?: string };
 

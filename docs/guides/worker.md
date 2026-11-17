@@ -50,7 +50,7 @@ When you stop, you are back on the assignment's home page. **Check & finish** un
 **Recordings** lists everything you recorded for this assignment, newest first, with where it is now:
 
 - **Waiting to upload** or **Uploading**: still on this phone. Do not close or clear the browser until these are gone. Once the server has verified a recording, the phone deletes its copy.
-- **✓ Saved**: safe on the server. You can download your **Video** (after the server has finished preparing it) and the **GPS (.json)**. Only your own files appear.
+- **✓ Saved**: safe on the server. You can download your **GPS (.json)** and your video. The video you get by default has faces and licence plates hidden; it appears a while after saving ("Hiding faces and plates…", which can take longer than the recording itself). The **Original** link is the video exactly as the phone recorded it. Only your own files appear.
 
 ## If something goes wrong
 

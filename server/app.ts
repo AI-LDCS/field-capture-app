@@ -4,13 +4,14 @@ import express, { type RequestHandler, type Router } from "express";
 import helmet from "helmet";
 import { config } from "./config.ts";
 import { pool } from "./db.ts";
-import { attachUser, csrfGuard, errorHandler, HttpError, requireAuth, requireRole } from "./http.ts";
+import { attachUser, csrfGuard, errorHandler, HttpError, requireAnonymizerToken, requireAuth, requireRole } from "./http.ts";
 import { adminAssignmentsRouter, workerAssignmentsRouter } from "./routes/assignments.ts";
 import { adminRoutesRouter } from "./routes/adminRoutes.ts";
 import { adminUsersRouter } from "./routes/adminUsers.ts";
 import { adminExportRouter, adminRecordingsRouter } from "./routes/adminRecordings.ts";
 import { workerRecordingsRouter } from "./routes/recordings.ts";
 import { authRouter } from "./routes/auth.ts";
+import { anonymizerRouter } from "./routes/anonymizer.ts";
 
 /** Every router and where it is mounted. The app is built from this table, and tests check against it. */
 const MOUNTS: { prefix: string; guards: RequestHandler[]; routers: Router[] }[] = [
@@ -19,6 +20,7 @@ const MOUNTS: { prefix: string; guards: RequestHandler[]; routers: Router[] }[] 
   { prefix: "/api/admin/assignments", guards: [requireAuth, requireRole("admin")], routers: [adminExportRouter, adminAssignmentsRouter] },
   { prefix: "/api/admin/recordings", guards: [requireAuth, requireRole("admin")], routers: [adminRecordingsRouter] },
   { prefix: "/api/admin", guards: [requireAuth, requireRole("admin")], routers: [adminRoutesRouter] },
+  { prefix: "/api/anonymizer", guards: [requireAnonymizerToken], routers: [anonymizerRouter] },
   { prefix: "/api/me/assignments", guards: [requireAuth, requireRole("worker")], routers: [workerAssignmentsRouter] },
   { prefix: "/api/me/recordings", guards: [requireAuth, requireRole("worker")], routers: [workerRecordingsRouter] },
 ];

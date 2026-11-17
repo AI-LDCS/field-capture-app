@@ -31,6 +31,14 @@ export const config = {
     fetchAhead: 8, // chunks read from storage at once while building one video
     uploadsInFlight: 4, // parts of the finished file sent to storage at once
   },
+  /** The GPU machine that blurs faces and plates. It is not a browser: it sends this bearer token and no cookie. */
+  anonymizer: {
+    token: env.ANONYMIZER_TOKEN ?? "",
+    leaseMinutes: Math.max(1, int(env.ANON_LEASE_MINUTES, 15)), // a claim is lost if the worker is silent this long
+    maxAttempts: 3, // claims per recording before it is marked failed
+    partBytes: 8 * 1024 * 1024, // the result is streamed to storage in parts this big
+    sweepMs: 60_000,
+  },
   adminUsername: env.ADMIN_USERNAME ?? "",
   adminPassword: env.ADMIN_PASSWORD ?? "",
   session: {
@@ -47,6 +55,7 @@ export const config = {
 
 export function requireConfig() {
   if (!config.databaseUrl) throw new Error("DATABASE_URL is required");
+  if (config.anonymizer.token && config.anonymizer.token.length < 32) throw new Error("ANONYMIZER_TOKEN must be at least 32 characters");
   if (!config.s3.accessKey || !config.s3.secretKey) throw new Error("S3_ACCESS_KEY and S3_SECRET_KEY are required");
   if (config.cookieSecure && config.publicOrigins.some((o) => o.startsWith("http://") && !/localhost|127\.0\.0\.1/.test(o))) {
     console.warn("COOKIE_SECURE=true but a non-localhost http:// origin is configured; login will not work there");

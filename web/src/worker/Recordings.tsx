@@ -85,12 +85,21 @@ export function RecordingList({ assignmentId, server }: { assignmentId: string; 
           {phone?.lastError && <div className="err small">{phone.lastError}</div>}
           {saved?.status === "server_verified" && (
             <div className="row wrap">
-              {saved.assembly === "done" ? (
+              {saved.anonymization === "done" ? (
                 <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/download`}>
-                  Video{saved.fileBytes !== null && ` (${fmtBytes(saved.fileBytes)})`}
+                  Video, faces and plates hidden{saved.anonymizedBytes !== null && ` (${fmtBytes(saved.anonymizedBytes)})`}
                 </a>
+              ) : saved.assembly === "done" ? (
+                <span className="small muted">
+                  {saved.anonymization === "failed" ? "Hiding faces and plates failed" : "Hiding faces and plates…"}
+                </span>
               ) : (
                 <span className="small muted">{saved.assembly === "failed" ? "Video could not be prepared" : "Preparing video…"}</span>
+              )}
+              {saved.assembly === "done" && (
+                <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/download?variant=original`}>
+                  Original{saved.fileBytes !== null && ` (${fmtBytes(saved.fileBytes)})`}
+                </a>
               )}
               <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/gps.json`}>
                 GPS (.json)

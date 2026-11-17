@@ -57,10 +57,11 @@ The mount table in `server/app.ts` (`MOUNTS`) is the single list of routers and 
 | `db.ts`, `migrate.ts` | `pg` pool and helpers; plain-SQL migrations from `db/migrations`, applied once each under an advisory lock. `migrate.ts` must stay directly in `server/`: it finds the migrations relative to itself, and the bundle in `dist/` is at the same depth. |
 | `http.ts` | `HttpError`, CSRF guard, session middleware, role guards, error handler. |
 | `auth/` | `password.ts` (Argon2id hashing), `sessions.ts` (hashed-token sessions), `bootstrap.ts` (creates the first admin from the environment, only if no admin exists). |
-| `routes/*.ts` | One file per area of the API: check the request, call the services, answer; see [API](../reference/api.md). |
+| `routes/*.ts` | One file per area of the API: check the request, call the services, answer; see [API](../reference/api.md). `anonymizer.ts` is for the GPU machine, behind a bearer token instead of a login. |
 | `services/evaluate.ts` | Recomputes segment coverage and decides assignment status from the GPS the server holds. |
 | `services/assemble.ts` | Builds the playable video after a recording is verified. |
-| `services/downloads.ts` | Sends video and GPS downloads. |
+| `services/downloads.ts` | Sends video and GPS downloads, original or anonymized (`?variant=`). |
+| `services/anonymize.ts` | Gives back anonymizer claims that ran out, or fails them after 3 attempts. The queue itself is `anon_state` on `recordings`. |
 | `services/storage.ts` | S3 client: bucket, put/get/delete, multipart. |
 | `services/audit.ts` | Writes `audit_log` rows. |
 
@@ -128,6 +129,7 @@ sequenceDiagram
   A->>D: verify manifest, mark server_verified, recompute coverage
   A-->>P: ok (phone deletes its copy)
   A->>S: background: assemble, remux, upload one file, delete chunks
+  Note over A,S: then a separate GPU machine claims it, downloads the original,<br/>hides faces and plates, and uploads a second file next to it
 ```
 
 Details and failure handling are in [field flow](../reference/field-flow.md).

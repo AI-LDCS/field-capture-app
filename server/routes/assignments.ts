@@ -55,6 +55,8 @@ export async function recordingSummaries(assignmentId: string, userId?: string):
     stopReason: r.stop_reason,
     assembly: r.assembly_state,
     fileBytes: r.file_bytes === null ? null : Number(r.file_bytes),
+    anonymization: r.anon_state,
+    anonymizedBytes: r.anon_bytes === null ? null : Number(r.anon_bytes),
   }));
 }
 

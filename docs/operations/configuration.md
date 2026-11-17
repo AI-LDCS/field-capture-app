@@ -24,6 +24,8 @@ Copy `.env.example` to `.env` and fill it in. Docker Compose reads `.env` for su
 | `ENABLE_DEV_TOOLS` | `false` | Fake GPS and canvas camera on the worker page. Development only. |
 | `ASSEMBLY_CONCURRENCY` | `3` | How many finished videos the server builds at the same time. Each build needs about twice its recording's size in temporary disk space. |
 | `REMUX` | `true` | Rewrite finished videos with ffmpeg for duration and seeking. Falls back to the plain file if ffmpeg is missing or fails. |
+| `ANONYMIZER_TOKEN` | empty | The password the anonymizer worker (the GPU machine) sends as `Authorization: Bearer ...`. At least 32 characters or the app refuses to start. **Empty switches `/api/anonymizer` off** (it answers `404`); recordings are still queued and wait. `npm run init:env` generates one. See [anonymizer](anonymizer.md). |
+| `ANON_LEASE_MINUTES` | `15` | How long a claimed recording stays reserved for a worker that has gone quiet. The worker's heartbeat keeps extending it, so this is "how long until a crashed worker's job is given to someone else", not the length of a job. |
 | `SESSION_ABSOLUTE_HOURS` | `336` | Maximum session age (14 days). |
 | `SESSION_IDLE_HOURS` | `24` | Sign out after this long without a request. |
 
@@ -76,7 +78,7 @@ In `shared/config.ts` (shared by the phone and the server, so they cannot disagr
 | `upload` | `retryIntervalMs` | 3000 | how often the phone tries to upload |
 | | `gpsBatchSize` | 200 | GPS points per request |
 
-Other fixed limits, in `server/config.ts` and the route files: login lockout (5 per username, 20 per IP, 15 minutes), password lengths (worker 8, admin 12, maximum 128), chunk size (32 MiB), chunks per recording (100 000), GPS batch (1000), assembly part size (8 MiB).
+Other fixed limits, in `server/config.ts` and the route files: login lockout (5 per username, 20 per IP, 15 minutes), password lengths (worker 8, admin 12, maximum 128), chunk size (32 MiB), chunks per recording (100 000), GPS batch (1000), assembly part size (8 MiB), anonymizer claims per recording (3, then it is `failed`), the lease sweep (every 60 s), and the part size of the anonymized upload (8 MiB).
 
 ### Choosing values
 

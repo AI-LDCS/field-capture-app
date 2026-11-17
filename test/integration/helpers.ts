@@ -4,6 +4,8 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import pg from "pg";
 
+/** The bearer token the fake anonymizer worker sends (at least 32 characters, like a real one). */
+export const ANON_TOKEN = "test-anonymizer-token-0123456789abcdef";
 export const HITS_DIR = path.resolve(import.meta.dirname, "../../.test-hits");
 
 /** Fresh database per test file, on the compose Postgres (127.0.0.1:5433). */
@@ -26,6 +28,7 @@ export async function startTestServer() {
   process.env.S3_BUCKET = `test-${process.pid}-${Date.now()}`;
   process.env.ENABLE_DEV_TOOLS = "false";
   process.env.REMUX = "false";
+  process.env.ANONYMIZER_TOKEN = ANON_TOKEN;
 
   // import only now, after the environment is set (config is read at import)
   const { createApp } = await import("../../server/app.ts");

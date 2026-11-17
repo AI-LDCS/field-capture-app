@@ -11,6 +11,7 @@ PostgreSQL 18 with PostGIS. Schema changes are plain SQL files in `db/migrations
 | `005_delete_workers.sql` | `users.deleted_at` (a deleted worker keeps their row) and a username index that ignores deleted users |
 | `006_delete_routes.sql` | `routes.deleted_at` (a deleted route keeps its versions) |
 | `007_rename_routes.sql` | lets a published or archived version's name change, so a route can be renamed everywhere |
+| `008_anonymize.sql` | the anonymized copy of a recording: its queue state, lease, file and checksum; recordings that were already built are queued |
 
 ## Entity overview
 
@@ -56,7 +57,7 @@ erDiagram
 
 **`assignment_segments`**: one row per segment at assignment time: `route_segment_id`, `ord`, `required` (copied), `status` (`pending`, `in_progress`, `completed`, `skipped`), `skip_reason`, `coverage`, `completed_at`. A check constraint makes `skipped` impossible when `required`.
 
-**`recordings`**: `id` (a UUID made on the phone, so registering twice is harmless), `assignment_id`, `user_id` (kept here so every worker query can be scoped without a join), `mime`, `status` (`open`, `server_verified`), `simulated`, `started_at_ms` (video t = 0), `ended_at_ms`, `stop_reason`, `chunk_count`, `gps_count`, `verified_at`, and the video build: `assembly_state` (`none`, `pending`, `running`, `done`, `failed`), `assembly_error`, `file_key`, `file_bytes`, `file_sha256`, `file_mime`, `chunks_purged`.
+**`recordings`**: `id` (a UUID made on the phone, so registering twice is harmless), `assignment_id`, `user_id` (kept here so every worker query can be scoped without a join), `mime`, `status` (`open`, `server_verified`), `simulated`, `started_at_ms` (video t = 0), `ended_at_ms`, `stop_reason`, `chunk_count`, `gps_count`, `verified_at`, and the video build: `assembly_state` (`none`, `pending`, `running`, `done`, `failed`), `assembly_error`, `file_key`, `file_bytes`, `file_sha256`, `file_mime`, `chunks_purged`. The anonymized copy (see [anonymizer](../operations/anonymizer.md)): `anon_state` (`none`, `pending`, `running`, `done`, `failed`), `anon_error`, `anon_attempts`, `anon_lease_id` and `anon_lease_until` (the claim a worker holds while `running`), `anon_key`, `anon_bytes`, `anon_sha256`, `anon_mode`, `anonymized_at`. The original stays in `file_key`; both files are kept.
 
 **`recording_chunks`**: `(recording_id, seq)`, `sha256`, `size`, `object_key`. The rows stay after the chunk objects are deleted: they are the record of what the video was built from.
 
@@ -66,7 +67,7 @@ erDiagram
 
 ### Audit
 
-**`audit_log`**: `at`, `actor_id`, `action`, `target_type`, `target_id`, `details jsonb`, `ip`. Actions written: `admin_bootstrapped`, `login`, `login_failed`, `login_locked`, `logout`, `password_changed`, `password_set`, `user_created`, `user_updated`, `user_activated`, `user_deactivated`, `user_deleted`, `route_created`, `route_draft_saved`, `route_draft_deleted`, `route_renamed`, `route_deleted`, `route_version_created`, `route_published`, `route_archived`, `assignment_created`, `assignment_withdrawn`, `assignment_evaluated`, `assignment_reviewed`, `assignment_exported`, `preflight`, `segment_skipped`, `segment_unskipped`, `recording_registered`, `recording_verified`, `recording_verify_failed`, `recording_discarded`, `recording_assembled`, `recording_assembly_failed`, `recording_viewed`, `recording_downloaded`, `gps_downloaded`.
+**`audit_log`**: `at`, `actor_id`, `action`, `target_type`, `target_id`, `details jsonb`, `ip`. Actions written: `admin_bootstrapped`, `login`, `login_failed`, `login_locked`, `logout`, `password_changed`, `password_set`, `user_created`, `user_updated`, `user_activated`, `user_deactivated`, `user_deleted`, `route_created`, `route_draft_saved`, `route_draft_deleted`, `route_renamed`, `route_deleted`, `route_version_created`, `route_published`, `route_archived`, `assignment_created`, `assignment_withdrawn`, `assignment_evaluated`, `assignment_reviewed`, `assignment_exported`, `preflight`, `segment_skipped`, `segment_unskipped`, `recording_registered`, `recording_verified`, `recording_verify_failed`, `recording_discarded`, `recording_assembled`, `recording_assembly_failed`, `recording_viewed`, `recording_downloaded`, `gps_downloaded`, `recording_anonymize_started`, `recording_anonymized`, `recording_anonymize_failed`, `recording_anonymize_requeued`.
 
 ## Rules the database enforces itself
 
@@ -114,6 +115,21 @@ stateDiagram-v2
 
 Segment status: `pending` → `in_progress` (some coverage) → `completed` (coverage at or above the segment's minimum); optional segments can be `skipped` (and un-skipped). The decision rules are in [field flow](field-flow.md#how-the-server-decides).
 
+## Anonymized copy
+
+`anon_state` is a second queue that starts when the video is built. It is separate from `status` and `assembly_state`, so a recording is downloadable as an original long before its anonymized copy exists.
+
+```mermaid
+stateDiagram-v2
+  [*] --> none
+  none --> pending: video built (or migration 008 for older recordings)
+  pending --> running: worker claims it (lease, attempt + 1)
+  running --> done: result uploaded and checksum matches
+  running --> pending: worker reports failure, or the lease runs out, with attempts left
+  running --> failed: failure or silence on the 3rd attempt
+  failed --> pending: admin queues it again (attempts reset)
+```
+
 ## Recording status
 
 On the server a recording is `open` until its manifest is verified, then `server_verified` and frozen. The phone tracks finer states (`recording`, `interrupted`, `pending_upload`, `uploading`, `upload_interrupted`, `server_verified`) in IndexedDB; they are kept separate on purpose: a finished recording is not uploaded, and an uploaded one does not mean the assignment is complete.
@@ -123,6 +139,7 @@ On the server a recording is `open` until its manifest is verified, then `server
 | Key | Content |
 | --- | --- |
 | `rec/<recordingId>/c/<seq>-<sha256>` | one chunk. The hash is part of the key, so two racing uploads of the same `seq` can never overwrite each other. Deleted after a good build. |
-| `rec/<recordingId>/video.webm` or `.mp4` | the assembled, remuxed video. Kept until an admin deletes it (no automatic retention). |
+| `rec/<recordingId>/video.webm` or `.mp4` | the assembled, remuxed video: the original. Kept until an admin deletes it (no automatic retention). |
+| `rec/<recordingId>/anon-<leaseId>.webm` or `.mp4` | the anonymized copy, written by the anonymizer worker. The lease id is in the name so a worker that lost its claim cannot overwrite the finished file. |
 
 One bucket (`S3_BUCKET`, default `recordings`), created at start-up if missing.
