@@ -514,7 +514,7 @@ export default function WorkerRun({ id, step }: { id: string; step: "home" | "on
 
       <section className="card">
         <h3>Recordings</h3>
-        <RecordingList assignmentId={id} server={run.recordings} />
+        <RecordingList assignmentId={id} server={run.recordings} purpose={run.purpose} />
         <div className="finish">
           {run.reasons.length > 0 && (
             <ul className="small">

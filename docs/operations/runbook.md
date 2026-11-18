@@ -125,6 +125,7 @@ Do not edit rows of published versions or verified recordings by hand: database 
 | A recording shows **upload interrupted** on the phone | Network or server error; the phone retries every 3 seconds. The last error is shown. It is not lost. |
 | Video in review says **preparing video** for a long time | The build job is working or stuck. Check `docker compose logs app`; a failure shows **video build failed** with a Retry button. |
 | Video will not seek, or has no length | The ffmpeg remux did not run (`REMUX=false`, or it failed and the plain file was used). Check the logs for the build. |
+| GPS file has a `timeWarning` | The finished video is shorter or longer than the time the recorder ran, so `videoTimeS` may be off by up to that gap later in the video. Cause not known yet (seen once, on one phone under load). Treat positions late in the video with care. |
 | `docker compose up` fails with "port is already allocated" | Another process uses the port (443 for the tailnet profile, 80/443 for public). Stop it or change `TAILNET_HTTPS_PORT`. |
 | App exits at start with a missing `S3_*` or `DATABASE_URL` error | The variable is not in `.env`. Both S3 keys and the database URL are required. |
 | Tailnet HTTPS stops working after ~3 months | The Tailscale certificate expired. Run `./scripts/tailnet-cert.sh --force` ([certificate script](deployment.md#the-tailnet-certificate-script)). |

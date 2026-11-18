@@ -59,6 +59,7 @@ export type RouteSummary = {
 export type AssignmentSummary = {
   id: string;
   status: AssignmentStatus;
+  purpose: AssignmentPurpose;
   createdAt: string;
   updatedAt: string;
   worker: { id: string; username: string; displayName: string; deleted: boolean };
@@ -73,6 +74,11 @@ export type PreflightOutcome = {
   bestAccuracyM: number | null;
   note?: string;
 };
+
+/** What an assignment's images are for. Training: the worker may download them for labelling. Inference: admins only. */
+export type AssignmentPurpose = "training" | "inference";
+
+export type FramesState = "none" | "pending" | "running" | "done" | "failed";
 
 export type RecordingSummary = {
   id: string;
@@ -89,6 +95,8 @@ export type RecordingSummary = {
   /** The copy with faces and plates hidden, made by a separate worker after the video is built. */
   anonymization: "none" | "pending" | "running" | "done" | "failed";
   anonymizedBytes: number | null;
+  /** The still images (sharpest frame every few metres, anonymized), made by the same worker. */
+  frames: { state: FramesState; count: number | null; stepM: number | null; error: string | null };
 };
 
 /** One verified recording in the admin Downloads list. */
@@ -103,6 +111,7 @@ export type DownloadRow = {
   assembly: RecordingSummary["assembly"];
   anonymization: RecordingSummary["anonymization"];
   anonymizedBytes: number | null;
+  frames: { state: FramesState; count: number | null };
   simulated: boolean;
   worker: { id: string; username: string; displayName: string; deleted: boolean };
   route: { name: string; version: number; deleted: boolean };

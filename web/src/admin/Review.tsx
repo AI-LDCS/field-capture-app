@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Circle, CircleMarker, MapContainer, Polyline, useMap } from "react-leaflet";
 import type { AssignmentDetail, LngLat, RecordingSummary } from "@shared/types.ts";
 import { api } from "../api.ts";
-import { toast } from "../feedback.tsx";
+import { confirmDialog, toast } from "../feedback.tsx";
 import { Play } from "../icons.tsx";
 import { AboveArrows, Badge, Card, DirectionArrows, FitTo, Tiles, fmtBytes, ll, useLoad, when } from "../ui.tsx";
 
@@ -43,6 +43,15 @@ const anonymizationText: Record<RecordingSummary["anonymization"], string> = {
   failed: "anonymizing failed",
 };
 
+const framesText = (f: RecordingSummary["frames"]) =>
+  f.state === "pending" || f.state === "running"
+    ? "making images…"
+    : f.state === "failed"
+      ? `images failed${f.error ? `: ${f.error}` : ""}`
+      : f.state === "done"
+        ? `${f.count} images every ${f.stepM} m`
+        : "";
+
 const assemblyText: Record<RecordingSummary["assembly"], string> = {
   none: "not verified",
   pending: "preparing video…",
@@ -62,7 +71,9 @@ export default function Review({ id }: { id: string }) {
   // keep polling while a video is still being built (fast), or its anonymized copy is (slow: it can take hours)
   const preparing = run?.recordings.some((r) => r.status === "server_verified" && r.assembly !== "done" && r.assembly !== "failed");
   const anonymizing = run?.recordings.some(
-    (r) => r.assembly === "done" && (r.anonymization === "pending" || r.anonymization === "running"),
+    (r) =>
+      r.assembly === "done" &&
+      (r.anonymization === "pending" || r.anonymization === "running" || r.frames.state === "pending" || r.frames.state === "running"),
   );
   useEffect(() => {
     if (!preparing && !anonymizing) return;
@@ -278,6 +289,32 @@ export default function Review({ id }: { id: string }) {
       </Card>
 
       <Card title="Recordings">
+        {run.recordings.some((r) => r.assembly === "done") && (
+          <div className="row wrap">
+            <span className="small muted">
+              Images for {run.purpose === "training" ? "training (the worker can download them)" : "scoring (admins only)"}
+            </span>
+            {run.recordings.some((r) => r.frames.state === "done") && (
+              <a className="btn ghost small" href={`/api/admin/assignments/${id}/frames.zip`}>
+                All images (.zip)
+              </a>
+            )}
+            <button
+              className="ghost small"
+              onClick={async () => {
+                const ok = await confirmDialog({
+                  title: "Make the images again?",
+                  body: "The images of every recording of this assignment are deleted and made again with the current step. Anything already downloaded will not match the new frame numbers.",
+                  confirmLabel: "Make again",
+                  danger: true,
+                });
+                if (ok) void act(() => api.rerunFrames(id), "Making the images again");
+              }}
+            >
+              Make images again
+            </button>
+          </div>
+        )}
         {run.recordings.length === 0 && <p className="muted">None.</p>}
         {run.recordings.map((r) => (
           <div key={r.id} className="item">
@@ -317,6 +354,12 @@ export default function Review({ id }: { id: string }) {
                   <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/gps.json`}>
                     GPS (.json)
                   </a>
+                  {r.assembly === "done" && <span className="small muted">{framesText(r.frames)}</span>}
+                  {r.frames.state === "done" && (
+                    <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/frames.zip`}>
+                      Images (.zip)
+                    </a>
+                  )}
                 </div>
                 {r.assembly === "done" && (
                   <video

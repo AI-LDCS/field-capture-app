@@ -395,6 +395,9 @@ describe("every endpoint refuses bad input and missing login", () => {
       ["POST", `/api/me/recordings/${NIL}/gps`],
       ["POST", `/api/me/recordings/${NIL}/finalize`],
       ["DELETE", `/api/me/recordings/${NIL}`],
+      ["GET", `/api/me/recordings/${NIL}/frames`],
+      ["GET", `/api/me/recordings/${NIL}/frames.zip`],
+      ["GET", `/api/me/assignments/${NIL}/frames.zip`],
     ];
     for (const [m, p] of WORKER_ENDPOINTS) {
       assert.equal((await new Client(t.base).req(m, p, m === "GET" ? undefined : {})).status, 401, `anon ${m} ${p}`);
@@ -414,6 +417,12 @@ describe("every endpoint refuses bad input and missing login", () => {
       ["GET", `/api/admin/recordings/${NIL}/gps.json`],
       ["POST", `/api/admin/recordings/${NIL}/reassemble`],
       ["POST", `/api/admin/recordings/${NIL}/reanonymize`],
+      ["GET", `/api/admin/recordings/${NIL}/frames`],
+      ["GET", `/api/admin/recordings/${NIL}/frames.zip`],
+      ["GET", `/api/admin/recordings/${NIL}/frames/0`],
+      ["GET", `/api/admin/assignments/${NIL}/frames.zip`],
+      ["POST", `/api/admin/assignments/${NIL}/frames/rerun`],
+      ["GET", `/api/admin/routes/${NIL}/frames.zip`],
       ["GET", `/api/admin/route-versions/${NIL}`],
     ] as const) {
       assert.equal((await new Client(t.base).req(m, p, m === "GET" ? undefined : {})).status, 401, `anon ${m} ${p}`);

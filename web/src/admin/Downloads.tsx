@@ -70,6 +70,14 @@ export function Downloads() {
             ) : (
               <span className="small muted">{r.assembly === "failed" ? "video build failed" : "preparing video…"}</span>
             )}
+            {r.frames.state === "done" ? (
+              <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/frames.zip`}>
+                Images ({r.frames.count}, .zip)
+              </a>
+            ) : (
+              r.assembly === "done" &&
+              r.frames.state !== "none" && <span className="small muted">{r.frames.state === "failed" ? "images failed" : "images…"}</span>
+            )}
             <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/gps.json`}>
               GPS (.json)
             </a>

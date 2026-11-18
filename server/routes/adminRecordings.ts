@@ -32,7 +32,7 @@ const LIST_LIMIT = 1000;
 adminRecordingsRouter.get("/", async (_req, res) => {
   const rows = await q(
     `SELECT r.id, r.assignment_id, r.verified_at, r.started_at_ms, r.ended_at_ms, r.gps_count, r.file_bytes, r.assembly_state, r.simulated,
-            r.anon_state, r.anon_bytes, r.anon_error, r.anon_attempts,
+            r.anon_state, r.anon_bytes, r.anon_error, r.anon_attempts, r.frames_state, r.frames_count,
             u.id AS user_id, u.username, u.display_name, (u.deleted_at IS NOT NULL) AS user_deleted,
             v.name AS route_name, v.version, (rt.deleted_at IS NOT NULL) AS route_deleted
        FROM recordings r
@@ -55,6 +55,7 @@ adminRecordingsRouter.get("/", async (_req, res) => {
       assembly: r.assembly_state,
       anonymization: r.anon_state,
       anonymizedBytes: r.anon_bytes === null ? null : Number(r.anon_bytes),
+      frames: { state: r.frames_state, count: r.frames_count },
       simulated: r.simulated,
       worker: { id: r.user_id, username: r.username, displayName: r.display_name, deleted: r.user_deleted },
       route: { name: r.route_name, version: r.version, deleted: r.route_deleted },

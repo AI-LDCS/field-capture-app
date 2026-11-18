@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { audit } from "./audit.ts";
 import { q } from "../db.ts";
 import { HttpError } from "../http.ts";
+import { timeCheck } from "../../shared/timing.ts";
 import { getObject } from "./storage.ts";
 
 /** Shared by the admin and worker download routes: what is ready, what a file is called, and how it is sent. */
@@ -35,6 +36,8 @@ export function ready(rec: any, variant: Variant = "original") {
 export async function gpsExport(rec: any) {
   const pts = await q("SELECT seq, t_ms, lat, lng, acc FROM gps_points WHERE recording_id = $1 ORDER BY seq", [rec.id]);
   const start = Number(rec.started_at_ms);
+  const window = rec.ended_at_ms == null ? null : Number(rec.ended_at_ms) - start;
+  const check = timeCheck(window, rec.video_duration_ms == null ? null : Number(rec.video_duration_ms));
   return {
     recordingId: rec.id,
     assignmentId: rec.assignment_id,
@@ -43,6 +46,7 @@ export async function gpsExport(rec: any) {
     videoStartedAt: new Date(start).toISOString(),
     videoStartedAtMs: start,
     note: "videoTimeS = seconds from the start of the video file; approximate (camera and GPS delay under about 1 s)",
+    ...check,
     points: pts.map((p) => ({
       seq: p.seq,
       timestamp: new Date(Number(p.t_ms)).toISOString(),

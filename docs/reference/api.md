@@ -3,7 +3,7 @@
 All endpoints are JSON over HTTPS, served by the same Node process as the web app. This page lists every endpoint. A test (`test/repo/docs.test.ts`) fails if an endpoint exists that is not listed here, and `npm test` fails if an endpoint has no test (see [testing](../development/testing.md)).
 
 - [Conventions](#conventions)
-- [Health](#health) · [Auth](#auth) · [Admin: workers](#admin-workers) · [Admin: routes](#admin-routes-and-versions) · [Admin: assignments](#admin-assignments) · [Admin: recordings](#admin-recordings) · [Worker: assignments](#worker-assignments) · [Worker: recordings](#worker-recordings) · [Anonymizer worker](#anonymizer-worker)
+- [Health](#health) · [Auth](#auth) · [Admin: workers](#admin-workers) · [Admin: routes](#admin-routes-and-versions) · [Admin: assignments](#admin-assignments) · [Admin: recordings](#admin-recordings) · [Worker: assignments](#worker-assignments) · [Worker: recordings](#worker-recordings) · [Anonymizer worker](#anonymizer-worker) · [Still images](#still-images)
 - [Error codes](#error-codes)
 
 Shapes named in **bold** (for example **AssignmentDetail**) are the TypeScript types in `shared/types.ts`.
@@ -142,7 +142,7 @@ Query `status` and `userId` (both optional). `200 AssignmentSummary[]`, newest f
 `200 AssignmentDetail`. `404` if unknown.
 
 ### POST /api/admin/assignments
-Body `{ routeVersionId, userId }`. Copies the version's segment list into the assignment. `201 AssignmentDetail`.
+Body `{ routeVersionId, userId, purpose? }`. `purpose` is `training` (the worker may download the still images, to label them) or `inference` (admins only; GPS and IDs are written into the images). It defaults to `inference` and cannot be changed afterwards. Copies the version's segment list into the assignment. `201 AssignmentDetail`.
 Errors: `409 not_published` (only published versions), `409 worker_inactive`, `404` (unknown version, or the user is not a worker).
 
 ### DELETE /api/admin/assignments/:id
@@ -180,7 +180,7 @@ Streams the assembled video: the original, or with `?variant=anonymized` the ano
 The same file as an attachment. The original by default (`recording-<id>.webm`); `?variant=anonymized` gives the anonymized copy (`recording-<id>-anonymized.webm`), with the same errors as `/video`. Audited as `recording_downloaded` with `details.variant`.
 
 ### GET /api/admin/recordings/:id/gps.json
-GPS as an attachment: `{ recordingId, assignmentId, mime, simulated, videoStartedAt, videoStartedAtMs, note, points: [{ seq, timestamp, timestampMs, latitude, longitude, accuracyM, videoTimeS }] }`. `videoTimeS` is seconds from the start of the video, so points line up with the footage. Audited as `gps_downloaded`.
+GPS as an attachment: `{ recordingId, assignmentId, mime, simulated, videoStartedAt, videoStartedAtMs, note, recorderWindowS, videoDurationS, timeMismatchS, timeWarning, points: [{ seq, timestamp, timestampMs, latitude, longitude, accuracyM, videoTimeS }] }`. `videoTimeS` is seconds from the start of the video, so points line up with the footage. It comes from the phone's clock and does not look at the video. `recorderWindowS` is how long the recorder ran, `videoDurationS` the real length of the finished file, and `timeMismatchS` the first minus the second (positive = the video is shorter). When they differ by more than 2 s, `timeWarning` explains that GPS may not line up with the footage; the times are not changed. Each of these is `null` when unknown (`videoDurationS` is `null` for recordings built before migration 009). The same fields are in the full export. Audited as `gps_downloaded`.
 
 ### POST /api/admin/recordings/:id/reassemble
 Starts the video build again for a recording whose build `failed` and whose chunks are still stored. `200 { ok: true }`. `409 cannot_reassemble` if the recording is not verified or its chunks were already cleaned up after a good build.
@@ -268,6 +268,55 @@ Body: the anonymized video, raw bytes, `Content-Type: application/octet-stream`.
 ### POST /api/anonymizer/:id/fail
 Body `{ error }` (up to 500 characters). Gives the claim up. The job goes back in the queue while it has attempts left, otherwise it is `failed` until an admin queues it again. `200 { ok: true, retry: boolean }`. Audited as `recording_anonymize_failed`.
 
+## Still images
+
+Besides the anonymized video, the GPU worker cuts each finished video into still images: the sharpest frame in every `SAMPLE_STEP_M` metres walked, anonymized, and for an *inference* assignment tagged with GPS and IDs. See [anonymizer](../operations/anonymizer.md#still-images). Each image has a `frame` number that counts across the whole assignment in walking order; `recordingIndex` says which recording it came from.
+
+### POST /api/anonymizer/frames/claim
+Same bearer token and rules as the video routes. Takes the oldest built recording whose images are waiting and whose earlier recordings (same assignment) are finished, or `204`. `200 { id, leaseId, leaseSeconds, attempt, ext, mime, bytes, sha256, stepM, gapMaxM, purpose, embed, assignmentId, routeId, routeVersionId, recordingId, recordingIndex, carry, timeUncertain, gps }`. `embed` is true for inference: the worker writes GPS and IDs into the images. `carry` is the counter state at the end of the recording before (`{ cumM, nextFrame, lastLat, lastLng }`), or `null`. `timeUncertain` is true when the video and the recorder's clock disagree by more than 2 s. `gps` is the points as in `gps.json`. Any images left by an earlier, abandoned attempt are deleted first. Audited as `recording_frames_started`.
+
+### GET /api/anonymizer/frames/:id/source
+Streams the original video to the worker that holds the claim. `409 not_claimed` / `409 lease_lost` as for the video routes.
+
+### POST /api/anonymizer/frames/:id/heartbeat
+"Still working": pushes the lease out. `200 { ok: true, leaseSeconds }`.
+
+### PUT /api/anonymizer/frames/:id/image/:frame
+Body: one anonymized PNG, raw bytes. Headers: `x-lease-id`, `x-sha256`, `Content-Length` (required), and `x-frame`: the image's metadata as URL-encoded JSON (`frame`, `bin`, `file`, `timestamp`, `videoTimeS`, `walkedStartM`, `walkedEndM`, `latitude`, `longitude`, `accuracyM`, `headingDeg` or `null`, `sharpness`, `lowSharpness`, `timeUncertain`, `afterGap`, `gapM` or `null`). Checked like a video result: `400 bad_checksum`, `400 bad_frame`, then `422 size_mismatch` / `422 checksum_mismatch`. Sending the same frame again replaces it. If the lease ran out meanwhile, `409 lease_lost` and the file is deleted. `200 { ok: true }`.
+
+### POST /api/anonymizer/frames/:id/complete
+Body `{ count, stepM, mode, carry }`. The job is done only if the server holds exactly `count` images (`422 incomplete` otherwise). Stores the step, the anonymization mode and the counter for the next recording. `200 { ok: true }`. Audited as `recording_frames_done`.
+
+### POST /api/anonymizer/frames/:id/fail
+Body `{ error }`. Gives the claim up; the job goes back in the queue while it has attempts left, otherwise it is `failed`. `200 { ok: true, retry }`. Audited as `recording_frames_failed`.
+
+### GET /api/admin/recordings/:id/frames
+`{ state, error, routeId, routeVersionId, assignmentId, recordingId, recordingIndex, purpose, stepM, anonymization, timeWarning, frames: [{ frame, bin, file, timestamp, videoTimeS, walkedStartM, walkedEndM, latitude, longitude, accuracyM, headingDeg, sharpness, lowSharpness, timeUncertain, afterGap, gapM, bytes, sha256 }] }`. `frames` is empty until `state` is `done`. This is the shape a scoring engine reads. `409 not_verified`.
+
+### GET /api/admin/recordings/:id/frames/:frame
+One image (`image/png`). `404` for an unknown frame. Not audited: a page of thumbnails would write one row per image.
+
+### GET /api/admin/recordings/:id/frames.zip
+A folder with `frames.json`, `manifest.csv` and `images/`. `409 no_frames` until the images are done. Audited as `frames_downloaded`.
+
+### GET /api/admin/assignments/:id/frames.zip
+`route.json` (the route version's geometry) and `assignment-<id>/` with `assignment.json` (every recording: start, stop reason, state, image count, step, time warning) and one `recording-<n>-<id>/` folder per recording that has images. `409 no_frames`. Audited as `frames_downloaded`.
+
+### POST /api/admin/assignments/:id/frames/rerun
+Deletes the images of every built recording of the assignment and queues them again, in order, with the current `SAMPLE_STEP_M`. `200 { ok: true, queued, stepM }`. `409 nothing_to_queue` / `409 frames_disabled`. Audited per recording as `recording_frames_requeued`.
+
+### GET /api/admin/routes/:id/frames.zip
+Every assignment of the route that has images, grouped by route version: `index.json`, then `v<version>/route.json` and `v<version>/assignment-<id>/…`. `409 no_frames`. Audited as `frames_downloaded`.
+
+### GET /api/me/recordings/:id/frames
+For a worker's own recording in a **training** assignment: `{ state, count, stepM, frames: [{ frame, file, bytes }] }`. No GPS. For an inference assignment, or anyone else's recording: `404`.
+
+### GET /api/me/recordings/:id/frames.zip
+The images only, in one folder: no GPS, no IDs, no metadata files. Same rules as above; `409 no_frames` until they are done. Audited as `frames_downloaded` (`by: worker`).
+
+### GET /api/me/assignments/:id/frames.zip
+All images of a worker's own **training** assignment in one folder, named `01-…`, `02-…` by recording so they sort in walking order. `404` for an inference assignment or someone else's; `409 no_frames`.
+
 ## Error codes
 
 | Status | Code | Meaning |
@@ -280,6 +329,7 @@ Body `{ error }` (up to 500 characters). Gives the claim up. The job goes back i
 | 400 | `wrong_password`, `same_password` | admin password change |
 | 400 | `dev_tools_off` | simulated recording sent while dev tools are off |
 | 400 | `bad_variant` | `?variant=` is neither `original` nor `anonymized` |
+| 400 | `bad_frame` | the anonymizer worker's image metadata (`x-frame`) is not valid, or does not match the frame number in the path |
 | 400 | `bad_lease`, `bad_checksum`, `bad_mode` | the anonymizer worker sent a missing or malformed lease, `x-sha256` or `x-anon-mode` |
 | 401 | `unauthenticated`, `invalid_credentials` | no or bad login |
 | 401 | `bad_token` | the anonymizer worker's bearer token is wrong |
@@ -292,11 +342,13 @@ Body `{ error }` (up to 500 characters). Gives the claim up. The job goes back i
 | 409 | `worker_inactive` | assigning to a deactivated worker |
 | 409 | `seq_conflict`, `already_verified`, `has_chunks`, `manifest_mismatch` | recording upload state |
 | 409 | `not_verified`, `not_ready`, `cannot_reassemble`, `nothing_to_export` | video or export not available |
+| 409 | `no_frames`, `nothing_to_queue`, `frames_disabled` | there are no still images to download yet; no built recording to make them from; or `FRAMES_ENABLED` is off |
 | 409 | `not_anonymized`, `cannot_reanonymize` | the anonymized copy is not ready; or it cannot be queued again |
 | 409 | `not_claimed`, `lease_lost` | the anonymizer worker does not hold the claim (nobody does, or it ran out or belongs to another worker) |
 | 411 | `length_required` | the anonymizer result was sent without a `Content-Length` |
 | 413 | `too_large` | body over the size limit (JSON 2 MB, chunk 32 MiB) |
 | 415 | `json_required` | wrong content type |
+| 422 | `incomplete` | the anonymizer worker says it sent N images but the server holds a different number |
 | 422 | `checksum_mismatch`, `size_mismatch` | chunk or anonymized-result bytes do not match `x-sha256` or `Content-Length` |
 | 429 | `too_many_attempts` | login lockout |
 | 500 | `server_error` | a bug; check the app log |

@@ -8,6 +8,7 @@ import type {
   SegmentInput,
   User,
   WorkerRow,
+  AssignmentPurpose,
 } from "@shared/types.ts";
 
 export class ApiError extends Error {
@@ -81,8 +82,10 @@ export const api = {
     return get<AssignmentSummary[]>(`/api/admin/assignments${p ? `?${p}` : ""}`);
   },
   assignment: (id: string) => get<AssignmentDetail>(`/api/admin/assignments/${id}`),
-  createAssignment: (routeVersionId: string, userId: string) =>
-    post<AssignmentDetail>("/api/admin/assignments", { routeVersionId, userId }),
+  createAssignment: (routeVersionId: string, userId: string, purpose: AssignmentPurpose) =>
+    post<AssignmentDetail>("/api/admin/assignments", { routeVersionId, userId, purpose }),
+  rerunFrames: (assignmentId: string) =>
+    post<{ ok: true; queued: number; stepM: number }>(`/api/admin/assignments/${assignmentId}/frames/rerun`),
   withdrawAssignment: (id: string) => del(`/api/admin/assignments/${id}`),
 
   myAssignments: () => get<AssignmentSummary[]>("/api/me/assignments"),

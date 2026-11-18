@@ -21,6 +21,7 @@ The tool is Node's built-in test runner (`node:test`) run through `tsx`; there i
 | `test/integration/endpoints.test.ts` | API, real Postgres + RustFS | every endpoint's success and refusal cases, a bad-input sweep over all bodies, a no-login/wrong-role sweep over all routes |
 | `test/unit/geo.test.ts` | unit | distances, coverage, bearings, direction arrows, GPS quality flags and review thresholds |
 | `test/unit/preflight.test.ts` | unit | the GPS-check rules |
+| `test/unit/timing.test.ts` | unit | the video length vs recorder time check in the GPS export |
 | `test/unit/curve.test.ts` | unit | curve smoothing |
 | `test/unit/editor.test.ts` | unit | the route editor's edit model: reorder, split, join, snap, parse coordinates, undo/redo |
 | `test/repo/docs.test.ts` | repo | the docs list every endpoint and environment variable, and their links and file paths resolve |

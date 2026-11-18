@@ -1,6 +1,7 @@
 import { audit } from "./audit.ts";
 import { config } from "../config.ts";
 import { q } from "../db.ts";
+import { expireFrameLeases } from "./frames.ts";
 
 /**
  * The anonymized copy of a recording is made by a separate worker (the GPU machine), not by this process.
@@ -33,9 +34,11 @@ export async function expireLeases() {
   return { requeued: requeued.length, failed: failed.length };
 }
 
+const sweep = () => Promise.all([expireLeases(), expireFrameLeases()]).catch((e) => console.error("anonymize sweep failed", e));
+
 export function startAnonymizeSweep() {
-  timer ??= setInterval(() => void expireLeases().catch((e) => console.error("anonymize sweep failed", e)), config.anonymizer.sweepMs);
-  void expireLeases().catch((e) => console.error("anonymize sweep failed", e));
+  timer ??= setInterval(() => void sweep(), config.anonymizer.sweepMs);
+  void sweep();
 }
 export function stopAnonymizeSweep() {
   if (timer) clearInterval(timer);
