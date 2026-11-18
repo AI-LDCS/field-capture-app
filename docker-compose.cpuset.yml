@@ -1,0 +1,18 @@
+# Optional: keep the stack on some CPUs, so a GPU worker on the SAME machine cannot starve it (see
+# docs/operations/cpu-affinity.md). Use it on top of the normal file:
+#
+#   STACK_CPUSET=0-3 docker compose -f docker-compose.yml -f docker-compose.cpuset.yml --profile tailnet up -d
+#
+# STACK_CPUSET is a list of CPU numbers: "0-3", "0,2,4" or "0-1,4". Put it in .env to make it permanent.
+# Only the services that are running are affected; the proxies you do not start are ignored.
+services:
+  db:
+    cpuset: ${STACK_CPUSET:?set STACK_CPUSET, for example 0-3}
+  rustfs:
+    cpuset: ${STACK_CPUSET:?set STACK_CPUSET, for example 0-3}
+  app:
+    cpuset: ${STACK_CPUSET:?set STACK_CPUSET, for example 0-3}
+  caddy-tailnet:
+    cpuset: ${STACK_CPUSET:?set STACK_CPUSET, for example 0-3}
+  caddy-public:
+    cpuset: ${STACK_CPUSET:?set STACK_CPUSET, for example 0-3}
