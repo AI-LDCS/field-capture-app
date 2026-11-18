@@ -98,15 +98,18 @@ export function RecordingList({
                   Video, faces and plates hidden{saved.anonymizedBytes !== null && ` (${fmtBytes(saved.anonymizedBytes)})`}
                 </a>
               ) : saved.assembly === "done" ? (
-                <span className="small muted">
-                  {saved.anonymization === "failed" ? "Hiding faces and plates failed" : "Hiding faces and plates…"}
-                </span>
+                saved.anonymization === "none" ? null : (
+                  <span className="small muted">
+                    {saved.anonymization === "failed" ? "Hiding faces and plates failed" : "Hiding faces and plates…"}
+                  </span>
+                )
               ) : (
                 <span className="small muted">{saved.assembly === "failed" ? "Video could not be prepared" : "Preparing video…"}</span>
               )}
               {saved.assembly === "done" && (
                 <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/download?variant=original`}>
-                  Original{saved.fileBytes !== null && ` (${fmtBytes(saved.fileBytes)})`}
+                  {saved.anonymization === "done" ? "Original" : "Video"}
+                  {saved.fileBytes !== null && ` (${fmtBytes(saved.fileBytes)})`}
                 </a>
               )}
               <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/gps.json`}>

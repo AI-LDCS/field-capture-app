@@ -33,6 +33,7 @@ async function held(req: Request) {
 
 /** Takes the oldest recording that is ready, or answers 204. The claim lasts `leaseSeconds` unless the worker reports in. */
 anonymizerRouter.post("/claim", async (req, res) => {
+  if (!config.anonymizer.videoEnabled) return void res.status(204).end(); // whole-video copies are switched off
   await expireLeases();
   const rec = await q1(
     `UPDATE recordings SET anon_state = 'running', anon_attempts = anon_attempts + 1, anon_error = NULL,

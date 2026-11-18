@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { ZipArchive } from "archiver";
 import { audit } from "../services/audit.ts";
+import { config } from "../config.ts";
+import { anonymizationShown } from "../services/anonymize.ts";
 import { kickAssembler } from "../services/assemble.ts";
 import { q, q1 } from "../db.ts";
 import { HttpError, notFound, uuidParam } from "../http.ts";
@@ -53,7 +55,7 @@ adminRecordingsRouter.get("/", async (_req, res) => {
       gpsCount: r.gps_count ?? 0,
       fileBytes: r.file_bytes === null ? null : Number(r.file_bytes),
       assembly: r.assembly_state,
-      anonymization: r.anon_state,
+      anonymization: anonymizationShown(r.anon_state),
       anonymizedBytes: r.anon_bytes === null ? null : Number(r.anon_bytes),
       frames: { state: r.frames_state, count: r.frames_count },
       simulated: r.simulated,
@@ -125,6 +127,8 @@ adminRecordingsRouter.post("/:id/reassemble", async (req, res) => {
 
 /** Queue the anonymized copy again after it failed (or if it was never queued). The attempts start over. */
 adminRecordingsRouter.post("/:id/reanonymize", async (req, res) => {
+  if (!config.anonymizer.videoEnabled)
+    throw new HttpError(409, "video_anonymization_off", "anonymized copies of the whole video are switched off (ANON_VIDEO_ENABLED)");
   const rec = await recording(req);
   if (rec.status !== "server_verified" || rec.assembly_state !== "done" || !["failed", "none"].includes(rec.anon_state))
     throw new HttpError(409, "cannot_reanonymize", "only a built recording whose anonymized copy failed can be queued again");

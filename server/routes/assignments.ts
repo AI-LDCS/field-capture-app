@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { audit } from "../services/audit.ts";
+import { anonymizationShown } from "../services/anonymize.ts";
 import { q, q1, tx } from "../db.ts";
 import type { AssignmentDetail, RecordingSummary } from "../../shared/types.ts";
 import { finishAssignment, refreshSegments } from "../services/evaluate.ts";
@@ -56,7 +57,7 @@ export async function recordingSummaries(assignmentId: string, userId?: string):
     stopReason: r.stop_reason,
     assembly: r.assembly_state,
     fileBytes: r.file_bytes === null ? null : Number(r.file_bytes),
-    anonymization: r.anon_state,
+    anonymization: anonymizationShown(r.anon_state),
     anonymizedBytes: r.anon_bytes === null ? null : Number(r.anon_bytes),
     frames: {
       state: r.frames_state,

@@ -254,7 +254,7 @@ The machine that hides faces and plates (`worker.py` next to `anonymize.py`, run
 A claim is a **lease**. `POST /claim` returns a `leaseId`; every later call for that recording sends it as the `x-lease-id` header (`400 bad_lease` if it is missing or malformed). A lease runs out after `ANON_LEASE_MINUTES` of silence, and then another claim can take the job, so the old worker's calls answer `409 lease_lost` and cannot finish it.
 
 ### POST /api/anonymizer/claim
-Takes the oldest built recording that is waiting. `200 { id, leaseId, leaseSeconds, attempt, ext, mime, bytes, sha256 }` (`bytes` and `sha256` describe the original, so the worker can check its download), or `204` with no body when nothing is waiting. Claims that ran out are first given back, or failed once they have used their 3 attempts. Audited as `recording_anonymize_started`.
+Takes the oldest built recording that is waiting, or answers `204` at once while `ANON_VIDEO_ENABLED` is off. `200 { id, leaseId, leaseSeconds, attempt, ext, mime, bytes, sha256 }` (`bytes` and `sha256` describe the original, so the worker can check its download), or `204` with no body when nothing is waiting. Claims that ran out are first given back, or failed once they have used their 3 attempts. Audited as `recording_anonymize_started`.
 
 ### GET /api/anonymizer/:id/source
 Streams the original video to the worker that holds the claim. `409 not_claimed` if nobody does, `409 lease_lost` for a lease that is stale or someone else's.
@@ -344,6 +344,7 @@ All images of a worker's own **training** assignment in one folder, named `01-â€
 | 409 | `not_verified`, `not_ready`, `cannot_reassemble`, `nothing_to_export` | video or export not available |
 | 409 | `no_frames`, `nothing_to_queue`, `frames_disabled` | there are no still images to download yet; no built recording to make them from; or `FRAMES_ENABLED` is off |
 | 409 | `not_anonymized`, `cannot_reanonymize` | the anonymized copy is not ready; or it cannot be queued again |
+| 409 | `video_anonymization_off` | `ANON_VIDEO_ENABLED` is off, so the whole video is not anonymized and cannot be queued |
 | 409 | `not_claimed`, `lease_lost` | the anonymizer worker does not hold the claim (nobody does, or it ran out or belongs to another worker) |
 | 411 | `length_required` | the anonymizer result was sent without a `Content-Length` |
 | 413 | `too_large` | body over the size limit (JSON 2 MB, chunk 32 MiB) |

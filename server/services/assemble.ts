@@ -180,8 +180,8 @@ async function assemble(id: string) {
     // 4. only now is the chunk copy redundant
     await q(
       // the anonymizer worker picks it up from here (anon_state 'pending'); an earlier run's result is never reset
-      "UPDATE recordings SET assembly_state = 'done', file_key = $1, file_bytes = $2, file_sha256 = $3, file_mime = $4, chunks_purged = true, video_duration_ms = $6, anon_state = CASE WHEN anon_state = 'none' THEN 'pending' ELSE anon_state END, frames_state = CASE WHEN frames_state = 'none' AND $7 THEN 'pending' ELSE frames_state END WHERE id = $5",
-      [key, total, hash.digest("hex"), baseMime(rec.mime), id, durationMs, config.frames.enabled],
+      "UPDATE recordings SET assembly_state = 'done', file_key = $1, file_bytes = $2, file_sha256 = $3, file_mime = $4, chunks_purged = true, video_duration_ms = $6, anon_state = CASE WHEN anon_state = 'none' AND $8 THEN 'pending' ELSE anon_state END, frames_state = CASE WHEN frames_state = 'none' AND $7 THEN 'pending' ELSE frames_state END WHERE id = $5",
+      [key, total, hash.digest("hex"), baseMime(rec.mime), id, durationMs, config.frames.enabled, config.anonymizer.videoEnabled],
     );
     await deleteObjects(chunks.map((c) => c.object_key));
     await audit(null, "recording_assembled", { type: "recording", id }, { bytes: total, remuxed: file === out, durationMs });

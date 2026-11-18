@@ -1,6 +1,7 @@
 import { audit } from "./audit.ts";
 import { config } from "../config.ts";
 import { q } from "../db.ts";
+import type { RecordingSummary } from "../../shared/types.ts";
 import { expireFrameLeases } from "./frames.ts";
 
 /**
@@ -9,6 +10,14 @@ import { expireFrameLeases } from "./frames.ts";
  * Enqueuing happens where the video is built (assemble.ts); claiming, uploading and failing are in routes/anonymizer.ts.
  */
 let timer: NodeJS.Timeout | null = null;
+
+/**
+ * What to tell people about a recording's anonymized video. With ANON_VIDEO_ENABLED off, nobody will ever claim a
+ * waiting job, so "waiting" and "working" are shown as "none" instead of a message that never goes away.
+ * A copy that exists ("done") or failed earlier is still reported as it is.
+ */
+export const anonymizationShown = (state: RecordingSummary["anonymization"]): RecordingSummary["anonymization"] =>
+  config.anonymizer.videoEnabled || (state !== "pending" && state !== "running") ? state : "none";
 
 /**
  * Gives claims that ran out of time back to the queue, or fails them once they have used all their attempts.

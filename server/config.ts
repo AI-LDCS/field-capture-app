@@ -34,6 +34,8 @@ export const config = {
   /** The GPU machine that blurs faces and plates. It is not a browser: it sends this bearer token and no cookie. */
   anonymizer: {
     token: env.ANONYMIZER_TOKEN ?? "",
+    /** Also make an anonymized copy of the whole video. Off: admins and the worker who recorded it download the original, and only the sampled images are anonymized. */
+    videoEnabled: bool(env.ANON_VIDEO_ENABLED, false),
     leaseMinutes: Math.max(1, int(env.ANON_LEASE_MINUTES, 15)), // a claim is lost if the worker is silent this long
     maxAttempts: 3, // claims per recording before it is marked failed
     partBytes: 8 * 1024 * 1024, // the result is streamed to storage in parts this big
