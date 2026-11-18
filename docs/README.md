@@ -16,6 +16,7 @@ Start with the [main README](../README.md) for what the system is and how to run
 | [Deployment](operations/deployment.md) | Putting it on a server (Tailscale or public), updating it |
 | [Configuration](operations/configuration.md) | Environment variables and tuning constants |
 | [Anonymizer](operations/anonymizer.md) | Hiding faces and plates: the GPU worker, who downloads what, failure and recovery |
+| [CPU affinity](operations/cpu-affinity.md) | The app and the GPU worker on one machine: which CPUs to give each, with measurements |
 | [Runbook](operations/runbook.md) | Health, backup and restore, RustFS export, troubleshooting, admin recovery |
 | [Database migration plan](operations/database-migration.md) | Schema changes, Postgres upgrades, moving servers, going back |
 
