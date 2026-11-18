@@ -11,6 +11,7 @@ let t: Awaited<ReturnType<typeof startTestServer>>;
 let admin: Client;
 before(async () => {
   t = await startTestServer();
+  t.config.anonymizer.videoEnabled = true; // this file is about the whole-video copy, which is off by default
   admin = await adminLogin(t.base);
 });
 after(async () => {
@@ -330,5 +331,41 @@ describe("a worker that fails or goes quiet", () => {
     assert.ok(
       (await t.pool.query("SELECT 1 FROM audit_log WHERE target_id=$1 AND action='recording_anonymize_failed'", [r.id])).rows.length,
     );
+  });
+});
+
+describe("with whole-video copies switched off (the default)", () => {
+  it("queues nothing, hands nothing out, hides a stuck state, and refuses to queue again", async () => {
+    t.config.anonymizer.videoEnabled = false;
+    try {
+      const r = await builtRecording("video-off");
+      assert.equal((await state(r.id)).anon_state, "none", "building the video does not queue a copy");
+      assert.equal((await gpu("POST", "/api/anonymizer/claim")).status, 204, "nothing is handed out");
+
+      // a job that was already waiting before the switch is reported as nothing, not as "anonymizing…" for ever
+      await t.pool.query("UPDATE recordings SET anon_state = 'pending' WHERE id = $1", [r.id]);
+      assert.equal((await gpu("POST", "/api/anonymizer/claim")).status, 204, "still not handed out");
+      const mine = await r.worker.client.get(`/api/me/assignments/${r.assignmentId}`);
+      assert.equal(mine.body.recordings[0].anonymization, "none");
+      const list = (await admin.get("/api/admin/recordings")).body.find((x: any) => x.id === r.id);
+      assert.equal(list.anonymization, "none");
+
+      // a copy that exists stays visible
+      await t.pool.query("UPDATE recordings SET anon_state = 'done' WHERE id = $1", [r.id]);
+      assert.equal((await admin.get("/api/admin/recordings")).body.find((x: any) => x.id === r.id).anonymization, "done");
+      await t.pool.query("UPDATE recordings SET anon_state = 'failed' WHERE id = $1", [r.id]);
+
+      const again = await admin.post(`/api/admin/recordings/${r.id}/reanonymize`);
+      assert.equal(again.status, 409);
+      assert.equal(again.body.error, "video_anonymization_off");
+      assert.equal((await state(r.id)).anon_state, "failed", "nothing changed");
+
+      // the worker still downloads its own video: the original
+      const own = await r.worker.client.get(`/api/me/recordings/${r.id}/download?variant=original`);
+      assert.equal(own.status, 200);
+      assert.ok(own.bytes.equals(r.original));
+    } finally {
+      t.config.anonymizer.videoEnabled = true;
+    }
   });
 });

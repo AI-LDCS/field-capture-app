@@ -337,7 +337,7 @@ export default function Review({ id }: { id: string }) {
                   )}
                   {r.assembly === "done" && (
                     <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download`}>
-                      Video (original)
+                      {r.anonymization === "none" ? "Video" : "Video (original)"}
                     </a>
                   )}
                   {r.assembly === "done" && <span className="small muted">{anonymizationText[r.anonymization]}</span>}

@@ -1,8 +1,8 @@
 # Anonymizer
 
-Every finished recording gets a second copy with faces and licence plates hidden. The original is kept; field workers download the anonymized copy by default, and admins can reach both.
+The faces and licence plates in what comes out of a recording are hidden by a separate GPU machine (`video-anonymizer/`, YOLO26 face and plate model), not by the app. The app only keeps the queues and the files.
 
-The detection runs on a separate GPU machine (`video-anonymizer/`, YOLO26 face and plate model), not in the app. The app only keeps the queue and the files.
+**What is anonymized.** The **still images** (see [below](#still-images)): the sharpest frame every few metres. That is what labelling and scoring use. The **video itself is not anonymized** by default: admins and the worker who recorded it download the original. To also make an anonymized copy of the whole video (slow, every frame), set `ANON_VIDEO_ENABLED=true` and run the worker with `--kinds frames,video`; the rest of this page, from the diagram to "Who can download what", describes that optional copy.
 
 ```mermaid
 sequenceDiagram
@@ -48,11 +48,13 @@ The scoring engine places each image on the route itself, from its GPS and the r
 
 **Make images again** (assignment page, `POST /api/admin/assignments/:id/frames/rerun`) deletes the images of all of the assignment's recordings and makes them again, in order, with the current `SAMPLE_STEP_M`. Do this after changing the step or the anonymization mode. Anything already downloaded will not match the new frame numbers; each frame carries its `stepM` so results can be tied to the set they came from.
 
-Run only one kind of job on a machine with `worker.py --kinds frames` or `--kinds video`; the default is both, frames first. `FRAMES_ENABLED=false` stops new recordings being queued for images. Recordings built before this feature are not queued automatically: press **Make images again**.
+The worker takes only the images by default (`--kinds frames`; Docker: `ANON_KINDS`). Add the whole-video copy with `--kinds frames,video`, together with `ANON_VIDEO_ENABLED=true` on the server. `FRAMES_ENABLED=false` stops new recordings being queued for images. Recordings built before this feature are not queued automatically: press **Make images again**.
 
 Image files are PNG (lossless). A 4 minute recording at 3 m is about 90 images and 150 MB.
 
 ## Who can download what
+
+With `ANON_VIDEO_ENABLED` off (the default) there is no anonymized video: admins and the worker who recorded it get the original (`?variant=original`, which is also the default then). The table is for when it is on.
 
 | Who | Anonymized | Original |
 | --- | --- | --- |

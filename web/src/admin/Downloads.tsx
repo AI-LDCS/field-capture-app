@@ -57,13 +57,13 @@ export function Downloads() {
             {r.assembly === "done" ? (
               <>
                 <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download`}>
-                  Original
+                  {r.anonymization === "none" ? "Video" : "Original"}
                 </a>
                 {r.anonymization === "done" ? (
                   <a className="btn ghost small" href={`/api/admin/recordings/${r.id}/download?variant=anonymized`}>
                     Anonymized
                   </a>
-                ) : (
+                ) : r.anonymization === "none" ? null : (
                   <span className="small muted">{r.anonymization === "failed" ? "anonymizing failed" : "anonymizing…"}</span>
                 )}
               </>
