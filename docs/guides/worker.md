@@ -34,7 +34,7 @@ The screen shows a **map** on top and your **camera** below. You can drag the ba
 - The small arrows on the route show which way to walk each segment.
 - The numbers at the bottom show how much of each segment is covered. Walk each required segment until it is green.
 - An optional segment can be skipped with **Skip it**.
-- **Keep the screen on and stay in this page.** If you switch to another app or lock the screen, **recording stops**. If that happens, start a new recording.
+- **Keep the screen on and stay in this page.** If you switch to another app or lock the screen, **recording stops**. If that happens, start a new recording **from the place where you stopped**: the app treats every later recording of a route as the continuation of the earlier ones, so do not skip ahead or start again from the beginning.
 - The recording uploads in the background while you walk when there is signal. Poor signal is fine: it uploads later.
 - To stop, tap **Stop** and tap again within three seconds.
 
@@ -50,7 +50,7 @@ When you stop, you are back on the assignment's home page. **Check & finish** un
 **Recordings** lists everything you recorded for this assignment, newest first, with where it is now:
 
 - **Waiting to upload** or **Uploading**: still on this phone. Do not close or clear the browser until these are gone. Once the server has verified a recording, the phone deletes its copy.
-- **✓ Saved**: safe on the server. You can download your **GPS (.json)** and your video. The video you get by default has faces and licence plates hidden; it appears a while after saving ("Hiding faces and plates…", which can take longer than the recording itself). The **Original** link is the video exactly as the phone recorded it. Only your own files appear.
+- **✓ Saved**: safe on the server. You can download your **GPS (.json)** and your video. The video you get by default has faces and licence plates hidden; it appears a while after saving ("Hiding faces and plates…", which can take longer than the recording itself). The **Original** link is the video exactly as the phone recorded it. Only your own files appear. If your route was assigned **for training**, an **Images for labelling** button appears too (a while after saving, "Making images…"): a ZIP of still pictures taken every few metres along your walk, faces and plates hidden, ready to put into CVAT. They contain no location. Routes assigned for scoring show no images button; the office downloads those.
 
 ## If something goes wrong
 

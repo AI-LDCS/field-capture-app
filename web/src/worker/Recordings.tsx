@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RecordingSummary } from "@shared/types.ts";
+import type { AssignmentPurpose, RecordingSummary } from "@shared/types.ts";
 import { Badge, fmtBytes, when } from "../ui.tsx";
 import { type LocalRecording, allRecordings, localSummary, putRecording } from "./lib/localdb.ts";
 import { devToolsOn, setSettings, useSettings, getRawSettings } from "./lib/settings.ts";
@@ -41,7 +41,15 @@ const WAITING = ["pending_upload", "pending_sync", "upload_interrupted"];
  * One list for all recordings of an assignment, wherever each one is right now. The phone's copy
  * tells the upload progress until the server has verified it; after that the server's row offers the files.
  */
-export function RecordingList({ assignmentId, server }: { assignmentId: string; server: RecordingSummary[] }) {
+export function RecordingList({
+  assignmentId,
+  server,
+  purpose,
+}: {
+  assignmentId: string;
+  server: RecordingSummary[];
+  purpose: AssignmentPurpose;
+}) {
   const local = useLocalRecordings(assignmentId);
   const [, force] = useState(0);
   useEffect(() => onUploaderChange(() => force((n) => n + 1)), []);
@@ -104,10 +112,26 @@ export function RecordingList({ assignmentId, server }: { assignmentId: string; 
               <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/gps.json`}>
                 GPS (.json)
               </a>
+              {purpose === "training" &&
+                saved.assembly === "done" &&
+                (saved.frames.state === "done" ? (
+                  <a className="btn ghost small" href={`/api/me/recordings/${saved.id}/frames.zip`}>
+                    Images for labelling ({saved.frames.count})
+                  </a>
+                ) : (
+                  <span className="small muted">{saved.frames.state === "failed" ? "Making images failed" : "Making images…"}</span>
+                ))}
             </div>
           )}
         </div>
       ))}
+      {purpose === "training" && server.filter((r) => r.frames.state === "done").length > 1 && (
+        <div className="row wrap">
+          <a className="btn ghost small" href={`/api/me/assignments/${assignmentId}/frames.zip`}>
+            All images of this assignment (.zip)
+          </a>
+        </div>
+      )}
       {onPhone.length > 0 && (
         <div className="row between wrap">
           <span className="small muted">Keep this browser until uploads finish.</span>

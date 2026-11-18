@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import type { AssignmentPurpose } from "@shared/types.ts";
 import { api } from "../api.ts";
 import { confirmDialog, toast } from "../feedback.tsx";
 import { Badge, Card, useLoad, when } from "../ui.tsx";
@@ -12,6 +13,7 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
 
   const [versionId, setVersionId] = useState(presetVersionId ?? "");
   const [userId, setUserId] = useState("");
+  const [purpose, setPurpose] = useState<AssignmentPurpose>("inference");
 
   const published = (routes.data ?? []).flatMap((r) =>
     r.versions.filter((v) => v.status === "published").map((v) => ({ id: v.id, label: `${r.name} · v${v.version}` })),
@@ -21,7 +23,7 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
   const create = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api.createAssignment(versionId, userId);
+      await api.createAssignment(versionId, userId, purpose);
       toast.success("Route assigned");
       list.reload();
     } catch (x: any) {
@@ -54,6 +56,13 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
                   {w.displayName ? ` (${w.displayName})` : ""}
                 </option>
               ))}
+            </select>
+          </label>
+          <label>
+            What the images are for
+            <select value={purpose} onChange={(e) => setPurpose(e.target.value as AssignmentPurpose)}>
+              <option value="inference">Scoring (inference): only admins download the images</option>
+              <option value="training">Training: the worker downloads the images to label them</option>
             </select>
           </label>
           <div className="row">
@@ -95,7 +104,7 @@ export function Assignments({ presetVersionId }: { presetVersionId?: string }) {
             <div>
               <strong>{a.route.name}</strong>
               {a.route.deleted && <span className="muted"> (deleted)</span>} <span className="muted">v{a.route.version}</span>{" "}
-              <Badge s={a.status} />
+              <Badge s={a.status} /> <span className="small muted">{a.purpose === "training" ? "training" : "scoring"}</span>
               <div className="small muted">
                 {a.worker.username}
                 {a.worker.deleted && " (deleted)"} · required {a.progress.requiredDone}/{a.progress.requiredTotal} · {when(a.createdAt)}

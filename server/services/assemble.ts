@@ -94,6 +94,22 @@ async function remux(input: string, output: string, ext: string): Promise<boolea
   });
 }
 
+/** Length of a finished file in ms, or null if ffprobe is missing, fails, or the file has no duration. */
+async function probeDurationMs(file: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const p = spawn("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let out = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.on("error", () => resolve(null));
+    p.on("close", (code) => {
+      const s = Number.parseFloat(out);
+      resolve(code === 0 && Number.isFinite(s) && s > 0 ? Math.round(s * 1000) : null);
+    });
+  });
+}
+
 async function assemble(id: string) {
   const rec = await q1("SELECT * FROM recordings WHERE id = $1", [id]);
   if (!rec) return;
@@ -131,6 +147,7 @@ async function assemble(id: string) {
     // 2. optional remux (duration + seeking); on any trouble keep the plain concatenation
     let file = raw;
     if (config.assembly.remux && (await remux(raw, out, ext))) file = out;
+    const durationMs = file === out ? await probeDurationMs(file) : null; // the plain file has no duration
 
     // 3. upload in parts of at least 5 MiB, hashing as we go
     const hash = crypto.createHash("sha256");
@@ -163,11 +180,11 @@ async function assemble(id: string) {
     // 4. only now is the chunk copy redundant
     await q(
       // the anonymizer worker picks it up from here (anon_state 'pending'); an earlier run's result is never reset
-      "UPDATE recordings SET assembly_state = 'done', file_key = $1, file_bytes = $2, file_sha256 = $3, file_mime = $4, chunks_purged = true, anon_state = CASE WHEN anon_state = 'none' THEN 'pending' ELSE anon_state END WHERE id = $5",
-      [key, total, hash.digest("hex"), baseMime(rec.mime), id],
+      "UPDATE recordings SET assembly_state = 'done', file_key = $1, file_bytes = $2, file_sha256 = $3, file_mime = $4, chunks_purged = true, video_duration_ms = $6, anon_state = CASE WHEN anon_state = 'none' THEN 'pending' ELSE anon_state END, frames_state = CASE WHEN frames_state = 'none' AND $7 THEN 'pending' ELSE frames_state END WHERE id = $5",
+      [key, total, hash.digest("hex"), baseMime(rec.mime), id, durationMs, config.frames.enabled],
     );
     await deleteObjects(chunks.map((c) => c.object_key));
-    await audit(null, "recording_assembled", { type: "recording", id }, { bytes: total, remuxed: file === out });
+    await audit(null, "recording_assembled", { type: "recording", id }, { bytes: total, remuxed: file === out, durationMs });
   } catch (e) {
     if (mp) await mp.abort();
     const msg = e instanceof Error ? e.message : String(e);

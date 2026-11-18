@@ -12,17 +12,38 @@ import { adminExportRouter, adminRecordingsRouter } from "./routes/adminRecordin
 import { workerRecordingsRouter } from "./routes/recordings.ts";
 import { authRouter } from "./routes/auth.ts";
 import { anonymizerRouter } from "./routes/anonymizer.ts";
+import { framesWorkerRouter } from "./routes/framesWorker.ts";
+import { adminFramesAssignmentRouter, adminFramesRecordingRouter, adminFramesRouteRouter } from "./routes/adminFrames.ts";
+import { workerFramesAssignmentRouter, workerFramesRecordingRouter } from "./routes/workerFrames.ts";
 
 /** Every router and where it is mounted. The app is built from this table, and tests check against it. */
 const MOUNTS: { prefix: string; guards: RequestHandler[]; routers: Router[] }[] = [
   { prefix: "/api/auth", guards: [], routers: [authRouter] },
   { prefix: "/api/admin/users", guards: [requireAuth, requireRole("admin")], routers: [adminUsersRouter] },
-  { prefix: "/api/admin/assignments", guards: [requireAuth, requireRole("admin")], routers: [adminExportRouter, adminAssignmentsRouter] },
-  { prefix: "/api/admin/recordings", guards: [requireAuth, requireRole("admin")], routers: [adminRecordingsRouter] },
+  {
+    prefix: "/api/admin/assignments",
+    guards: [requireAuth, requireRole("admin")],
+    routers: [adminExportRouter, adminFramesAssignmentRouter, adminAssignmentsRouter],
+  },
+  {
+    prefix: "/api/admin/recordings",
+    guards: [requireAuth, requireRole("admin")],
+    routers: [adminRecordingsRouter, adminFramesRecordingRouter],
+  },
+  { prefix: "/api/admin/routes", guards: [requireAuth, requireRole("admin")], routers: [adminFramesRouteRouter] },
   { prefix: "/api/admin", guards: [requireAuth, requireRole("admin")], routers: [adminRoutesRouter] },
+  { prefix: "/api/anonymizer/frames", guards: [requireAnonymizerToken], routers: [framesWorkerRouter] },
   { prefix: "/api/anonymizer", guards: [requireAnonymizerToken], routers: [anonymizerRouter] },
-  { prefix: "/api/me/assignments", guards: [requireAuth, requireRole("worker")], routers: [workerAssignmentsRouter] },
-  { prefix: "/api/me/recordings", guards: [requireAuth, requireRole("worker")], routers: [workerRecordingsRouter] },
+  {
+    prefix: "/api/me/assignments",
+    guards: [requireAuth, requireRole("worker")],
+    routers: [workerFramesAssignmentRouter, workerAssignmentsRouter],
+  },
+  {
+    prefix: "/api/me/recordings",
+    guards: [requireAuth, requireRole("worker")],
+    routers: [workerRecordingsRouter, workerFramesRecordingRouter],
+  },
 ];
 
 /** "METHOD /full/path" for every endpoint the app serves (API and health check). */

@@ -39,6 +39,12 @@ export const config = {
     partBytes: 8 * 1024 * 1024, // the result is streamed to storage in parts this big
     sweepMs: 60_000,
   },
+  /** Still images cut from each finished video by the GPU worker (see services/frames.ts). */
+  frames: {
+    enabled: bool(env.FRAMES_ENABLED, true), // queue the frames job when a video is built
+    stepM: int(env.SAMPLE_STEP_M, 3), // metres walked per image
+    gapMaxM: int(env.SAMPLE_GAP_M, 15), // a restart this close to where the last recording stopped is one continuous walk
+  },
   adminUsername: env.ADMIN_USERNAME ?? "",
   adminPassword: env.ADMIN_PASSWORD ?? "",
   session: {
@@ -56,6 +62,8 @@ export const config = {
 export function requireConfig() {
   if (!config.databaseUrl) throw new Error("DATABASE_URL is required");
   if (config.anonymizer.token && config.anonymizer.token.length < 32) throw new Error("ANONYMIZER_TOKEN must be at least 32 characters");
+  if (!(config.frames.stepM >= 1 && config.frames.stepM <= 50)) throw new Error("SAMPLE_STEP_M must be between 1 and 50 (metres)");
+  if (!(config.frames.gapMaxM >= 0 && config.frames.gapMaxM <= 1000)) throw new Error("SAMPLE_GAP_M must be between 0 and 1000 (metres)");
   if (!config.s3.accessKey || !config.s3.secretKey) throw new Error("S3_ACCESS_KEY and S3_SECRET_KEY are required");
   if (config.cookieSecure && config.publicOrigins.some((o) => o.startsWith("http://") && !/localhost|127\.0\.0\.1/.test(o))) {
     console.warn("COOKIE_SECURE=true but a non-localhost http:// origin is configured; login will not work there");
